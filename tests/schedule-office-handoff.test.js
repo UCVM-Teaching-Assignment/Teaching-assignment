@@ -144,3 +144,19 @@ test('LAB office can publish a second reviewed batch with a newer draft revision
  assert.equal(result.publishedCount,1);
  assert.equal(f.lab.publicView(s.id).stations[0].runs[0].room,'CSB Skills 2');
 });
+
+test('LAB bulk import allows simultaneous stations in separate subspaces of one CSB room',()=>{
+ const f=fixture(),a=publish(f),b=publish(f);
+ const rows=f.workflow.officeExport('lab','lab').rows;
+ assert.equal(rows.length,2);
+ const filled=rows.map((r,i)=>labRow([r],{
+  runKey:'station-'+(i+1),room:'CSB Wards',subspace:i?'Area B':'Area A',
+  groupCode:String(i+1),studentIds:i?'TEST-03;TEST-04':'TEST-01;TEST-02',
+  studentNames:i?'Synthetic Three;Synthetic Four':'Synthetic One;Synthetic Two'}));
+ const preview=f.workflow.previewOfficeBulk('lab',{office:'lab',rows:filled});
+ assert.equal(preview.valid,true,JSON.stringify(preview.errors));
+ f.workflow.publishOfficeBulk('lab',{office:'lab',rows:filled,batchId:'subspace-example'});
+ const published=f.lab.publicView(a.id);
+ assert.equal(published.stations.find(x=>x.sessionId===a.id).runs[0].subspace,'area a');
+ assert.equal(published.stations.find(x=>x.sessionId===b.id).runs[0].subspace,'area b');
+});

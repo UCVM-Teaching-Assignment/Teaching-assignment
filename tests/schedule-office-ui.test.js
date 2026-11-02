@@ -20,3 +20,10 @@ test('ADFAD export template roundtrips session IDs, roles, credited hours and re
  const parsed=csv.parseOfficeCsv('adfa',text);
  assert.deepEqual(parsed.rows[0],Object.fromEntries(Object.entries(rows[0]).map(([k,v])=>[k,String(v)])));
 });
+
+test('LAB office CSV preserves independent room subspaces when exporting a multi-station activity',()=>{
+ const row={sessionId:'s1',courseNumber:'VETM 505',date:'2026-11-03',startTime:'08:30',endTime:'10:30',runKey:'a',
+  room:'CSB Wards',subspace:'Area A',capacity:12,attendance:'Groups',groupCode:'1',studentIds:'S1',studentNames:'Synthetic',expectedRevision:0};
+ const result=csv.parseOfficeCsv('lab',csv.officeTemplate('lab',[row]));
+ assert.equal(result.rows[0].subspace,'Area A');
+});
