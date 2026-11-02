@@ -10,7 +10,7 @@ const minutes=value=>/^([01]\d|2[0-3]):[0-5]\d$/.test(text(value))?Number(value.
 const overlaps=(a,b)=>a.date===b.date&&a.start<b.end&&b.start<a.end;
 const distinct=values=>[...new Set(values)];
 const ADMIN=new Set(['owner','developer','administrator','admin','adfa_general','adfa_regular']);
-const sourceFields=s=>({id:s.id,academicYear:s.academicYear,curriculumYear:String(s.curriculumYear),courseCode:s.courseCode,date:s.date,topic:s.topic,startTime:s.startTime,endTime:s.endTime,room:s.room,updatedAtUtc:s.updatedAtUtc,assignments:s.assignments,labApprovedRuns:s.labApprovedRuns});
+const sourceFields=s=>({id:s.id,academicYear:s.academicYear,curriculumYear:String(s.curriculumYear),courseCode:s.courseCode,date:s.date,topic:s.topic,startTime:s.startTime,endTime:s.endTime,room:s.room,labApprovedRuns:s.labApprovedRuns});
 function intervals(rows){
  const sorted=rows.map(r=>[minutes(r.start),minutes(r.end)]).filter(r=>Number.isFinite(r[0])&&Number.isFinite(r[1])&&r[1]>r[0]).sort((a,b)=>a[0]-b[0]);
  const out=[];for(const r of sorted){const last=out.at(-1);if(last&&r[0]<=last[1])last[1]=Math.max(last[1],r[1]);else out.push(r.slice())}return out;
@@ -93,7 +93,7 @@ function createLabService({store,annualState=()=>null}={}){
    stations:d.stations.map(s=>({id:cleanId(s.id),sessionId:s.sessionId,label:text(s.label).slice(0,400),assignedGroupIds:distinct(list(s.assignedGroupIds).map(text)),runs:uniqueIds(list(s.runs).map(r=>({id:cleanId(r.id),start:text(r.start),end:text(r.end),roomId:text(r.roomId),mode:r.mode==='all'?'all':'groups',groupIds:distinct(list(r.groupIds).map(text))})),'run')}))
   };
  }
- function instructorRows(s){return list(s.assignments).map(a=>{const f=list(store.tables.faculty).find(f=>f.facultyId===a.facultyId)||list(annual().faculty).find(f=>f.id===a.facultyId);return {assignmentId:a.sessionAssignmentId||null,facultyId:a.facultyId,name:f?.displayName||f?.name||a.sourceFacultyName||'Not provided',participantCategory:['Sessional','Guest','Other'].includes(a.participantCategory||f?.recordType)?(a.participantCategory||f.recordType):'',role:a.teachingRole==='Lab Primary'?'Primary':a.teachingRole==='Lab Secondary'?'Secondary':a.teachingRole||'Not provided'}})}
+ function instructorRows(s){return list(s.assignments).filter(a=>a.facultyId).map(a=>{const f=list(store.tables.faculty).find(f=>f.facultyId===a.facultyId)||list(annual().faculty).find(f=>f.id===a.facultyId);return {assignmentId:a.sessionAssignmentId||null,facultyId:a.facultyId,name:f?.displayName||f?.name||a.sourceFacultyName||'Not provided',participantCategory:['Sessional','Guest','Other'].includes(a.participantCategory||f?.recordType)?(a.participantCategory||f.recordType):'',role:a.teachingRole==='Lab Primary'?'Primary':a.teachingRole==='Lab Secondary'?'Secondary':a.teachingRole||'Not provided'}})}
  function runsFor(draft,ctx){
   const groupMap=new Map(draft.groups.map(g=>[g.id,g])),rooms=new Map(draft.rooms.map(r=>[r.id,r]));
   return draft.stations.flatMap(st=>st.runs.map(run=>{
@@ -112,8 +112,10 @@ function createLabService({store,annualState=()=>null}={}){
   const course=annual().annual?.[ctx.scope.academicYear]?.[ctx.scope.courseCode];
   if(ctx.scope.academicYear!==store.tables.academicYear){
    const release=list(course?.published).at(-1);
-   if(!release)issue('COURSE_UNPUBLISHED','Publish the approved annual Course before publishing its Lab allocations.');
-   else if(course.revision!==release.revision||course.finalizedRevision!==course.revision||ctx.sessions.some(s=>!list(release.sessions).some(p=>p.id===s.id&&JSON.stringify(p.assignments)===JSON.stringify(s.assignments)&&p.startTime===s.startTime&&p.endTime===s.endTime&&p.date===s.date)))issue('COURSE_CHANGED','Finalize and publish the current Course revision before publishing these Lab allocations.');
+   if(!release)issue('COURSE_UNPUBLISHED','ADC must publish the Course schedule before LAB can publish its allocations.');
+   else if(ctx.sessions.some(s=>!list(release.sessions).some(p=>p.id===s.id&&p.startTime===s.startTime&&p.endTime===s.endTime&&p.date===s.date&&p.topic===s.topic&&p.room===s.room)))
+    issue('COURSE_CHANGED','ADC must publish updated dates, times, topics and locations before LAB can publish.');
+
   }
   const seenStudents=new Set();
   for(const group of draft.groups){
@@ -128,8 +130,9 @@ function createLabService({store,annualState=()=>null}={}){
    if(station.assignedGroupIds.some(id=>!groups.has(id)))issue('UNKNOWN_GROUP','The assigned audience references a missing group.',station.id);
    const expected=list(source.labApprovedRuns).length?source.labApprovedRuns.map(t=>({start:t[0],end:t[1]})):[{start:clock(source.startTime),end:clock(source.endTime)}];
    if(!Number.isFinite(minutes(clock(source.startTime)))||!Number.isFinite(minutes(clock(source.endTime))))issue('SOURCE_TIME_UNKNOWN','The approved Session needs verified start and end times.',station.id);
-   if(JSON.stringify(intervals(station.runs))!==JSON.stringify(intervals(expected))&&list(source.assignments).length){requiredApprovals.add('ADFAD');issue('FACULTY_COVERAGE_CHANGE','Run times change approved faculty working intervals. Use the existing ADFAD change workflow.',station.id)}
-   if(!list(source.assignments).length||list(source.assignments).some(a=>!a.facultyId))issue('INSTRUCTOR_UNKNOWN','Confirm the teaching assignments before publication.',station.id);
+   // LAB runs and student groups are operational. Teacher coverage and DOE
+   // are confirmed by ADFAD after this LAB stage.
+
   }
   for(const row of runs){
    const {run,station,source,room}=row;
@@ -142,24 +145,13 @@ function createLabService({store,annualState=()=>null}={}){
    if(!room||!room.label||!room.resourceKey)issue('ROOM_REQUIRED','Choose an identified room or subspace.',station.id,run.id);
    else if(room.capacity===null||!Number.isInteger(room.capacity)||room.capacity<0)issue('CAPACITY_UNKNOWN','Confirm the room/subspace student capacity.',station.id,run.id);
    else if(row.studentIds.length>room.capacity)issue('CAPACITY_EXCEEDED','Assigned student count exceeds room/subspace capacity.',station.id,run.id);
-   for(const facultyId of row.facultyIds){
-    const f=list(store.tables.faculty).find(x=>x.facultyId===facultyId)||list(annual().faculty).find(x=>x.id===facultyId);
-    if(!f||f.active!==true||f.appointmentValid===false||(f.activationDate&&ctx.scope.date<f.activationDate)||(f.appointmentEndDate&&ctx.scope.date>f.appointmentEndDate))issue('FACULTY_UNAVAILABLE','A faculty appointment is inactive or not effective on the Session date.',station.id,run.id);
-    if(list(store.tables.afcRecords).some(a=>a.facultyId===facultyId&&a.active!==false&&a.startDate<=row.date&&a.endDate>=row.date))issue('FACULTY_UNAVAILABLE','A faculty member is unavailable for this date. Check the existing availability tools.',station.id,run.id);
-    for(const activity of list(store.tables.activities).filter(a=>(a.facultyKey||a.facultyId)===facultyId&&a.active!==false&&a.category!=='teaching_excellence'&&(a.startDate||a.date)<=row.date&&(a.endDate||a.date)>=row.date)){
-     const evidence=list(activity.timeEvidence).filter(e=>e.date===row.date);
-     if(!evidence.length)issue('AVAILABILITY_UNKNOWN','Another work activity has unconfirmed time on this date.',station.id,run.id);
-     for(const e of evidence){const start=minutes(clock(e.startTime)),end=minutes(clock(e.endTime));if(!Number.isFinite(start)||!Number.isFinite(end)||overlaps(row,{date:row.date,start,end}))issue('FACULTY_UNAVAILABLE','Another work activity requires availability review.',station.id,run.id)}
-    }
-    if(list(store.tables.extra?.afcRequests).some(a=>a.facultyId===facultyId&&['pending_report_to','pending_admin'].includes(a.status)&&a.startDate<=row.date&&a.endDate>=row.date))issue('AVAILABILITY_UNKNOWN','A pending availability request requires review.',station.id,run.id);
-   }
+
   }
   const occupied=[];
   for(const [key,b] of Object.entries(state().blocks))if(key!==ctx.key){const p=b.publications.at(-1);if(p&&p.scope.academicYear===ctx.scope.academicYear&&p.scope.date===ctx.scope.date)occupied.push(...p.occupancy)}
   function compare(a,b){
    if(!overlaps(a,b))return;
    if(a.studentIds.some(id=>b.studentIds.includes(id)))issue('STUDENT_OVERLAP','Assigned students overlap another mandatory run; All is not optional attendance.',a.station?.id,a.run?.id);
-   if(a.facultyIds.some(id=>b.facultyIds.includes(id)))issue('FACULTY_OVERLAP','A faculty member is assigned to overlapping runs.',a.station?.id,a.run?.id);
    if(a.room&&b.room&&a.room.resourceKey===b.room.resourceKey&&(!a.room.subspace||!b.room.subspace||a.room.subspace===b.room.subspace))issue('ROOM_OVERLAP','Room/subspace is occupied by overlapping runs.',a.station?.id,a.run?.id);
   }
   runs.forEach((a,i)=>{runs.slice(i+1).forEach(b=>compare(a,b));occupied.forEach(b=>compare(a,b))});
@@ -167,9 +159,7 @@ function createLabService({store,annualState=()=>null}={}){
    if(ctx.sessions.some(s=>s.id===other.id)||other.date!==run.date||other.academicYear!==ctx.scope.academicYear)continue;
    const start=minutes(clock(other.startTime)),end=minutes(clock(other.endTime));
    if(run.room&&text(other.room).toLowerCase()===run.room.resourceKey&&overlaps(run,{date:other.date,start,end}))issue('ROOM_OVERLAP','Another Course Session reserves this room.',run.station.id,run.run.id);
-   if(!list(other.assignments).some(a=>run.facultyIds.includes(a.facultyId)))continue;
-   if(!Number.isFinite(start)||!Number.isFinite(end))issue('AVAILABILITY_UNKNOWN','Another assigned Session has unknown times. Check faculty availability.',run.station.id,run.run.id);
-   else if(overlaps(run,{date:other.date,start,end}))issue('FACULTY_OVERLAP','A faculty member has another overlapping Course Session.',run.station.id,run.run.id);
+
   }
   return {canPublish:issues.length===0,requiredApprovals:[...requiredApprovals],issues};
  }
@@ -181,7 +171,14 @@ function createLabService({store,annualState=()=>null}={}){
   const ctx=context(sessionId),p=state().blocks[ctx.key]?.publications.at(-1);
   if(!p||ctx.archived)return null;
   if(ctx.scope.academicYear!==store.tables.academicYear&&!list(annual().annual?.[ctx.scope.academicYear]?.[ctx.scope.courseCode]?.published).length)return null;
-  return clone(p.public);
+  // ADFAD confirms staff after LAB publication. Public reads combine the
+  // immutable group/room release with current confirmed Session instructors.
+  const projected=clone(p.public);
+  for(const station of projected.stations){
+   const current=ctx.sessions.find(s=>s.id===station.sessionId);
+   station.instructors=current?instructorRows(current).map(({name,role,participantCategory})=>({name,role,participantCategory})):[];
+  }
+  return projected;
  }
  function read(uid,sessionId){
   const u=actor(uid),ctx=context(sessionId),can=allowed(u,ctx),pub=can&&ctx.archived?clone(state().blocks[ctx.key]?.publications.at(-1)?.public||null):publicView(sessionId);

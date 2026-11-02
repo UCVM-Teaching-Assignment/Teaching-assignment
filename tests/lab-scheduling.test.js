@@ -50,8 +50,14 @@ test('wrong-course/year Lab scope, inactive and mandatory-password accounts cann
 test('actor-supplied role cannot turn a Faculty account into an owner',()=>{
  const f=fixture();assert.throws(()=>f.service.save({uid:'faculty',role:'owner'},{sessionId:'s1',expectedRevision:0,draft:{},requestId:'spoof'}));
 });
-test('stale drafts and source assignment changes are rejected at publish',()=>{
- const f=fixture(),c=ready(f);assert.throws(()=>f.service.save('lab',{sessionId:'s1',expectedRevision:c.revision-1,draft:c.draft,requestId:'stale'}),e=>e.code==='STALE_REVISION');f.tables.sessions[0].assignments[0].teachingRole='Lab Secondary';assert.throws(()=>publish(f,c),e=>e.code==='SOURCE_CHANGED');
+test('LAB source changes are structural; ADFAD faculty changes do not invalidate operational publication',()=>{
+ const f=fixture(),c=ready(f);
+ assert.throws(()=>f.service.save('lab',{sessionId:'s1',expectedRevision:c.revision-1,draft:c.draft,requestId:'stale'}),e=>e.code==='STALE_REVISION');
+ f.tables.sessions[0].assignments[0].teachingRole='Lab Secondary';
+ publish(f,c);
+ assert.equal(f.service.publicView('s1').stations[0].instructors[0].role,'Secondary');
+ f.tables.sessions[0].startTime='09:00:00';
+ assert.ok(has(f.service.read('lab','s1').validation,'SOURCE_CHANGED'));
 });
 test('request replay is exactly once and different payload reuse is denied',()=>{
  const f=fixture(),c=ready(f),p={sessionId:'s1',expectedRevision:c.revision,requestId:'same',draft:c.draft};const a=f.service.save('lab',p),count=f.tables.history.length;const b=f.service.save('lab',p);assert.equal(a.revision,b.revision);assert.equal(f.tables.history.length,count);p.draft.groups[0].code='changed';assert.throws(()=>f.service.save('lab',p),e=>e.code==='REQUEST_REUSE');
@@ -59,8 +65,11 @@ test('request replay is exactly once and different payload reuse is denied',()=>
 test('publication replay does not append a new release and revocation is rechecked',()=>{
  const f=fixture(),c=ready(f),p={sessionId:'s1',expectedRevision:c.revision,requestId:'p'};const a=f.service.publish('lab',p),b=f.service.publish('lab',p);assert.equal(a.version,b.version);f.tables.users[0].labScopes=[];assert.throws(()=>f.service.publish('lab',p),e=>e.code==='ROLE_DENIED');
 });
-test('out-of-envelope timing requires ADC and changed faculty coverage requires ADFAD',()=>{
- const f=fixture(),c=ready(f);c.draft.stations[0].runs[0].start='08:00';const n=saveAgain(f,c);assert.ok(n.validation.requiredApprovals.includes('ADC'));assert.ok(n.validation.requiredApprovals.includes('ADFAD'));assert.throws(()=>publish(f,n),e=>e.code==='LAB_VALIDATION');
+test('LAB may book inside an approved ADC time envelope but must request ADC for extension',()=>{
+ const f=fixture(),c=ready(f);c.draft.stations[0].runs[0].start='08:00';
+ const n=saveAgain(f,c);
+ assert.deepEqual(n.validation.requiredApprovals,['ADC']);
+ assert.throws(()=>publish(f,n),e=>e.code==='LAB_VALIDATION');
 });
 test('operational writes cannot smuggle replacement instructors or teaching roles',()=>{
  const f=fixture(),c=ready(f);c.draft.stations[0].assignments=[{facultyId:'other',teachingRole:'Primary'}];assert.throws(()=>saveAgain(f,c),e=>e.code==='PROTECTED_ASSIGNMENT');
@@ -71,8 +80,12 @@ test('All does not exempt simultaneous students at two mandatory stations',()=>{
 test('unknown capacity and exceeded room capacity block publication',()=>{
  const f=fixture(),c=ready(f);c.draft.rooms[0].capacity=null;let n=saveAgain(f,c);assert.ok(has(n.validation,'CAPACITY_UNKNOWN'));n.draft.rooms[0].capacity=0;n=saveAgain(f,n,'capacity-zero');assert.ok(has(n.validation,'CAPACITY_EXCEEDED'));
 });
-test('faculty future activation, inactive status and AFC are rechecked at publication',()=>{
- const f=fixture(),c=ready(f);f.tables.faculty[0].activationDate='2026-12-01';assert.throws(()=>publish(f,c),e=>e.code==='LAB_VALIDATION');f.tables.faculty[0].activationDate=null;f.tables.afcRecords.push({facultyId:'f1',active:true,startDate:'2026-11-03',endDate:'2026-11-03',reason:'SECRET'});const n=f.service.read('lab','s1');assert.ok(has(n.validation,'FACULTY_UNAVAILABLE'));assert.ok(!JSON.stringify(n.validation).includes('SECRET'));
+test('LAB publication does not wait for Faculty approval or AFC clearance',()=>{
+ const f=fixture(),c=ready(f);f.tables.faculty[0].activationDate='2026-12-01';
+ f.tables.afcRecords.push({facultyId:'f1',active:true,startDate:'2026-11-03',endDate:'2026-11-03',reason:'SECRET'});
+ assert.equal(f.service.read('lab','s1').validation.canPublish,true);publish(f,c);
+ assert.equal(f.service.publicView('s1').version,1);
+ assert.ok(!JSON.stringify(f.service.publicView('s1')).includes('SECRET'));
 });
 test('archiving freezes writes and hides historical Calendar publication',()=>{
  const f=fixture(),c=ready(f);publish(f,c);f.archive();assert.throws(()=>saveAgain(f,c),e=>e.code==='ARCHIVED_YEAR');assert.throws(()=>publish(f,c,'later'),e=>e.code==='ARCHIVED_YEAR');assert.equal(f.service.publicView('s1'),null);assert.equal(f.service.read('owner','s1').capabilities.canEdit,false);
@@ -83,15 +96,17 @@ test('invalid clock and reversed intervals are not silently converted or repaire
 test('arbitrary numbers of groups are accepted without multiplying teaching coverage',()=>{
  const f=fixture(),c=ready(f);c.draft.groups.push({id:'g4',code:'4',members:[{id:'student-4',name:'Private fourth'}]});c.draft.stations[0].assignedGroupIds.push('g4');c.draft.stations[0].runs[0].groupIds.push('g4');const n=saveAgain(f,c);assert.equal(n.validation.canPublish,true);publish(f,n);assert.deepEqual(f.service.publicView('s1').stations[0].runs[0].groups,['1','4']);
 });
-test('another published block catches cross-course student, room and faculty collisions',()=>{
- const f=fixture(),c=ready(f);publish(f,c);f.tables.sessions.push({...copy(f.tables.sessions[0]),id:'outside',courseCode:'VETM 599',topic:'Other lab'});const x=f.service.read('owner','outside');x.draft.groups=copy(c.draft.groups);x.draft.rooms=copy(c.draft.rooms);x.draft.stations[0].assignedGroupIds=['g1','g2','g3'];x.draft.stations[0].runs=copy(c.draft.stations[0].runs);const n=f.service.save('owner',{sessionId:'outside',expectedRevision:x.revision,requestId:'other',draft:x.draft});assert.ok(has(n.validation,'STUDENT_OVERLAP'));assert.ok(has(n.validation,'ROOM_OVERLAP'));assert.ok(has(n.validation,'FACULTY_OVERLAP'));
+test('another published block catches student and room conflicts before ADFAD Faculty review',()=>{
+ const f=fixture(),c=ready(f);publish(f,c);f.tables.sessions.push({...copy(f.tables.sessions[0]),id:'outside',courseCode:'VETM 599',topic:'Other lab'});const x=f.service.read('owner','outside');x.draft.groups=copy(c.draft.groups);x.draft.rooms=copy(c.draft.rooms);x.draft.stations[0].assignedGroupIds=['g1','g2','g3'];x.draft.stations[0].runs=copy(c.draft.stations[0].runs);const n=f.service.save('owner',{sessionId:'outside',expectedRevision:x.revision,requestId:'other',draft:x.draft});assert.ok(has(n.validation,'STUDENT_OVERLAP'));assert.ok(has(n.validation,'ROOM_OVERLAP'));assert.ok(!has(n.validation,'FACULTY_OVERLAP'));
 });
 test('new-year copy clears memberships and published releases and is still a draft',()=>{
  const f=fixture(),c=ready(f);publish(f,c);f.tables.sessions.push({...copy(f.tables.sessions[0]),id:'next',academicYear:'2027-28',date:'2027-11-03'});const n=f.service.copyStructure('owner',{fromSessionId:'s1',toSessionId:'next',expectedRevision:0,requestId:'copy'});assert.ok(n.draft.groups.every(g=>g.members.length===0));assert.equal(f.service.publicView('next'),null);assert.equal(n.draft.stations[0].sessionId,'next');assert.equal(n.scope.academicYear,'2027-28');
 });
 module.exports={fixture,ready};
-test('unresolved teacher identities require availability review instead of silent publication',()=>{
- const f=fixture();f.tables.sessions[0].assignments[0].facultyId=null;const c=ready(f);assert.ok(has(c.validation,'INSTRUCTOR_UNKNOWN'));
+test('faculty-free LAB stations can publish without creating substitute teaching records',()=>{
+ const f=fixture();f.tables.sessions[0].assignments=[];const c=ready(f);
+ assert.equal(c.validation.canPublish,true);publish(f,c);
+ assert.deepEqual(f.service.publicView('s1').stations[0].instructors,[]);
 });
 test('archived authorized staff retain the immutable published schedule',()=>{
  const f=fixture(),c=ready(f);publish(f,c);f.archive();assert.equal(f.service.read('owner','s1').published.version,1);assert.equal(f.service.read('faculty','s1').published,null);
@@ -99,18 +114,23 @@ test('archived authorized staff retain the immutable published schedule',()=>{
 test('a room booked by another canonical course is unavailable even without Lab metadata',()=>{
  const f=fixture(),c=ready(f);f.tables.sessions.push({id:'lecture',academicYear:'2026-27',curriculumYear:'2',courseCode:'VTMD 304',sessionType:'LEC',topic:'Lecture',date:'2026-11-03',startTime:'09:00:00',endTime:'10:00:00',room:'lab',assignments:[]});assert.ok(has(f.service.read('lab','s1').validation,'ROOM_OVERLAP'));
 });
-test('canonical activity facultyKey and dated timeEvidence block conflicting faculty work',()=>{
- const f=fixture();f.tables.activities.push({facultyKey:'f1',activityId:'work1',category:'clinical',startDate:'2026-11-03',endDate:'2026-11-03',timeEvidence:[{date:'2026-11-03',startTime:'09:00',endTime:'10:00'}],timeStatus:'verified'});assert.ok(has(ready(f).validation,'FACULTY_UNAVAILABLE'));
+test('faculty work conflicts do not block stage-2 LAB operational publication',()=>{
+ const f=fixture();f.tables.activities.push({facultyKey:'f1',activityId:'work1',category:'clinical',startDate:'2026-11-03',endDate:'2026-11-03',timeEvidence:[{date:'2026-11-03',startTime:'09:00',endTime:'10:00'}]});
+ assert.equal(ready(f).validation.canPublish,true);
 });
-test('informational work does not block but pending AFC requires review',()=>{
- const f=fixture();f.tables.activities.push({facultyKey:'f1',category:'teaching_excellence',startDate:'2026-11-03',endDate:'2026-11-03',timeEvidence:[]});assert.equal(ready(f).validation.canPublish,true);f.tables.extra.afcRequests=[{facultyId:'f1',status:'pending_admin',startDate:'2026-11-03',endDate:'2026-11-03',reason:'SECRET'}];const c=f.service.read('lab','s1');assert.ok(has(c.validation,'AVAILABILITY_UNKNOWN'));assert.ok(!JSON.stringify(c.validation).includes('SECRET'));
+test('pending AFC is reviewed when ADFAD assigns Faculty, not while LAB books a room',()=>{
+ const f=fixture();ready(f);
+ f.tables.extra.afcRequests=[{facultyId:'f1',status:'pending_admin',startDate:'2026-11-03',endDate:'2026-11-03',reason:'SECRET'}];
+ const c=f.service.read('lab','s1');
+ assert.equal(c.validation.canPublish,true);
+ assert.ok(!JSON.stringify(c.validation).includes('SECRET'));
 });
 test('a removed canonical station returns source-changed instead of crashing the editor',()=>{
  const f=fixture();f.tables.sessions.push({...copy(f.tables.sessions[0]),id:'s2'});ready(f);f.tables.sessions.pop();const c=f.service.read('lab','s1');assert.ok(has(c.validation,'SOURCE_CHANGED'));assert.equal(c.validation.canPublish,false);
 });
 test('future working assignments cannot publish through an older Course release',()=>{
  const f=fixture();const row={...copy(f.tables.sessions[0]),id:'future',academicYear:'2027-28',date:'2027-11-03'};f.tables.sessions.push(row);
- const source={years:{'2027-28':{status:'active'}},annual:{'2027-28':{'VETM 505':{working:[row],revision:2,finalizedRevision:1,published:[{version:1,revision:1,sessions:[{...row,assignments:[]}]}]}}}};
+ const source={years:{'2027-28':{status:'active'}},annual:{'2027-28':{'VETM 505':{working:[row],revision:2,finalizedRevision:1,published:[{version:1,revision:1,sessions:[{...row,startTime:'09:30:00',assignments:[]}]}]}}}};
  const service=mod.createLabService({store:f.store,annualState:()=>source});assert.ok(has(service.read('owner','future').validation,'COURSE_CHANGED'));
 });
 test('only Owner grants explicit LAB course scopes without modifying base roles',()=>{
