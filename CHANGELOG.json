@@ -6,16 +6,16 @@
       "pr": 102,
       "title": "Lab group scheduling and publication in the Testing Demo",
       "changes": [
-        "Calendar now has Schedule Workflow: ADC publishes Course, date and start/end time. Session title, room and suggested Faculty are optional.",
-        "ADC Faculty suggestions are stored separately. They do not become teaching assignments or calculate DOE until ADFAD confirms them.",
-        "LAB follows ADC publication to book rooms, subspaces, capacities, rosters, student groups and rotation runs. All means that activity's explicitly assigned students.",
-        "Lab Scheduling has separate Draft and Published versions, restricted rosters, version checks, and room/student conflict validation; Faculty confirmation is no longer a LAB publication prerequisite.",
-        "ADFAD confirms eligible Faculty as Primary or Secondary and enters credited hours after LAB group publication; known conflicts block and unknown availability requires an explicit review note.",
-        "Developer and Owner can test ADC, LAB, ADFAD and academic-year Owner tools; LAB Coordinator and LAB Backup have explicit course scopes in the synthetic Testing Demo.",
-        "New ADC LAB Sessions automatically provision course-specific permissions for the two default LAB tester accounts; additional users and future years still need Owner grants.",
-        "Calendar shows the ADC Session before faculty assignment, published LAB rooms/groups after LAB publication, and confirmed instructors after ADFAD; drafts and student identities stay private.",
-        "Independent ADC drafts may publish parallel LAB stations sharing Course/date/time even with blank titles, but the same draft cannot publish twice.",
-        "Focused tests, synthetic sample data, role and privacy checks, workflow documentation and database-contract notes accompany PR #102. These changes do not alter University SQL, Firestore or PAWS Beta."
+        "ADC can publish Course/date/start/end without optional title, room or Faculty; both single-session and CSV/TSV bulk import are supported.",
+        "Bulk import previews every row, validates Course/Year/Time, publishes all-or-none and prevents duplicate retry by batch ID.",
+        "Developer Dashboard edits versioned import rules: optional field labels, required flags, work owners, import limit and default Session Type.",
+        "Four core Calendar fields remain mandatory; changing a rule never silently rewrites existing Session or DOE data.",
+        "Missing title and room create ADC-owned Tasks by default; Developer can change owners and staff can complete pending fields directly.",
+        "Missing Faculty suggestion belongs to ADFAD, not ADC; ADFAD confirms suggestions or independently assigns Faculty and credited hours.",
+        "LAB follows ADC publication to book rooms, capacities, student groups and restricted rosters, independently of Faculty approval.",
+        "LAB student/room conflicts still block, while ADFAD handles Faculty/AFC and unknown availability conflicts at final assignment.",
+        "Developer can test ADC, LAB and ADFAD stages; Calendar reflects published updates and Tasks presents live role-scoped work.",
+        "PR #102 remains Testing Demo only; no PAWS Beta/SQL writes, real roster import, DOE bulk calculations or production publication."
       ]
     },
     {

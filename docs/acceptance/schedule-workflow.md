@@ -32,3 +32,30 @@ All means the students explicitly assigned to the Lab station, not the entire un
 Source of schedule truth is the canonical Course Session. ADC suggestions are explicitly separate from ADFAD-confirmed Assignment rows. Lab booking publishes only operational group/room/run metadata linked by Session ID, and restricted rosters remain out of public payloads. Shared/authoritative storage, real role enforcement, concurrent editing, roster retention/privacy review, ADFAD override governance and historic/multi-year migration require a trusted backend and institutional acceptance. Demo localStorage does not establish any of those guarantees.
 
 The original multi-year Academic Years workspace and historical Sessions may still use their prior approval flows; migrate those separately instead of modifying real rows implicitly.
+
+## Developer-configurable ADC bulk import (PR #102)
+
+The **Developer Dashboard** button appears at the top of Calendar only for the Developer and Owner Demo roles. Settings are saved to the current browser-local Testing store with an audit entry and incrementing revision. Configuration edits affect both new import validation and the existing live ADC/ADFAD task projection. Rules are not silently shared with other browsers, authenticated university databases, SQL, or future academic years.
+
+Four fields must always be provided to create a valid published Session:
+
+- **Course Number**: an existing Course Catalog code.
+- **Year**: the curriculum year, 1–4, which must agree with the Course Catalog. This is not an academic-year selector.
+- **Date**: date inside the active 2026–27 academic year (May 1, 2026 through April 30, 2027).
+- **Time**: either Start Time and End Time columns, or a single `08:30-10:30` range.
+
+Developer can change **Title / Topic** and **Room Number** rules: their field labels, whether they are additional blockers before publication, and who owns missing optional work (**ADC** or **ADFAD**). Developer can also set default Session Type and a maximum import count (1–500). To preserve valid Calendar data, the four core fields remain required, visibly locked. Faculty suggestions remain optional and the eventual Faculty assignment is always an **ADFAD** responsibility.
+
+### CSV/TSV import testing
+
+1. Select **ADC** or **Developer** in Demo Role Tester, open **Schedule Workflow**, then **Bulk Import CSV / Excel Paste**.
+2. Click **Download CSV template**. Upload a `.csv` or `.tsv` file, or paste cells from Excel into the text area. Direct binary `.xlsx` is not supported: save the worksheet as CSV or paste the selected cells.
+3. Create three synthetic lines with a valid Course, curriculum Year, ISO date and start/end time. Leave Title, Room and Faculty blank on one row, and enter Title/Room and a known **Suggested Faculty** on another. The optional title is a per-Session description and **does not overwrite the Course Catalog name**.
+4. Click **Validate & Preview**. Verify each row's status, valid/invalid counts, and expected office to-dos. Add an invalid Course or Year, then re-preview: publication must be disabled for the entire batch, without creating any Session.
+5. Correct the row and preview again; click **Publish all** and confirm. All rows should appear in Calendar at the specified dates/times, with no automatic Faculty assignment or DOE credit. The same batch ID is idempotent in the API; submitting an existing batch ID with different data is rejected.
+6. Open the existing **Tasks** panel as ADC. It should show **Session title**, **Room number** (when missing) for these published Sessions, with **Open Work**. Complete the missing Title and Room; the item disappears immediately. For LAB, a published LAB room booking also resolves a missing-Room task.
+7. Switch to **ADFAD**. The same session should display **Assign faculty (no suggestion)** or **Confirm suggested faculty** rather than generating an ADC suggestion task. Open Work and confirm/assign through the existing ADFAD stage, following LAB publication when required.
+8. Switch to **Developer**. Verify both ADC and ADFAD work items. Open Developer Dashboard and make Room required for publication. Without Room, a subsequent import row should fail preview; after turning the setting back off it should publish and create a missing-room to-do. Change Room to ADFAD ownership and confirm the outstanding task moves between role queues, with ADFAD able to complete it. Check rule version increments and stale-version rejection.
+9. Negative checks: LAB and Faculty cannot publish/import or write Developer rule settings. Invalid CSV quoting, duplicate header mapping, unknown suggested Faculty, invalid times and invalid Curriculum Year must be rejected. Do not use actual UCIDs, student rosters or private faculty information in this Demo.
+
+This is a manual acceptance checklist, not evidence that a person has run it in the deployed site. Published Session creation does not imply the SQL source has been updated; authoritative multi-year import and persistent institutional work queue require a separate reviewed backend implementation.
