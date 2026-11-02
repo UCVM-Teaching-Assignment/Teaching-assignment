@@ -19,7 +19,7 @@
   const isFaculty=a=>['faculty','hicc','visc'].includes(normalized(a&&a.role).toLowerCase());
   const canPlan=a=>['owner','developer','adfa_general','adfa_regular','administrator','admin','adc','lab','hicc','visc'].includes(normalized(a&&a.role).toLowerCase());
   const canAdfa=a=>['owner','developer','adfa_general','adfa_regular','administrator','admin'].includes(normalized(a&&a.role).toLowerCase());
-  const owner=a=>normalized(a&&a.role).toLowerCase()==='owner';
+  const owner=a=>['owner','developer'].includes(normalized(a&&a.role).toLowerCase());
   function bootstrap(source){
     const faculty=clone(source.faculty||[]).map(f=>({id:f.facultyId,name:f.displayName||f.preferredLastName||f.facultyId,active:f.active!==false,activationDate:typeof f.activationDate==='string'?f.activationDate:null,appointmentValid:f.appointmentValid!==false,contractDoe:Number(f.contractTeachingDoe)||0}));
     const users=clone(source.users||[]).map(u=>({uid:u.firebaseUid,role:u.baseRole,facultyId:u.facultyId||null,name:u.displayName||u.firebaseUid}));

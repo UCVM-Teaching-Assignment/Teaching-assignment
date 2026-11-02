@@ -88,6 +88,13 @@ function createScheduleWorkflow({store}={}){
   requireADFAD(uid);
   const s=store.tables.sessions.find(x=>x.id===p?.sessionId);
   if(!s)error('NOT_FOUND','An existing published Course Session is required.');
+  // New ADC-published LAB Sessions must complete operational booking before
+  // ADFAD confirms instructors. Legacy Sessions retain their prior approval flow.
+  if(s.sessionType==='LAB'&&s.scheduleStatus==='published'){
+   const key=JSON.stringify({academicYear:s.academicYear,curriculumYear:String(s.curriculumYear),courseCode:s.courseCode,date:s.date});
+   const release=store.tables.extra?.labScheduling?.blocks?.[key]?.publications?.at(-1);
+   if(!release)error('LAB_NOT_PUBLISHED','LAB must publish the room, runs and assigned students before ADFAD confirms Faculty.');
+  }
   if(p.expectedRevision!==Number(s.facultyRevision||0))error('STALE_REVISION','Faculty assignments changed. Reload to confirm.');
   const items=arr(p.assignments);
   if(!items.length||items.length>30)error('INVALID_ASSIGNMENT','Assign at least one Faculty member.');

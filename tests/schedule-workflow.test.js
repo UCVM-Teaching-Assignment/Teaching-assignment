@@ -59,25 +59,36 @@ test('LAB can publish group/room allocations before any faculty exists; ADFAD co
  const calendar=await createSessionRepository(f.store).list({academicYear:'2026-27'});
  assert.equal(calendar[0].room,'Room A');assert.equal(calendar[0].instructorNames,'Alice Faculty');
 });
-test('Developer can act as ADC, LAB and ADFAD; LAB and ADC cannot self-confirm teaching credits',()=>{
- const f=fixture(),s=published(f,'developer').session;const ctx=f.lab.read('developer',s.id);
+test('Developer can publish ADC schedule, edit LAB booking and confirm teaching assignments',()=>{
+ const f=fixture(),s=published(f,'developer').session,ctx=f.lab.read('developer',s.id);
  assert.equal(ctx.capabilities.canEdit,true);
  assert.throws(()=>f.workflow.confirmFaculty('adc',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lab Secondary',creditedHours:6}]}),e=>e.code==='ROLE_DENIED');
+ const draft=ctx.draft;draft.groups=[{id:'g1',code:'1',members:[{id:'test1',name:'Synthetic'}]}];draft.rooms=[{id:'room',label:'Room X',resourceKey:'room-x',subspace:'',capacity:4}];
+ draft.stations[0].assignedGroupIds=['g1'];draft.stations[0].runs[0].roomId='room';draft.stations[0].runs[0].groupIds=['g1'];
+ const saved=f.lab.save('developer',{sessionId:s.id,expectedRevision:ctx.revision,requestId:'developer-lab',draft});
+ f.lab.publish('developer',{sessionId:s.id,expectedRevision:saved.revision,requestId:'developer-pub'});
  assert.equal(f.workflow.confirmFaculty('developer',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lab Secondary',creditedHours:6}]}).facultyStatus,'confirmed');
 });
-test('ADFAD can assign without suggestions but must not assign inactive/future faculty or duplicate persons',()=>{
- const f=fixture(),s=published(f).session;f.tables.faculty[0].activationDate='2026-12-01';
- assert.throws(()=>f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lab Primary'}]}),e=>e.code==='FACULTY_UNAVAILABLE');
+test('ADFAD can independently assign Faculty after ADC publishes a non-LAB Session',()=>{
+ const f=fixture(),d=f.workflow.saveDraft('adc',{...proposal,sessionType:'LEC'}),s=f.workflow.publish('adc',{draftId:d.id,expectedRevision:d.revision}).session;
+ f.tables.faculty[0].activationDate='2026-12-01';
+ assert.throws(()=>f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lecture'}]}),e=>e.code==='FACULTY_UNAVAILABLE');
  f.tables.faculty[0].activationDate=null;
- assert.throws(()=>f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lab Primary'},{facultyId:'f1',teachingRole:'Lab Secondary'}]}),e=>e.code==='INVALID_ASSIGNMENT');
- const a=f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f2',teachingRole:'Lab Secondary'}]});
- assert.equal(a.facultyStatus,'confirmed');assert.equal(f.tables.sessions[0].assignments[0].facultyId,'f2');assert.equal(f.tables.sessions[0].assignments[0].doeCredit,null,'unconfirmed hours do not become 0-hour DOE');
+ assert.throws(()=>f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lecture'},{facultyId:'f1',teachingRole:'Lecture'}]}),e=>e.code==='INVALID_ASSIGNMENT');
+ const a=f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f2',teachingRole:'Lecture'}]});
+ assert.equal(a.facultyStatus,'confirmed');assert.equal(f.tables.sessions[0].assignments[0].facultyId,'f2');assert.equal(f.tables.sessions[0].assignments[0].doeCredit,null,'hours remain pending, not silently zero');
 });
-test('teacher conflict/unknown activity is reviewed by ADFAD, not LAB',()=>{
- const f=fixture(),s=published(f).session;
+test('unknown work time is reviewed by ADFAD after ADC publication, with an explicit note',()=>{
+ const f=fixture(),d=f.workflow.saveDraft('adc',{...proposal,sessionType:'LEC'}),s=f.workflow.publish('adc',{draftId:d.id,expectedRevision:d.revision}).session;
  f.tables.activities.push({activityId:'a1',facultyKey:'f1',startDate:s.date,endDate:s.date,category:'clinical_day',timeEvidence:[],active:true});
- assert.throws(()=>f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lab Primary',creditedHours:2}]}),e=>e.code==='FACULTY_REVIEW_REQUIRED');
- const result=f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lab Primary',creditedHours:2}],reviewNote:'Verified independently; no conflict in this synthetic example.'});
+ assert.throws(()=>f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lecture',creditedHours:2}]}),e=>e.code==='FACULTY_REVIEW_REQUIRED');
+ const result=f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lecture',creditedHours:2}],reviewNote:'Verified separately; no conflict in the synthetic example.'});
  assert.equal(result.facultyStatus,'confirmed');
- assert.throws(()=>f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[],reviewNote:'irrelevant'}),e=>e.code==='INVALID_ASSIGNMENT');
+ assert.throws(()=>f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[],reviewNote:'irrelevant'}),e=>e.code==='STALE_REVISION');
+});
+
+test('LAB Session may not receive ADFAD faculty before a published LAB booking',()=>{
+ const f=fixture(),s=published(f).session;
+ assert.throws(()=>f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lab Primary',creditedHours:2}]}),e=>e.code==='LAB_NOT_PUBLISHED');
+ assert.equal(f.tables.sessions[0].assignments.length,0);
 });
