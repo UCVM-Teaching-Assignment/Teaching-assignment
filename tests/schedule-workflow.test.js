@@ -42,7 +42,7 @@ test('stage 1 validates required course, date and exact start/end; rejects stale
  assert.throws(()=>f.workflow.publish('adc',{draftId:d.id,expectedRevision:d.revision-1}),e=>e.code==='STALE_REVISION');
  published(f);assert.throws(()=>f.workflow.publish('adc',{draftId:d.id,expectedRevision:d.revision}),e=>e.code==='DUPLICATE_SESSION');
 });
-test('LAB can publish group/room allocations before any faculty exists; ADFAD confirms a suggestion afterwards',()=>{
+test('LAB can publish group/room allocations before any faculty exists; ADFAD confirms a suggestion afterwards',async()=>{
  const f=fixture(),s=published(f).session,ctx=f.lab.read('lab',s.id),d=ctx.draft;
  d.groups=[{id:'g1',code:'1',members:[{id:'s1',name:'Synthetic Student'}]}];
  d.rooms=[{id:'r1',label:'Room A',resourceKey:'room-a',subspace:'',capacity:10}];

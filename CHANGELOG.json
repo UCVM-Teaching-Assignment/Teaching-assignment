@@ -11,7 +11,11 @@
         "Block capacity, overlap, stale-source and protected assignment changes rather than bypassing ADC or ADFAD approval.",
         "Add synthetic examples and focused tests; these browser-local tools do not modify University SQL, Firestore or live student records.",
         "Document the trusted-backend and per-run teacher-approval work still required; this entry is not a production deployment claim.",
-        "Provide the two existing LAB Demo tester accounts explicit edit scopes for 2026-27 Lab courses, including browser-local data created before this change; preserve Owner grants for other users and future years."
+        "Provide the two existing LAB Demo tester accounts explicit edit scopes for 2026-27 Lab courses, including browser-local data created before this change; preserve Owner grants for other users and future years.",
+        "ADC can save separate draft sessions and publish Course/date/start/end to the Testing Calendar without requiring a Topic, room or Faculty; proposed Faculty are suggestions only.",
+        "LAB editors book rooms and publish student groups after ADC, independent of Faculty assignment or AFC validation; live student rosters remain private.",
+        "ADFAD confirms suggested or newly selected Faculty only after LAB publication (for new LAB sessions), explicitly records credited hours and reviews uncertain availability; teaching DOE is not multiplied by student groups.",
+        "Developer and Owner can exercise both ADC and ADFAD stages and the existing LAB editor; new Calendar Schedule Workflow entry and documented synthetic test path."
       ]
     },
     {
