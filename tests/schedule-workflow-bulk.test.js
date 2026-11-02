@@ -34,7 +34,7 @@ test('publishBulk is atomic, creates two calendar sessions, and only missing opt
  assert.equal(adfa[0].missing[0],'Assign faculty (no suggestion)');
  assert.equal(adfa[1].missing[0],'Confirm suggested faculty');
  assert.equal(f.service.list('developer').workItems.length,3);
- assert.equal(f.service.list('faculty').workItems?.length||0,0);
+ assert.throws(()=>f.service.list('faculty'),e=>e.code==='ROLE_DENIED');
 });
 test('duplicate batch retry is no-op and changing payload under same batch ID fails',()=>{
  const f=fixture(),first=f.service.publishBulk('developer',{batchId:'one',rows,expectedRulesVersion:1}),written=f.commits;

@@ -12,6 +12,14 @@ const validDate=x=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(x))return false;const t=Date.
 const ADC=new Set(['adc','developer','owner']);
 const ADFAD=new Set(['adfa_general','adfa_regular','administrator','admin','developer','owner']);
 const TYPES=new Set(['LEC','SRL','LAB','Exam','OSCE','Quiz/Midterm']);
+const DEFAULT_BULK_RULES={
+ version:1, coreRequired:['courseNumber','year','date','time'],
+ fields:{topic:{required:false,todoOwner:'adc',label:'Session title'},
+         room:{required:false,todoOwner:'adc',label:'Room number'},
+         facultySuggestion:{required:false,todoOwner:'adfa',label:'Faculty assignment'}},
+ maxRows:500,defaultSessionType:'LEC'
+};
+
 function createScheduleWorkflow({store}={}){
  if(!store||typeof store.bag!=='function')throw Error('Synthetic Demo store required');
  const bag=()=>store.bag('adcScheduleWorkflow',()=>({version:1,next:0,drafts:{}}));
@@ -24,6 +32,41 @@ function createScheduleWorkflow({store}={}){
  const year=()=>store.tables.academicYear;
  const course=code=>arr(store.tables.courses).find(x=>value(x.courseCode).toUpperCase()===value(code).toUpperCase());
  const idKey=x=>value(x).toUpperCase();
+ const rules=()=>clone(bag().bulkRules||DEFAULT_BULK_RULES);
+ function requireDeveloper(uid){const a=actor(uid);if(!['developer','owner'].includes(role(a)))error('ROLE_DENIED','Developer Dashboard access required.');}
+ function getRules(uid){requireDeveloper(uid);return rules();}
+ function setRules(uid,p){
+  requireDeveloper(uid);
+  const before=rules();
+  if(p?.expectedVersion!==before.version)error('STALE_REVISION','Import rules changed; reload the Developer Dashboard.');
+  if(Object.prototype.hasOwnProperty.call(p||{},'requiredFields')||Object.prototype.hasOwnProperty.call(p||{},'coreRequired'))error('RULES_INVALID','The four core Calendar fields must remain required.');
+  const next=clone(before);
+  if(p.maxRows!==undefined){if(!Number.isInteger(p.maxRows)||p.maxRows<1||p.maxRows>500)error('RULES_INVALID','Max rows must be between 1 and 500.');next.maxRows=p.maxRows;}
+  if(p.defaultSessionType!==undefined){if(!TYPES.has(p.defaultSessionType))error('RULES_INVALID','Choose a supported Session Type.');next.defaultSessionType=p.defaultSessionType;}
+  if(p.fields!==undefined){
+   if(!p.fields||Array.isArray(p.fields)||typeof p.fields!=='object')error('RULES_INVALID','Invalid field policy.');
+   for(const [key,change] of Object.entries(p.fields)){
+    if(!['topic','room','facultySuggestion'].includes(key)||!change||typeof change!=='object'||Array.isArray(change))error('RULES_INVALID','Unsupported import rule field.');
+    for(const prop of Object.keys(change))if(!['required','todoOwner','label'].includes(prop))error('RULES_INVALID','Unsupported import rule setting.');
+    if(Object.prototype.hasOwnProperty.call(change,'required')&&typeof change.required!=='boolean')error('RULES_INVALID','Required setting must be a checkbox.');
+    if(Object.prototype.hasOwnProperty.call(change,'todoOwner')&&!['adc','adfa'].includes(change.todoOwner))error('RULES_INVALID','Missing detail owner must be ADC or ADFAD.');
+    if(Object.prototype.hasOwnProperty.call(change,'label')&&(typeof change.label!=='string'||!value(change.label)||value(change.label).length>60))error('RULES_INVALID','A rule label must be 1-60 characters.');
+    if(key==='facultySuggestion'&&(change.todoOwner&&change.todoOwner!=='adfa'||change.required===true))error('RULES_INVALID','Faculty assignment is always owned by ADFAD and never an ADC publication blocker.');
+    Object.assign(next.fields[key],change);
+   }
+  }
+  next.fields.facultySuggestion.required=false;next.fields.facultySuggestion.todoOwner='adfa';
+  next.version=before.version+1;
+  bag().bulkRules=next;
+  store.audit({domain:'scheduling',changeType:'bulk_import_rules_updated',actorFirebaseUid:uid,before,after:clone(next)});
+  store.commit();return clone(next);
+ }
+ const extraRequired=d=>{
+  const r=rules();
+  if(r.fields.topic.required&&!d.topic)error('INVALID_SCHEDULE','Session title is required by the current Developer rules.');
+  if(r.fields.room.required&&!d.room)error('INVALID_SCHEDULE','Room number is required by the current Developer rules.');
+ };
+
  function canonical(raw){
   const d=raw||{};
   return {academicYear:value(d.academicYear||year()),courseCode:idKey(d.courseCode),date:value(d.date),
@@ -53,31 +96,35 @@ function createScheduleWorkflow({store}={}){
   const row={id,revision:1,values:d,createdBy:uid,updatedBy:uid,publishedSessionId:null};
   b.drafts[id]=row;store.audit({domain:'scheduling',changeType:'adc_draft_saved',actorFirebaseUid:uid,draftId:id});store.commit();return clone(row);
  }
- function publish(uid,p){
-  requireADC(uid);const b=bag(),draft=b.drafts[p?.draftId];
-  if(!draft)error('NOT_FOUND','ADC draft not found.');
-  if(draft.revision!==p.expectedRevision)error('STALE_REVISION','Reload the current ADC draft before publishing.');
-  if(draft.publishedSessionId)error('DUPLICATE_SESSION','This ADC draft has already been published.');
-  const d=draft.values,c=validate(d);
-  // Two independently approved LAB stations may share the same Course, date
-  // and interval, especially when Topic and room are still blank. Only the
-  // originating draft ID is idempotent: the same draft cannot publish twice.
-  const id=uuidFor('adc-published:'+draft.id);
-  const session={id,academicYear:d.academicYear,curriculumYear:String(c.curriculumYear),courseCode:c.courseCode,courseName:c.courseName,
-    date:d.date,startTime:d.startTime+':00',endTime:d.endTime+':00',sessionType:d.sessionType,
-    topic:d.topic,room:d.room||null,assignments:[],suggestedFacultyIds:clone(d.suggestedFacultyIds),
-    scheduleStatus:'published',scheduleVersion:1,schedulePublishedAt:store.nowIso(),
-    schedulePublishedBy:uid,facultyStatus:'pending',facultyRevision:0,updatedAtUtc:store.nowIso()};
-  store.tables.sessions.push(session);
-  // These two built-in LAB tester accounts must receive Stage 2 course
-  // access immediately, even when ADC publishes a previously unseen Course.
-  // Other LAB accounts and future years remain explicitly Owner-scoped.
-  if(session.sessionType==='LAB')for(const user of store.tables.users){
+ function makePublishedSession(d,c,id,uid){
+  return {id,academicYear:d.academicYear,curriculumYear:String(c.curriculumYear),courseCode:c.courseCode,courseName:c.courseName,
+   date:d.date,startTime:d.startTime+':00',endTime:d.endTime+':00',sessionType:d.sessionType,
+   topic:d.topic,room:d.room||null,assignments:[],suggestedFacultyIds:clone(d.suggestedFacultyIds),
+   scheduleStatus:'published',scheduleVersion:1,schedulePublishedAt:store.nowIso(),
+   schedulePublishedBy:uid,facultyStatus:'pending',facultyRevision:0,updatedAtUtc:store.nowIso()};
+ }
+ function allowBuiltInLabTesters(session){
+  if(session.sessionType!=='LAB')return;
+  for(const user of store.tables.users){
    if(!['uid-lab-1','uid-lab-2'].includes(user.firebaseUid)||value(user.baseRole).toLowerCase()!=='lab'||user.active!==true)continue;
    const scopes=arr(user.labScopes),scope={academicYear:session.academicYear,curriculumYear:String(session.curriculumYear),courseCode:session.courseCode};
    if(!scopes.some(x=>['academicYear','curriculumYear','courseCode'].every(k=>String(x[k])===String(scope[k]))))scopes.push(scope);
    user.labScopes=scopes;
   }
+ }
+ function publish(uid,p){
+  requireADC(uid);const b=bag(),draft=b.drafts[p?.draftId];
+  if(!draft)error('NOT_FOUND','ADC draft not found.');
+  if(draft.revision!==p.expectedRevision)error('STALE_REVISION','Reload the current ADC draft before publishing.');
+  if(draft.publishedSessionId)error('DUPLICATE_SESSION','This ADC draft has already been published.');
+  const d=draft.values,c=validate(d);extraRequired(d);
+  // Two independently approved LAB stations may share the same Course, date
+  // and interval, especially when Topic and room are still blank. Only the
+  // originating draft ID is idempotent: the same draft cannot publish twice.
+  const id=uuidFor('adc-published:'+draft.id);
+  const session=makePublishedSession(d,c,id,uid);
+  store.tables.sessions.push(session);
+  allowBuiltInLabTesters(session);
   draft.publishedSessionId=id;
   store.audit({domain:'scheduling',changeType:'adc_schedule_published',actorFirebaseUid:uid,academicYear:session.academicYear,sessionId:id,
     after:{courseCode:session.courseCode,date:session.date,startTime:session.startTime,endTime:session.endTime,sessionType:session.sessionType}});
@@ -156,6 +203,134 @@ function createScheduleWorkflow({store}={}){
   store.commit();
   return {sessionId:s.id,facultyRevision:s.facultyRevision,facultyStatus:'confirmed',assignments:clone(out),availabilityWarnings:[...new Set(warnings)]};
  }
+
+ function splitRange(raw){
+  const t=value(raw).replace(/\u2013|\u2014/g,'-');
+  const found=t.match(/^\s*(\d{1,2}:[0-5]\d)\s*-\s*(\d{1,2}:[0-5]\d)\s*$/);
+  return found?[found[1],found[2]]:['',''];
+ }
+ const clock=v=>{const s=value(v);return /^\d:[0-5]\d$/.test(s)?'0'+s:s;};
+ const dateValue=x=>{
+  const s=value(x),match=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  return match?match[3]+'-'+match[1].padStart(2,'0')+'-'+match[2].padStart(2,'0'):s;
+ };
+ function normalizeImported(row){
+  const time=splitRange(row.time||row.Time||'');
+  const sourceYear=value(row.year||row.curriculumYear||row.Year);
+  const ids=arr(row.suggestedFacultyIds);
+  const d=canonical({courseCode:row.courseNumber||row.courseCode,date:dateValue(row.date),
+   academicYear:row.academicYear||year(),sessionType:row.sessionType||rules().defaultSessionType,
+   startTime:clock(row.startTime||time[0]),endTime:clock(row.endTime||time[1]),
+   topic:row.title??row.topic??row.courseTitle??'',room:row.room??row.roomNumber??'',
+   suggestedFacultyIds:ids});
+  return {d,sourceYear};
+ }
+ function previewBulk(uid,p){
+  requireADC(uid);
+  if(!p||!Array.isArray(p.rows)||p.rows.length<1||p.rows.length>rules().maxRows)error('IMPORT_VALIDATION','Import needs 1-'+rules().maxRows+' rows.');
+  const r=rules(),items=[],errors=[];
+  for(let i=0;i<p.rows.length;i++){
+   const row=p.rows[i],rowNumber=i+1,problems=[];
+   if(!row||Array.isArray(row)||typeof row!=='object')problems.push('Expected a row of course fields.');
+   let d=null,c=null;
+   if(!problems.length){
+    try{
+     const normalized=normalizeImported(row);d=normalized.d;
+     if(!/^[1-4]$/.test(normalized.sourceYear))problems.push('Curriculum Year (1-4) is required.');
+     else {c=validate(d);if(String(c.curriculumYear)!==normalized.sourceYear)problems.push('Curriculum Year does not match the Course Catalog.');}
+     if(!problems.length)extraRequired(d);
+    }catch(e){problems.push(e.message);}
+   }
+   const item={rowNumber,normalized:d?{...d,curriculumYear:c?String(c.curriculumYear):''}:null,errors:problems};
+   items.push(item);
+   if(problems.length)errors.push({rowNumber,messages:problems});
+  }
+  const accepted=items.filter(x=>!x.errors.length);
+  const adcTodoCount=accepted.filter(item=>(!item.normalized.topic&&r.fields.topic.todoOwner==='adc')||(!item.normalized.room&&r.fields.room.todoOwner==='adc')).length;
+  return {valid:errors.length===0,readyCount:accepted.length,invalidCount:errors.length,items,errors,rulesVersion:r.version,
+   adcTodoCount,adfadTodoCount:accepted.length};
+ }
+ function publishBulk(uid,p){
+  requireADC(uid);const batchId=value(p?.batchId);
+  if(!/^[a-zA-Z0-9_.:-]{1,120}$/.test(batchId))error('IMPORT_VALIDATION','Provide a unique batch ID (letters, digits, colon, dot, hyphen or underscore).');
+  const b=bag(),signature=JSON.stringify(p.rows);
+  const previous=(b.bulkImports||{})[batchId];
+  if(previous){
+   if(previous.signature!==signature)error('IMPORT_CONFLICT','This batch ID has already been used for different rows.');
+   return clone(previous.response);
+  }
+  if(p.expectedRulesVersion!==rules().version)error('STALE_REVISION','Developer rules changed after preview; preview this file again.');
+  const preview=previewBulk(uid,p);
+  if(!preview.valid)error('IMPORT_VALIDATION',preview.invalidCount+' invalid row(s). Review the preview before publishing.');
+  const prepared=preview.items.map((item,i)=>{
+   const d=item.normalized,c=course(d.courseCode),id=uuidFor('adc-bulk:'+batchId+':'+(i+1));
+   return makePublishedSession(d,c,id,uid);
+  });
+  // In-memory staging is complete. Commit all rows in one transaction to
+  // browser-local Demo storage; never overwrite old Sessions or create DOE.
+  store.tables.sessions.push(...prepared);
+  for(const session of prepared)allowBuiltInLabTesters(session);
+  const response={batchId,createdCount:prepared.length,sessionIds:prepared.map(x=>x.id),adcTodoCount:preview.adcTodoCount,adfadTodoCount:preview.adfadTodoCount};
+  if(!b.bulkImports)b.bulkImports={};
+  b.bulkImports[batchId]={signature,response:clone(response),rulesVersion:preview.rulesVersion,actor:uid,at:store.nowIso()};
+  store.audit({domain:'scheduling',changeType:'adc_bulk_import_published',actorFirebaseUid:uid,batchId,academicYear:year(),createdCount:prepared.length,sessionIds:response.sessionIds});
+  store.commit();
+  return clone(response);
+ }
+ function labBookedRoom(s){
+  if(s.sessionType!=='LAB')return false;
+  const key=JSON.stringify({academicYear:s.academicYear,curriculumYear:String(s.curriculumYear),courseCode:s.courseCode,date:s.date});
+  const releases=arr(store.tables.extra?.labScheduling?.blocks?.[key]?.publications),published=releases[releases.length-1]?.public;
+  return Boolean(arr(published?.stations).find(st=>st.sessionId===s.id&&arr(st.runs).some(run=>value(run.room||run.roomId))));
+ }
+ function workItemsFor(uid){
+  const r=role(actor(uid)),visible=r==='developer'||r==='owner'?['adc','adfa']:r==='adc'?['adc']:ADFAD.has(r)?['adfa']:[];
+  const policy=rules(),items=[];
+  for(const s of arr(store.tables.sessions)){
+   if(s.academicYear!==year()||s.scheduleStatus!=='published')continue;
+   const groups={};
+   const add=(stage,label)=>{
+    if(!visible.includes(stage))return;
+    if(!groups[stage])groups[stage]={sessionId:s.id,stage,courseCode:s.courseCode,date:s.date,sessionType:s.sessionType,
+     status:'ready',missing:[],scheduleVersion:Number(s.scheduleVersion||1)};
+    groups[stage].missing.push(label);
+   };
+   if(!value(s.topic))add(policy.fields.topic.todoOwner,policy.fields.topic.label);
+   if(!value(s.room)&&!labBookedRoom(s))add(policy.fields.room.todoOwner,policy.fields.room.label);
+   if(!arr(s.assignments).length)
+    add('adfa',arr(s.suggestedFacultyIds).length?'Confirm suggested faculty':'Assign faculty (no suggestion)');
+   if(groups.adfa&&s.sessionType==='LAB'){
+    const key=JSON.stringify({academicYear:s.academicYear,curriculumYear:String(s.curriculumYear),courseCode:s.courseCode,date:s.date});
+    if(!arr(store.tables.extra?.labScheduling?.blocks?.[key]?.publications).length)groups.adfa.status='waiting_for_lab';
+   }
+   items.push(...Object.values(groups));
+  }
+  return items.sort((a,b)=>a.date.localeCompare(b.date)||a.courseCode.localeCompare(b.courseCode)||a.stage.localeCompare(b.stage));
+ }
+ function completeDetails(uid,p){
+  const a=actor(uid),s=arr(store.tables.sessions).find(x=>x.id===p?.sessionId&&x.scheduleStatus==='published'&&x.academicYear===year());
+  if(!s)error('NOT_FOUND','Published Course Session not found.');
+  if(p.expectedVersion!==Number(s.scheduleVersion||1))error('STALE_REVISION','Course details changed; reload Work Queue.');
+  const settings=rules(),changed={};
+  for(const [from,to] of [['title','topic'],['room','room']]){
+   if(!Object.prototype.hasOwnProperty.call(p,from))continue;
+   const owner=settings.fields[to].todoOwner;
+   if(!['developer','owner'].includes(role(a))&&!(owner==='adc'&&role(a)==='adc')&&!(owner==='adfa'&&ADFAD.has(role(a))))
+    error('ROLE_DENIED','Only the responsible office may complete '+from+'.');
+   const next=value(p[from]).slice(0,to==='topic'?400:160);
+   if(!next)error('INVALID_SCHEDULE','Cannot complete '+from+' with an empty value.');
+   if(next!==value(s[to]))changed[to]=next;
+  }
+  if(!Object.keys(changed).length)error('INVALID_SCHEDULE','Enter a title or room to complete.');
+  if(s.sessionType==='LAB'){
+   const key=JSON.stringify({academicYear:s.academicYear,curriculumYear:String(s.curriculumYear),courseCode:s.courseCode,date:s.date});
+   if(arr(store.tables.extra?.labScheduling?.blocks?.[key]?.publications).length)error('LAB_CHANGE_REQUIRED','LAB has published operational details; changes must follow its approval workflow.');
+  }
+  const before={topic:s.topic,room:s.room};
+  Object.assign(s,changed);s.scheduleVersion=Number(s.scheduleVersion||1)+1;s.updatedAtUtc=store.nowIso();
+  store.audit({domain:'scheduling',changeType:'adc_schedule_details_completed',actorFirebaseUid:uid,sessionId:s.id,before,after:{topic:s.topic,room:s.room}});
+  store.commit();return {sessionId:s.id,scheduleVersion:s.scheduleVersion,topic:s.topic,room:s.room};
+ }
  function listing(uid){
   const a=actor(uid),r=role(a),canADC=ADC.has(r),canADFAD=ADFAD.has(r);
   if(!canADC&&!canADFAD)error('ROLE_DENIED','Only ADC, ADFAD and Developer can access the scheduling workflow.');
@@ -173,9 +348,9 @@ function createScheduleWorkflow({store}={}){
     facultyRevision:Number(s.facultyRevision||0),assignments:arr(s.assignments).map(x=>({facultyId:x.facultyId,teachingRole:x.teachingRole,creditedHours:x.creditedHours})),
     labStatus:s.sessionType==='LAB'?(labRelease?'published':'pending'):'not-applicable'};
   }).sort((a,b)=>String(a.date??'').localeCompare(String(b.date??''))||String(a.startTime??'').localeCompare(String(b.startTime??''))||String(a.courseCode??'').localeCompare(String(b.courseCode??'')));
-  return {capabilities:{canADC,canADFAD,canDeveloper:r==='developer'},academicYear:year(),courses,faculty,
-    drafts:canADC?Object.values(bag().drafts).filter(x=>!x.publishedSessionId).map(clone):[],sessions};
+  return {capabilities:{canADC,canADFAD,canDeveloper:r==='developer',canEditRules:['developer','owner'].includes(r)},academicYear:year(),courses,faculty,
+    rules:rules(),workItems:workItemsFor(uid),drafts:canADC?Object.values(bag().drafts).filter(x=>!x.publishedSessionId).map(clone):[],sessions};
  }
- return Object.freeze({list:listing,saveDraft,publish,suggest,confirmFaculty});
+ return Object.freeze({list:listing,saveDraft,publish,suggest,confirmFaculty,previewBulk,publishBulk,getRules,setRules,completeDetails});
 }
 module.exports={createScheduleWorkflow};
