@@ -40,7 +40,11 @@ test('stage 1 validates required course, date and exact start/end; rejects stale
  }
  const d=f.workflow.saveDraft('adc',proposal);
  assert.throws(()=>f.workflow.publish('adc',{draftId:d.id,expectedRevision:d.revision-1}),e=>e.code==='STALE_REVISION');
- published(f);assert.throws(()=>f.workflow.publish('adc',{draftId:d.id,expectedRevision:d.revision}),e=>e.code==='DUPLICATE_SESSION');
+ const first=published(f);
+ const second=f.workflow.publish('adc',{draftId:d.id,expectedRevision:d.revision});
+ assert.notEqual(first.session.id,second.session.id,'separate ADC drafts may be separate parallel stations');
+ assert.equal(f.tables.sessions.length,2);
+ assert.throws(()=>f.workflow.publish('adc',{draftId:d.id,expectedRevision:d.revision}),e=>e.code==='DUPLICATE_SESSION');
 });
 test('LAB can publish group/room allocations before any faculty exists; ADFAD confirms a suggestion afterwards',async()=>{
  const f=fixture(),s=published(f).session,ctx=f.lab.read('lab',s.id),d=ctx.draft;

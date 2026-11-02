@@ -17,7 +17,8 @@
         "ADFAD confirms suggested or newly selected Faculty only after LAB publication (for new LAB sessions), explicitly records credited hours and reviews uncertain availability; teaching DOE is not multiplied by student groups.",
         "Developer and Owner can exercise both ADC and ADFAD stages and the existing LAB editor; new Calendar Schedule Workflow entry and documented synthetic test path.",
         "Automatically grant the two built-in LAB Demo testers scoped access to a newly ADC-published LAB Course; other LAB accounts remain Owner-granted.",
-        "Refresh Calendar only after published LAB changes, and enable Developer annual-year Owner controls for testing."
+        "Refresh Calendar only after published LAB changes, and enable Developer annual-year Owner controls for testing.",
+        "Permit separate ADC drafts for parallel LAB stations sharing the same Course/date/time and missing optional titles; reject re-publication of the same draft."
       ]
     },
     {

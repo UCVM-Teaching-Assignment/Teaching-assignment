@@ -59,8 +59,9 @@ function createScheduleWorkflow({store}={}){
   if(draft.revision!==p.expectedRevision)error('STALE_REVISION','Reload the current ADC draft before publishing.');
   if(draft.publishedSessionId)error('DUPLICATE_SESSION','This ADC draft has already been published.');
   const d=draft.values,c=validate(d);
-  if(store.tables.sessions.some(x=>x.academicYear===d.academicYear&&idKey(x.courseCode)===d.courseCode&&x.date===d.date&&normClock(x.startTime)===d.startTime&&normClock(x.endTime)===d.endTime&&x.sessionType===d.sessionType&&value(x.topic)===d.topic))
-   error('DUPLICATE_SESSION','A matching Session is already on Calendar; choose a different topic or time.');
+  // Two independently approved LAB stations may share the same Course, date
+  // and interval, especially when Topic and room are still blank. Only the
+  // originating draft ID is idempotent: the same draft cannot publish twice.
   const id=uuidFor('adc-published:'+draft.id);
   const session={id,academicYear:d.academicYear,curriculumYear:String(c.curriculumYear),courseCode:c.courseCode,courseName:c.courseName,
     date:d.date,startTime:d.startTime+':00',endTime:d.endTime+':00',sessionType:d.sessionType,
