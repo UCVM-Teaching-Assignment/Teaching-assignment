@@ -42,7 +42,7 @@
   if(!dialog)return;
   const isLab=office==='lab';
   const instructions=isLab
-   ?'One CSV row per student group per run. Same Run Key = same run; for All, list every assigned group in that run. Fill Room, Capacity, Group Code and Student IDs separated with semicolons. Run time must remain inside ADC-approved Session time. No Faculty/DOE edits here.'
+   ?'One CSV row per student group per run. Same Run Key = same run; for All, list every assigned group in that run. Fill Room, optional Subspace, Capacity, Group Code and Student IDs separated with semicolons. Run time must remain inside ADC-approved Session time. No Faculty/DOE edits here.'
    :'One CSV row per Faculty per Session. Duplicate Session ID rows are allowed for Primary and Secondary teachers. Fill Faculty ID, Teaching Role and Credited Hours. Existing appointments, AFC, time conflicts and work activities are checked on preview. Any conflict blocks the entire batch.';
   const errors=preview?.errors||[];
   const previewHtml=preview?'<p role="status">'+(preview.valid?'All rows passed validation':'Upload BLOCKED')+

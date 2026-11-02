@@ -79,7 +79,7 @@
  ].join('\n')+'\n';
  const OFFICE_COLUMNS={
   lab:[['Session ID','sessionId'],['Course Number','courseNumber'],['Date','date'],
-   ['Start Time','startTime'],['End Time','endTime'],['Run Key','runKey'],['Room Number','room'],
+   ['Start Time','startTime'],['End Time','endTime'],['Run Key','runKey'],['Room Number','room'],['Subspace','subspace'],
    ['Capacity','capacity'],['Attendance','attendance'],['Group Code','groupCode'],
    ['Student IDs','studentIds'],['Student Names','studentNames'],['Expected Lab Revision','expectedRevision']],
   adfa:[['Session ID','sessionId'],['Course Number','courseNumber'],['Date','date'],

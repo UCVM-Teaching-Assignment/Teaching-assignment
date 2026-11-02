@@ -57,7 +57,7 @@ function createOfficeBulk({store}){
     for(const groupId of ids){
      const g=ctx.draft.groups.find(x=>x.id===groupId);
      rows.push({sessionId:s.id,courseNumber:s.courseCode,date:s.date,startTime:run.start,endTime:run.end,
-      runKey:run.id,room:room?.label||'',capacity:room?.capacity??'',
+      runKey:run.id,room:room?.label||'',subspace:room?.subspace||'',capacity:room?.capacity??'',
       attendance:run.mode,groupCode:g?.code||'',studentIds:list(g?.members).map(m=>m.id).join(';'),
       studentNames:list(g?.members).map(m=>m.name).join(';'),expectedRevision:ctx.revision});
     }
@@ -105,9 +105,10 @@ function createOfficeBulk({store}){
    groups.set(groupId,{id:groupId,code:groupCode,members:roster});
    const roomLabel=val(row.room),capacity=Number(row.capacity);
    if(!roomLabel||!val(row.capacity)||!Number.isInteger(capacity)||capacity<1)throw codeError('ROOM_REQUIRED','Each LAB run needs a room and positive integer capacity.');
-   const roomId='bulk-room:'+roomLabel.toLowerCase();
+   const subspace=val(row.subspace).toLowerCase(),resourceKey=roomLabel.toLowerCase();
+   const roomId='bulk-room:'+resourceKey+':'+subspace;
    if(rooms.has(roomId)&&rooms.get(roomId).capacity!==capacity)throw codeError('CAPACITY_CONFLICT','One room must have the same capacity in this batch.');
-   rooms.set(roomId,{id:roomId,label:roomLabel,resourceKey:roomLabel.toLowerCase(),subspace:'',capacity});
+   rooms.set(roomId,{id:roomId,label:roomLabel,resourceKey,subspace,capacity});
    const mode=val(row.attendance).toLowerCase()==='all'?'all':'groups';
    if(!['all','groups','selected groups','group'].includes(val(row.attendance).toLowerCase()))
     throw codeError('INVALID_DRAFT','Attendance must be All or Groups.');
