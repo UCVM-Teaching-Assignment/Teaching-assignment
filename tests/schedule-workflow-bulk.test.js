@@ -106,3 +106,14 @@ test('ambiguous numeric Course Number is not silently mapped to the wrong Course
  assert.equal(preview.valid,false);
  assert.match(preview.errors[0].messages.join(' '),/ambiguous/i);
 });
+
+test('ADC can complete an omitted title after LAB has published its rooms and rosters',()=>{
+ const f=fixture(),id=f.service.publishBulk('adc',{batchId:'lab-title',rows:[{courseNumber:'VETM 505',year:'3',date:'2026-11-06',time:'08:30-10:30',sessionType:'LAB'}],expectedRulesVersion:1}).sessionIds[0];
+ const key=JSON.stringify({academicYear:'2026-27',curriculumYear:'3',courseCode:'VETM 505',date:'2026-11-06'});
+ f.tables.extra.labScheduling={blocks:{[key]:{publications:[{public:{stations:[{sessionId:id,runs:[{room:'CSB Wards'}]}]}}]}}};
+ assert.deepEqual(f.service.list('adc').workItems[0].missing,['Session title']);
+ const result=f.service.completeDetails('adc',{sessionId:id,expectedVersion:1,title:'Applied practice'});
+ assert.equal(result.topic,'Applied practice');
+ assert.equal(f.service.list('adc').workItems.length,0);
+ assert.equal(f.tables.extra.labScheduling.blocks[key].publications.length,1);
+});
