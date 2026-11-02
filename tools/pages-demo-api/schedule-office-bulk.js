@@ -34,7 +34,11 @@ function createOfficeBulk({store}){
  function officeExport(uid,office){
   requireOffice(uid,office);
   const temp=fakeStore(),lab=createLabService({store:temp}),rows=[];
-  const sessions=list(store.tables.sessions).filter(s=>isPending(s)||office==='lab'&&s.academicYear===store.tables.academicYear&&s.scheduleStatus==='published');
+  const all=list(store.tables.sessions).filter(s=>s.academicYear===store.tables.academicYear&&s.cancelled!==true);
+  // LAB validation is scoped by Course/date, not by individual Session.
+  // Include legacy siblings when ADC publishes a new station into that scope.
+  const pendingScopes=new Set(all.filter(s=>s.sessionType==='LAB'&&s.scheduleStatus==='published'&&!hasLabRelease(store.tables,s)).map(labKey));
+  const sessions=office==='lab'?all.filter(s=>s.sessionType==='LAB'&&pendingScopes.has(labKey(s))):all.filter(isPending);
   for(const s of sessions){
    if(office==='adfa'){
     if(!isPending(s))continue;
@@ -67,11 +71,12 @@ function createOfficeBulk({store}){
  }
  function keysFromRows(uid,office,rows){
   const originals=new Map(list(store.tables.sessions).map(s=>[s.id,s]));
+  const publishedLabScopes=new Set([...originals.values()].filter(s=>s.academicYear===store.tables.academicYear&&s.sessionType==='LAB'&&s.scheduleStatus==='published').map(labKey));
   const grouped=new Map(),errors=[];
   if(!Array.isArray(rows)||rows.length<1||rows.length>500)throw codeError('IMPORT_VALIDATION','Provide 1–500 office import rows.');
   for(let i=0;i<rows.length;i++){
    const row=rows[i],id=val(row?.sessionId),s=originals.get(id),rowNumber=i+1;
-   if(!row||typeof row!=='object'||Array.isArray(row)||!s||s.scheduleStatus!=='published'||s.academicYear!==store.tables.academicYear){
+   if(!row||typeof row!=='object'||Array.isArray(row)||!s||s.academicYear!==store.tables.academicYear||!(s.scheduleStatus==='published'||office==='lab'&&s.sessionType==='LAB'&&publishedLabScopes.has(labKey(s)))){
     errors.push({rowNumber,code:'INVALID_SESSION',message:'Use an ADC-published Session ID in the active academic year.'});continue;
    }
    if(office==='lab'&&s.sessionType!=='LAB'){errors.push({rowNumber,code:'INVALID_SESSION',message:'LAB imports must contain LAB Sessions only.'});continue}
