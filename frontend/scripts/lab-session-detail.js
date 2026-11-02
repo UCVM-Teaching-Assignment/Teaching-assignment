@@ -2,7 +2,11 @@
   'use strict';
   const api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
-  if(root)root.UCVM_LAB_DETAIL=api;
+  if(root){
+    root.UCVM_LAB_DETAIL=api;
+    const enable=()=>{if(root.UCVM_PAWS_DEMO_API&&root.UCVM_ASSETS?.loadScriptOnce)root.UCVM_ASSETS.loadScriptOnce('lab-scheduling-entry.js','PAWS_LAB_SCHEDULING').catch(error=>console.warn('[Lab scheduling]',error.message));};
+    if(root.document?.readyState==='complete')enable();else root.addEventListener?.('load',enable,{once:true});
+  }
 })(typeof window==='undefined'?null:window,function(){
   'use strict';
   const text=value=>String(value??'').trim();
@@ -26,7 +30,10 @@
     const actionCell=row=>hasActions?`<td><div class="lab-row-actions">${actions(row)}</div></td>`:'';
     const stations=model.stations.map(row=>`<tr data-lab-session="${escape(row.id)}"><th scope="row">${title(row)}</th><td>${room(row)}</td>${model.slots.map(time=>time===slot(row)?'<td><span class="lab-group-missing">Not provided</span></td>':'<td class="lab-not-scheduled"><span class="sr-only">Not scheduled in this source interval</span></td>').join('')}${actionCell(row)}</tr>`).join('');
     const srl=model.srl.map(row=>`<tr><th scope="row">${title(row)}</th><td>${room(row)}</td><td>${escape(slot(row))}</td>${actionCell(row)}</tr>`).join('');
-    return `<div class="lab-tables"><p class="lab-source-note">Times shown are the stored activity intervals. Student group rotations are not provided in the current source.</p><div class="lab-table-scroll"><table class="lab-detail-table"><caption class="sr-only">LAB activities and source intervals</caption><thead><tr><th scope="col">Station / Instructor</th><th scope="col">Room</th>${model.slots.map(time=>`<th scope="col">${escape(time)}</th>`).join('')}${actionHead}</tr></thead><tbody>${stations}</tbody></table></div>${srl?`<div class="lab-table-scroll"><table class="lab-detail-table"><caption class="sr-only">SRL activities</caption><thead><tr><th scope="col">SRL / Instructor</th><th scope="col">Room</th><th scope="col">Time</th>${actionHead}</tr></thead><tbody>${srl}</tbody></table></div>`:''}</div>`;
+    const labSource=`<p class="lab-source-note">Times shown are the stored activity intervals. Student group rotations are not provided in the current source.</p><div class="lab-table-scroll"><table class="lab-detail-table"><caption class="sr-only">LAB activities and source intervals</caption><thead><tr><th scope="col">Station / Instructor</th><th scope="col">Room</th>${model.slots.map(time=>`<th scope="col">${escape(time)}</th>`).join('')}${actionHead}</tr></thead><tbody>${stations}</tbody></table></div>`;
+    const demo=typeof window!=='undefined'&&window.UCVM_PAWS_DEMO_API&&model.stations.length;
+    const lab=demo?`<button type="button" data-paws-lab-open="${escape(model.stations[0].id)}">Lab Scheduling / Published Groups</button><section data-paws-lab-published="${escape(model.stations[0].id)}"></section><details data-paws-lab-source open><summary>Approved source sessions and teaching changes</summary>${labSource}</details>`:labSource;
+    return `<div class="lab-tables">${lab}${srl?`<div class="lab-table-scroll"><table class="lab-detail-table"><caption class="sr-only">SRL activities</caption><thead><tr><th scope="col">SRL / Instructor</th><th scope="col">Room</th><th scope="col">Time</th>${actionHead}</tr></thead><tbody>${srl}</tbody></table></div>`:''}</div>`;
   }
 
   // Calendar-only projection. SQL Session rows and the existing detail model stay unchanged.
