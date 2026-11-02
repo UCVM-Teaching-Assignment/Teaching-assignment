@@ -6,16 +6,16 @@
       "pr": 102,
       "title": "Lab group scheduling and publication in the Testing Demo",
       "changes": [
-        "ADC can publish Course/date/start/end without optional title, room or Faculty; both single-session and CSV/TSV bulk import are supported.",
-        "Bulk import previews every row, validates Course/Year/Time, publishes all-or-none and prevents duplicate retry by batch ID.",
-        "Developer Dashboard edits versioned import rules: optional field labels, required flags, work owners, import limit and default Session Type.",
-        "Four core Calendar fields remain mandatory; changing a rule never silently rewrites existing Session or DOE data.",
-        "Missing title and room create ADC-owned Tasks by default; Developer can change owners and staff can complete pending fields directly.",
-        "Missing Faculty suggestion belongs to ADFAD, not ADC; ADFAD confirms suggestions or independently assigns Faculty and credited hours.",
-        "LAB follows ADC publication to book rooms, capacities, student groups and restricted rosters, independently of Faculty approval.",
-        "LAB student/room conflicts still block, while ADFAD handles Faculty/AFC and unknown availability conflicts at final assignment.",
-        "Developer can test ADC, LAB and ADFAD stages; Calendar reflects published updates and Tasks presents live role-scoped work.",
-        "PR #102 remains Testing Demo only; no PAWS Beta/SQL writes, real roster import, DOE bulk calculations or production publication."
+        "ADC-only Schedule Workflow publishes single or CSV/TSV bulk Course Sessions; Developer and Owner retain full testing access.",
+        "Every ADC publication immediately generates LAB tasks for LAB Sessions and ADFAD Faculty tasks for all Session types, including cases without suggested Faculty.",
+        "LAB and ADFAD now have separate office Work Queue panels and prefilled downloadable CSV templates for their assigned Sessions.",
+        "LAB bulk upload records rooms, capacity, run times and mandatory student groups/rosters; preview blocks collisions and invalid staffing-free lab allocations.",
+        "ADFAD bulk upload records confirmed Faculty, teaching roles and credited hours, and runs AFC, appointment, work-activity and cross-session conflict checks.",
+        "LAB/ADFAD office batches validate in an isolated store and publish atomically only when all rows pass, using revision checks and idempotent Batch IDs.",
+        "ADFAD can view and download work immediately after ADC publish; LAB Sessions show Waiting for LAB until operational group publication is complete.",
+        "Role-based office scopes restrict LAB roster access; public Calendar displays published rooms/groups and confirmed instructors, never private student identities.",
+        "Developer Dashboard keeps editable versioned ADC import rules and optional-field task ownership; four core publication fields stay required.",
+        "All changes remain browser-local PAWS Testing Demo only; PAWS Beta, production SQL and real rosters are unchanged."
       ]
     },
     {
