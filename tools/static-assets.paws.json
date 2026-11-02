@@ -78,6 +78,8 @@
   "faculty-admin-ccc-replacement.js",
   "lab-session-detail.js",
   "lab-scheduling-entry.js",
+  "schedule-workflow.js",
+  "schedule-workflow.css",
   "lab-scheduling-editor.js",
   "lab-scheduling.css",
   "calendar-activity-placement.js",
