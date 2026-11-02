@@ -10,7 +10,8 @@
         "Separate saved drafts from versioned published group tables and restricted roster snapshots; preserve Primary and Secondary teaching roles.",
         "Block capacity, overlap, stale-source and protected assignment changes rather than bypassing ADC or ADFAD approval.",
         "Add synthetic examples and focused tests; these browser-local tools do not modify University SQL, Firestore or live student records.",
-        "Document the trusted-backend and per-run teacher-approval work still required; this entry is not a production deployment claim."
+        "Document the trusted-backend and per-run teacher-approval work still required; this entry is not a production deployment claim.",
+        "Provide the two existing LAB Demo tester accounts explicit edit scopes for 2026-27 Lab courses, including browser-local data created before this change; preserve Owner grants for other users and future years."
       ]
     },
     {

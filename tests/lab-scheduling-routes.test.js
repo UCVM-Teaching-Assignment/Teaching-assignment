@@ -22,3 +22,19 @@ test('Faculty activity listing uses published labels, not changed working topics
  assert.equal((await f.request('/publish','POST',{sessionId:id,expectedRevision:saved.revision,requestId:'publish'})).status,200);
  f.tables.sessions[0].topic='UNPUBLISHED SECRET TOPIC';const listing=await f.request('','GET',undefined,'faculty');assert.ok(!JSON.stringify(listing).includes('UNPUBLISHED SECRET'));
 });
+
+test('LAB Coordinator opens and saves an ordinary 2026-27 Lab without Owner manually granting its course',async()=>{
+ const f=setup();
+ f.tables.users[1].firebaseUid='uid-lab-1';
+ f.tables.sessions.push({id:'ordinary-lab',academicYear:'2026-27',curriculumYear:'2',courseCode:'VTMD 304',date:'2026-11-03',sessionType:'LAB',topic:'Synthetic Year 2',startTime:'08:30:00',endTime:'10:30:00',room:'Demo Room',updatedAtUtc:'v1',assignments:[]});
+ const list=await f.request('','GET',undefined,'uid-lab-1');
+ assert.equal(list.status,200);
+ assert.equal(list.jsonBody.items.find(item=>item.sessionId==='ordinary-lab')?.canEdit,true);
+ const context=await f.request('/context?sessionId=ordinary-lab','GET',undefined,'uid-lab-1');
+ assert.equal(context.status,200);
+ assert.equal(context.jsonBody.capabilities.canEdit,true);
+ const updated=await f.request('/draft','POST',{sessionId:'ordinary-lab',expectedRevision:context.jsonBody.revision,requestId:'seeded-lab-edits',draft:context.jsonBody.draft},'uid-lab-1');
+ assert.equal(updated.status,200);
+ assert.equal(updated.jsonBody.revision,1);
+ assert.equal((await f.request('/context?sessionId=ordinary-lab','GET',undefined,'faculty')).jsonBody.draft,undefined);
+});

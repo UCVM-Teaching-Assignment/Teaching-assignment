@@ -42,7 +42,27 @@ function createLabService({store,annualState=()=>null}={}){
   const sessions=all.filter(s=>s.sessionType==='LAB'&&scopeMatch(s)).sort((a,b)=>text(a.id).localeCompare(text(b.id)));
   return {scope,sessions,all,key:JSON.stringify(scope),token:JSON.stringify(sessions.map(sourceFields)),archived:annual().years?.[scope.academicYear]?.status==='archived'};
  }
+ // Provision explicit course scopes for the two existing synthetic LAB tester
+ // accounts, including browsers that saved their Demo data before this feature.
+ // Other LAB users and future-year courses still require an Owner grant.
+ function ensureDemoLabFixtureScopes(){
+  const bag=state();
+  if(bag.demoLabFixtureScopesV1===true)return;
+  const scopes=distinct(list(store.tables.sessions)
+   .filter(s=>s.sessionType==='LAB'&&s.academicYear===store.tables.academicYear)
+   .map(s=>JSON.stringify({academicYear:s.academicYear,curriculumYear:String(s.curriculumYear),courseCode:s.courseCode})))
+   .map(value=>JSON.parse(value));
+  for(const user of list(store.tables.users)){
+   if(!['uid-lab-1','uid-lab-2'].includes(user.firebaseUid)||text(user.baseRole).toLowerCase()!=='lab'||user.active!==true)continue;
+   const existing=list(user.labScopes);
+   for(const scope of scopes)if(!existing.some(s=>['academicYear','curriculumYear','courseCode'].every(k=>String(s[k])===String(scope[k]))))existing.push(scope);
+   user.labScopes=existing;
+  }
+  bag.demoLabFixtureScopesV1=true;
+  store.commit();
+ }
  function actor(uid){
+  ensureDemoLabFixtureScopes();
   const u=typeof uid==='string'&&list(store.tables.users).find(x=>x.firebaseUid===uid);
   if(!u||u.active!==true||u.mustChangePassword!==false)fail('ROLE_DENIED','An active, ready Demo account is required.');
   return u;

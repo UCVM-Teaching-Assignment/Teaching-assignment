@@ -6,13 +6,13 @@ Target: UCVM-Teaching-Assignment/Teaching-assignment, PAWS Frontend Demo. No Bet
 
 Calendar -> Lab Scheduling; existing LAB detail -> Lab Scheduling / Published Groups. The entry loads through the existing asset loader; the editor and CSS load only when needed. Original source-session actions and SRL details remain accessible.
 
-Owner/Developer can load the explicitly synthetic Course 505 example and grant a LAB account one academic-year/cohort/course scope. The example intentionally retains the screenshot-shaped All/three-run student overlap as a Draft conflict; it is not silently published.
+The built-in LAB Coordinator and LAB Backup Demo accounts now get explicit edit scopes for existing 2026-27 LAB courses, including previously saved browser-local data. Each scope is an academic-year/cohort/course tuple, not a role-wide grant. Owner must still grant access for new courses, additional LAB accounts and other years. Owner/Developer can load the synthetic Course 505 example; its All/three-run overlap remains a Draft conflict and is not silently published.
 
 LAB editors can edit group labels and synthetic TSV rosters, room/subspace capacities, explicit activity audiences, arbitrary run rows, All/group allocations, save drafts, review issues and publish valid operational changes. Public tables retain Primary/Secondary and participant categories separately. Faculty receives the published projection without working rosters. Published roster views require scoped access and a release version. Template copying into an empty target clears memberships and leaves publication empty.
 
 ## Verification evidence
 
-- Dependency-free Node tests: `node --test tests/lab-scheduling*.test.js` - 43 passing, 0 failing at the implementation checkpoint. Includes source-detail integration, roles/scope, All, arbitrary groups, public privacy, source revisions, receipts, archive/copy behavior, real activity timeEvidence shape, pending AFC, future Course publication, renderer escaping and TSV parsing.
+- Dependency-free Node tests: `node --test tests/lab-scheduling*.test.js` - 48 passing, 0 failing after the LAB access scope fix. Includes source-detail integration, roles/scope, All, arbitrary groups, public privacy, source revisions, receipts, archive/copy behavior, real activity timeEvidence shape, pending AFC, future Course publication, renderer escaping and TSV parsing.
 - TDD: domain, routes, rendering, new integration findings and the published-list privacy regression were observed failing before their implementation/fix.
 - Chromium component QA: 1400x1000 and 390x844. Open/reopen -> group/roster editing -> Save Draft -> Publish Changes -> later Draft remains private -> out-of-envelope change is blocked -> switching to Faculty clears editor and shows published-only view. No page errors in the component run. Fixed mobile column squeeze and a close/reopen race.
 - Browser connector in this Chat session exposes read-only tabs, not browser control. Chromium direct navigation to localhost is blocked by environment policy. Rendered checks used an offline DOM harness, the actual editor/renderer, and a bridge to the actual new Demo route/service. They are component evidence, not full staged-site or authentication signoff.
@@ -28,7 +28,7 @@ Record actual PR/SHA/banner first; the shared Pages URL may show a different PR.
 | --- | --- | --- |
 | LAB-01 | Open Calendar and a LAB detail | Both entries work; source SWAP/actions and SRL remain accessible |
 | LAB-02 | Owner loads sample twice | Exactly two synthetic Sessions; no duplicated faculty/credits or overwritten existing source |
-| LAB-03 | Switch to LAB account | Only granted course/year/cohort can edit; no account/DOE grant |
+| LAB-03 | Switch to LAB Coordinator or LAB Backup and open an existing 2026-27 LAB course | Working Draft / Save Draft enabled without Owner setup, but no access to other years, Faculty information or DOE |
 | LAB-04 | Assign All with an empty audience | Explicit blocking issue; no whole-cohort fallback |
 | LAB-05 | Publish the default reference-shaped sample | Overlapping mandatory students block publication |
 | LAB-06 | Use disjoint valid synthetic audiences, known capacities and approved run intervals | Save, review and Publish Changes succeeds |
@@ -40,6 +40,21 @@ Record actual PR/SHA/banner first; the shared Pages URL may show a different PR.
 | LAB-12 | Faculty/public payload inspection | No student IDs/names, drafts, DOE, UCID, email or AFC reason |
 | LAB-13 | Archived and next-year template | Archive read-only; copied roster empty; no approvals/publication copied |
 | LAB-14 | Desktop, narrow viewport, keyboard and Escape | Readable scrollable tables; operable controls; no focus trap |
+
+
+## Quick manual test: LAB editing (PR #102)
+
+1. Open https://ucvm-teaching-assignment.github.io/Teaching-assignment/ . Confirm banner PR #102 and exact head SHA; this is a shared Testing site.
+2. Choose **LAB Coordinator** or **LAB Backup** in Demo Role Tester.
+3. From **Calendar**, click **Lab Scheduling**; alternatively click a LAB session, then **Lab Scheduling / Published Groups**.
+4. Choose an existing 2026-27 Year 1, 2 or 3 LAB in **Academic year / cohort / course / activity**. **Working Draft**, **Add group**, rooms/runs, **Save Draft** and **Publish Changes** must be available. The old generic **Edit Session** is intentionally administrator-only.
+5. Use only synthetic roster rows: a student ID, TAB, then name. Add Group 1, select it in **Assigned activity audience** and a run, enter a room with known capacity, then **Save Draft**. Close/reopen: draft remains; published display is unchanged.
+6. To test publication, complete all group rosters, use approved faculty coverage and room capacity, and resolve every Publication checks issue. Save again; **Publish Changes** should update only the published group table.
+7. For the All/three-group reference, switch to Owner and **Load synthetic 505 example** once; return to LAB Coordinator. Its intentional All/rotation student overlap must block publishing until the conflict is actually resolved.
+8. Moving run times outside the approved source must require ADC/ADFAD. Switching to Faculty removes editing and private rosters. Other LAB accounts and future years without explicit Owner scope are still denied.
+9. Repeat with LAB Backup. Do not reset browser Demo data merely to enable these scopes; the one-time grant handles existing browser-local records.
+
+Never use real student or staff data in Testing. Record PR/SHA, role, year/course, observed errors, and actual manual pass/fail evidence.
 
 ## Boundaries to retain
 
