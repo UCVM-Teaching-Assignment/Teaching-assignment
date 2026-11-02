@@ -23,3 +23,17 @@
 .paws-stage-note{margin-top:12px}.paws-stage-list{max-height:220px;overflow:auto;border:1px solid #e0e4ee;border-radius:5px}
 .paws-stage-list>div{padding:8px;border-bottom:1px solid #edf0f5;font-size:12px}
 @media(max-width:730px){.paws-stage-dialog{width:98vw}.paws-stage-body{padding:12px}.paws-stage-grid{grid-template-columns:1fr}.paws-stage-faculty-row{grid-template-columns:1fr 1fr}.paws-stage-faculty-row>button{grid-column:1/-1}.paws-stage-flow span{min-width:100%}}
+
+/* Bulk Import and Developer Dashboard */
+.paws-rule-field{border:1px solid #dbe0e8;border-radius:6px;padding:10px;min-width:0}
+.paws-rule-field legend{font-weight:700;font-size:13px;padding:0 4px}
+.paws-rule-field label{margin-bottom:8px}
+.paws-rule-field input[type=checkbox]{width:auto;min-width:16px;margin-right:6px}
+.paws-stage-bulk-open{margin:12px 0}
+.paws-bulk-table{width:100%;border-collapse:collapse;font-size:12px}
+.paws-bulk-table th,.paws-bulk-table td{border-bottom:1px solid #e4e9f0;padding:7px;text-align:left;vertical-align:top}
+.paws-bulk-table th{position:sticky;top:0;background:#eff3f8}
+.paws-task-open-row{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #dde4ec;padding:10px;background:#fff;color:#263a55;cursor:pointer}
+.paws-task-open-row:hover{background:#eef4fb}
+.paws-stage-card textarea[data-bulk-source]{width:100%;min-height:180px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+@media(max-width:730px){.paws-bulk-table{font-size:11px}.paws-rule-field{grid-column:1/-1}}

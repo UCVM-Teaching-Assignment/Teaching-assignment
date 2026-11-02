@@ -84,6 +84,7 @@
    '<section class="paws-stage-card"><h3>Published timetable (current academic year)</h3><p>Stage 1 publication appears in Calendar immediately. LAB students and room allocations are shown only after LAB Publish Changes; ADFAD confirmed instructors appear last.</p>'+
    '<div class="paws-stage-list">'+state.sessions.slice(-80).reverse().map(s=>'<div>'+summary(s)+'</div>').join('')+'</div></section></div>';
   bind();
+  root.PAWS_SCHEDULE_BULK_UI?.mountScheduleShortcut?.(dialog,state);
  }
  function snapshotFaculty(){
   if(!dialog)return[];
@@ -157,7 +158,8 @@
    else root.alert('Lab Scheduling is unavailable; reload PAWS Testing.');
   };
  }
- async function open(){
+ async function open(target){
+  if(target?.sessionId&&target.stage==='adfa'){activeSession=target.sessionId;facultyRows=[];}
   if(!identity()||!allowedRole(identity()?.role)){root.alert('Use ADC, ADFAD, Developer or Owner Demo role.');return}
   if(!dialog){
    dialog=root.document.createElement('dialog');dialog.className='paws-stage-dialog';
@@ -168,7 +170,7 @@
   }
   if(!dialog.open)dialog.showModal();
   dialog.innerHTML='<p role="status">Loading three-stage schedule workflow…</p>';
-  try{await refresh()}catch(e){dialog.innerHTML='<p role="alert">'+esc(e.message)+'</p><button type="button" id="paws-stage-retry">Close</button>';dialog.querySelector('#paws-stage-retry').onclick=()=>dialog.close()}
+  try{await refresh();if(target?.sessionId&&target.stage==='adfa'){facultyRows=defaultFaculty();render();}}catch(e){dialog.innerHTML='<p role="alert">'+esc(e.message)+'</p><button type="button" id="paws-stage-retry">Close</button>';dialog.querySelector('#paws-stage-retry').onclick=()=>dialog.close()}
  }
  function mount(){
   if(!root?.document||!root.UCVM_PAWS_DEMO_API)return;
