@@ -91,3 +91,18 @@ test('LAB published room satisfies missing room task without altering ADC source
  assert.equal(f.service.list('adc').workItems[0].missing.includes('Room number'),false);
  assert.equal(session.room,null);
 });
+
+test('pasted Excel 12-hour Time and unique numeric Course Number normalize without guessing',()=>{
+ const f=fixture(),preview=f.service.previewBulk('adc',{rows:[{courseNumber:'304',year:'2',date:'11/04/2026',time:'8:30 AM - 10:30 AM'}]});
+ assert.equal(preview.valid,true,JSON.stringify(preview.errors));
+ assert.equal(preview.items[0].normalized.courseCode,'VTMD 304');
+ assert.equal(preview.items[0].normalized.date,'2026-11-04');
+ assert.equal(preview.items[0].normalized.startTime,'08:30');
+ assert.equal(preview.items[0].normalized.endTime,'10:30');
+});
+test('ambiguous numeric Course Number is not silently mapped to the wrong Course Catalog entry',()=>{
+ const f=fixture();f.tables.courses.push({courseCode:'VETM 304',curriculumYear:2,courseName:'Different Course'});
+ const preview=f.service.previewBulk('adc',{rows:[{courseNumber:'304',year:'2',date:'2026-11-04',time:'08:30-10:30'}]});
+ assert.equal(preview.valid,false);
+ assert.match(preview.errors[0].messages.join(' '),/ambiguous/i);
+});
