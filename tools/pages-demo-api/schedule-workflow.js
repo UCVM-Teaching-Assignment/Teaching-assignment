@@ -342,9 +342,9 @@ function createScheduleWorkflow({store}={}){
    if(next!==value(s[to]))changed[to]=next;
   }
   if(!Object.keys(changed).length)error('INVALID_SCHEDULE','Enter a title or room to complete.');
-  if(s.sessionType==='LAB'){
+  if(s.sessionType==='LAB'&&Object.prototype.hasOwnProperty.call(changed,'room')){
    const key=JSON.stringify({academicYear:s.academicYear,curriculumYear:String(s.curriculumYear),courseCode:s.courseCode,date:s.date});
-   if(arr(store.tables.extra?.labScheduling?.blocks?.[key]?.publications).length)error('LAB_CHANGE_REQUIRED','LAB has published operational details; changes must follow its approval workflow.');
+   if(arr(store.tables.extra?.labScheduling?.blocks?.[key]?.publications).length)error('LAB_CHANGE_REQUIRED','Published LAB room allocations belong to the LAB booking workflow.');
   }
   const before={topic:s.topic,room:s.room};
   Object.assign(s,changed);s.scheduleVersion=Number(s.scheduleVersion||1)+1;s.updatedAtUtc=store.nowIso();
