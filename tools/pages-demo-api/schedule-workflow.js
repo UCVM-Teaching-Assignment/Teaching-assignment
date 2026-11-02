@@ -317,8 +317,12 @@ function createScheduleWorkflow({store}={}){
    };
    if(!value(s.topic))add(policy.fields.topic.todoOwner,policy.fields.topic.label);
    if(!value(s.room)&&!labBookedRoom(s))add(policy.fields.room.todoOwner,policy.fields.room.label);
-   if(!arr(s.assignments).length)
-    add('adfa',arr(s.suggestedFacultyIds).length?'Confirm suggested faculty':'Assign faculty (no suggestion)');
+   if(!arr(s.assignments).length){
+    const custom=policy.fields.facultySuggestion.label,hasSuggestion=arr(s.suggestedFacultyIds).length>0;
+    add('adfa',custom==='Faculty assignment'
+     ?(hasSuggestion?'Confirm suggested faculty':'Assign faculty (no suggestion)')
+     :custom+(hasSuggestion?' — Confirm suggestion':' — Assign faculty (no suggestion)'));
+   }
    if(groups.adfa&&s.sessionType==='LAB'){
     const key=JSON.stringify({academicYear:s.academicYear,curriculumYear:String(s.curriculumYear),courseCode:s.courseCode,date:s.date});
     if(!arr(store.tables.extra?.labScheduling?.blocks?.[key]?.publications).length)groups.adfa.status='waiting_for_lab';

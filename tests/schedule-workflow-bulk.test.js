@@ -117,3 +117,12 @@ test('ADC can complete an omitted title after LAB has published its rooms and ro
  assert.equal(f.service.list('adc').workItems.length,0);
  assert.equal(f.tables.extra.labScheduling.blocks[key].publications.length,1);
 });
+
+test('Developer-configured Faculty task label appears in ADFAD Work Queue without moving Faculty work to ADC',()=>{
+ const f=fixture();
+ f.service.setRules('developer',{expectedVersion:1,fields:{facultySuggestion:{label:'Instructor assignment'}}});
+ f.service.publishBulk('adc',{batchId:'faculty-label',rows:[{...rows[0],title:'Title',room:'CSB 101'}],expectedRulesVersion:2});
+ assert.equal(f.service.list('adc').workItems.length,0);
+ const tasks=f.service.list('adfa').workItems;
+ assert.equal(tasks.length,1);assert.match(tasks[0].missing[0],/Instructor assignment/);
+});
