@@ -133,3 +133,14 @@ test('LAB role may not access ADC publishing or private ADFAD export',()=>{
  assert.throws(()=>f.workflow.officeExport('lab','adfa'),e=>e.code==='ROLE_DENIED');
  assert.throws(()=>f.workflow.previewOfficeBulk('adfa',{office:'lab',rows:[]}),e=>e.code==='ROLE_DENIED');
 });
+
+test('LAB office can publish a second reviewed batch with a newer draft revision and new operation receipt',()=>{
+ const f=fixture(),s=publish(f),source=f.workflow.officeExport('lab','lab').rows;
+ const first=[labRow(source)];
+ f.workflow.publishOfficeBulk('lab',{office:'lab',batchId:'first-lab-edit',rows:first});
+ const update=[{...first[0],expectedRevision:1,room:'CSB Skills 2'}];
+ assert.equal(f.workflow.previewOfficeBulk('lab',{office:'lab',rows:update}).valid,true);
+ const result=f.workflow.publishOfficeBulk('lab',{office:'lab',batchId:'second-lab-edit',rows:update});
+ assert.equal(result.publishedCount,1);
+ assert.equal(f.lab.publicView(s.id).stations[0].runs[0].room,'CSB Skills 2');
+});

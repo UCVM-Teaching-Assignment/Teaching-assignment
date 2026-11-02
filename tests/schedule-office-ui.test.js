@@ -1,11 +1,11 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const flow=require('../frontend/scripts/schedule-workflow.js'),ui=require('../frontend/scripts/schedule-bulk-ui.js');
+const flow=require('../frontend/scripts/schedule-workflow.js'),ui=require('../frontend/scripts/schedule-bulk-ui.js'),officeUI=require('../frontend/scripts/schedule-office-ui.js');
 const csv=require('../frontend/scripts/schedule-bulk-csv.js');
 test('Schedule Workflow is reserved for ADC and Developer; ADFAD and LAB work from their queue',()=>{
  assert.equal(flow.allowedRole('adc'),true);assert.equal(flow.allowedRole('developer'),true);
  assert.equal(flow.allowedRole('adfa_general'),false);assert.equal(flow.allowedRole('lab'),false);
- assert.equal(ui.roleAllowed('lab','lab'),true);assert.equal(ui.roleAllowed('adfa_general','adfa'),true);
+ assert.equal(officeUI.can('lab','lab'),true);assert.equal(officeUI.can('adfa_general','adfa'),true);
  assert.equal(ui.roleAllowed('lab','bulk'),false);assert.equal(ui.roleAllowed('adfa_general','bulk'),false);
 });
 test('LAB export template roundtrips station runs and group roster IDs with Excel CSV quoting',()=>{
