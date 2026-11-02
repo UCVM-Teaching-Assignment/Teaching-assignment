@@ -168,13 +168,14 @@
   rulesDialog.innerHTML='<p>Loading Developer Dashboard rules…</p>';
   try{const r=await call('/rules');renderRules(r);}catch(e){rulesDialog.innerHTML=heading('Developer Dashboard','rules')+'<p role="alert">'+esc(feedback(e))+'</p>';rulesDialog.querySelector('[data-close-stage]').onclick=()=>rulesDialog.close();}
  }
+ function taskActionFor(item,fields){
+  const missing=Array.isArray(item?.missing)?item.missing:[];
+  const details=missing.includes(fields?.topic?.label)||missing.includes(fields?.room?.label);
+  return item?.stage==='adfa'&&!details?'faculty':'details';
+ }
  async function openTask(item){
   const stage=item?.stage,sessionId=text(item?.sessionId);
   if(!sessionId)return;
-  if(stage==='adfa'){
-   root.PAWS_SCHEDULE_WORKFLOW?.open?.({sessionId,stage:'adfa'});
-   return;
-  }
   try{requireRole('workflow');}catch(e){root?.alert?.(e.message);return;}
   try{
    const state=await call(),session=state.sessions.find(x=>x.id===sessionId);
@@ -182,11 +183,12 @@
    const task=state.workItems.find(x=>x.sessionId===sessionId&&x.stage===stage);
    if(!task)throw Error('That task is no longer open. Refresh Tasks.');
    if(task.status==='waiting_for_lab')throw Error('LAB publication must finish first.');
-   if(task.missing.some(x=>x.startsWith('Assign faculty')||x.startsWith('Confirm suggested'))) {
+   const policy=state.rules.fields;
+   if(taskActionFor(task,policy)==='faculty'){
     root.PAWS_SCHEDULE_WORKFLOW?.open?.({sessionId,stage:'adfa'});return;
    }
    if(taskDialog?.open)taskDialog.close();taskDialog=newDialog('Complete schedule work');
-   const policy=state.rules.fields,canTopic=task.missing.includes(policy.topic.label),canRoom=task.missing.includes(policy.room.label);
+   const canTopic=task.missing.includes(policy.topic.label),canRoom=task.missing.includes(policy.room.label);
    taskDialog.innerHTML=heading('Complete '+(stage==='adc'?'ADC':'ADFAD')+' schedule details','task')+
     '<div class="paws-stage-body"><p>'+esc(session.courseCode)+' · '+esc(dateTime(session))+' · version '+esc(session.scheduleVersion)+'</p>'+
     '<form data-task-complete class="paws-stage-grid">'+
@@ -243,5 +245,5 @@
   if(root.document.readyState==='complete')start();else root.addEventListener('load',start,{once:true});
   root.addEventListener('ucvm-timetable-user',mount);root.addEventListener('paws-profile',mount);
  }
- return Object.freeze({openBulk,openRules,openTask,mountScheduleShortcut,workQueue,roleAllowed,mapFacultySuggestions});
+ return Object.freeze({openBulk,openRules,openTask,mountScheduleShortcut,workQueue,roleAllowed,mapFacultySuggestions,taskActionFor});
 });
