@@ -183,16 +183,17 @@
  async function openTask(item){
   const stage=item?.stage,sessionId=text(item?.sessionId);
   if(!sessionId)return;
+  if(stage==='lab'){root.PAWS_SCHEDULE_OFFICE_UI?.open?.('lab',{sessionId});return;}
   try{requireRole('workflow');}catch(e){root?.alert?.(e.message);return;}
   try{
    const state=await call(),session=state.sessions.find(x=>x.id===sessionId);
    if(!session)throw Error('Published Session no longer exists.');
    const task=state.workItems.find(x=>x.sessionId===sessionId&&x.stage===stage);
    if(!task)throw Error('That task is no longer open. Refresh Tasks.');
-   if(task.status==='waiting_for_lab')throw Error('LAB publication must finish first.');
+   // ADFAD may download and prepare work while LAB is pending; import validation blocks early publication.
    const policy=state.rules.fields;
    if(taskActionFor(task,policy)==='faculty'){
-    root.PAWS_SCHEDULE_WORKFLOW?.open?.({sessionId,stage:'adfa'});return;
+    root.PAWS_SCHEDULE_OFFICE_UI?.open?.('adfa',{sessionId});return;
    }
    if(taskDialog?.open)taskDialog.close();taskDialog=newDialog('Complete schedule work');
    const canTopic=task.missing.includes(policy.topic.label),canRoom=task.missing.includes(policy.room.label);
@@ -230,7 +231,7 @@
   const tasks=(state.workItems||[]),holder=dialog.querySelector('.paws-stage-body');
   if(tasks.length&&holder){
    const section=root.document.createElement('section');section.className='paws-stage-card';
-   section.innerHTML='<h3>ADC / ADFAD Work Queue ('+tasks.length+')</h3>'+
+   section.innerHTML='<h3>ADC Work Queue ('+tasks.length+')</h3>'+
     '<div class="paws-stage-list">'+tasks.slice(0,100).map(t=>
      '<button type="button" class="paws-task-open-row" data-stage-task-id="'+esc(t.sessionId)+'" data-stage-task-role="'+esc(t.stage)+'">'+
      '<strong>'+esc(t.stage.toUpperCase())+'</strong> '+esc(t.courseCode)+' · '+esc(t.date)+' · '+esc(t.missing.join(', '))+

@@ -37,3 +37,10 @@
 .paws-task-open-row:hover{background:#eef4fb}
 .paws-stage-card textarea[data-bulk-source]{width:100%;min-height:180px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
 @media(max-width:730px){.paws-bulk-table{font-size:11px}.paws-rule-field{grid-column:1/-1}}
+
+/* Office Work Queue bulk assignment tools */
+.paws-office-textarea{width:100%;min-height:200px;font:12px/1.5 ui-monospace,Consolas,monospace;white-space:pre;overflow-x:auto}
+.paws-office-error{padding:9px 11px;margin:0;border-bottom:1px solid #eee;border-left:3px solid #b24531;background:#fff9f5;font-size:12px}
+.paws-office-directory{max-height:160px;overflow-y:auto;font-size:12px;padding:8px 14px}
+.paws-task-bulk-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}
+.paws-task-bulk-actions button{border:1px solid #b9c6d7;background:#f0f5fc;color:#193550;border-radius:5px;padding:8px 10px;cursor:pointer}

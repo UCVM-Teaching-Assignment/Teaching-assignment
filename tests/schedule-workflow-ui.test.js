@@ -1,9 +1,9 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const ui=require('../frontend/scripts/schedule-workflow.js');
-test('Schedule Workflow exposes ADC and ADFAD controls only to correct roles, Developer can see both',()=>{
+test('Schedule Workflow belongs to ADC while Developer retains testing access',()=>{
  assert.equal(ui.allowedRole('adc'),true);
- assert.equal(ui.allowedRole('adfa_general'),true);
+ assert.equal(ui.allowedRole('adfa_general'),false);
  assert.equal(ui.allowedRole('developer'),true);
  assert.equal(ui.allowedRole('owner'),true);
  assert.equal(ui.allowedRole('lab'),false);

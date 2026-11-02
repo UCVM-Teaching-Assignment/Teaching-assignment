@@ -81,6 +81,7 @@
   "schedule-bulk-csv.js",
   "schedule-workflow.js",
   "schedule-bulk-ui.js",
+  "schedule-office-ui.js",
   "schedule-workflow.css",
   "lab-scheduling-editor.js",
   "lab-scheduling.css",

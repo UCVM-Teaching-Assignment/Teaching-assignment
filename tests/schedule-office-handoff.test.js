@@ -77,8 +77,8 @@ test('LAB batch with invalid capacity is blocked without any partial publication
 test('LAB cannot bulk publish an unscoped LAB session',()=>{
  const f=fixture();const s=publish(f,{course:'VTMD 304',date:'2026-11-04'});
  const row=labRow([{sessionId:s.id,expectedRevision:0}],{sessionId:s.id});
- assert.equal(f.workflow.previewOfficeBulk('lab',{office:'lab',rows}).valid,false);
- assert.throws(()=>f.workflow.publishOfficeBulk('lab',{office:'lab',rows,batchId:'outside'}),e=>e.code==='IMPORT_VALIDATION');
+ assert.equal(f.workflow.previewOfficeBulk('lab',{office:'lab',rows:[row]}).valid,false);
+ assert.throws(()=>f.workflow.publishOfficeBulk('lab',{office:'lab',rows:[row],batchId:'outside'}),e=>e.code==='IMPORT_VALIDATION');
 });
 test('ADFAD export prepopulates suggestions; cannot publish LAB assignments until LAB finishes',()=>{
  const f=fixture(),s=publish(f,{suggestions:['f1']});

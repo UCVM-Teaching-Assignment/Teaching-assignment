@@ -8,7 +8,7 @@
  const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[ch]));
  const ADC=['adc','developer','owner'];
  const ADFAD=['developer','owner','adfa_general','adfa_regular','administrator','admin'];
- const allowedRole=role=>ADC.includes(String(role||'').toLowerCase())||ADFAD.includes(String(role||'').toLowerCase());
+ const allowedRole=role=>ADC.includes(String(role||'').toLowerCase());
  const dateTime=s=>(s.date||'')+' '+String(s.startTime||'').slice(0,5)+'–'+String(s.endTime||'').slice(0,5);
  let dialog=null,state=null,activeDraft='',activeSession='',facultyRows=[],busy=false,notice='';
  const selected=s=>state?.sessions?.find(x=>x.id===s)||null;
@@ -51,7 +51,7 @@
   const titleRequired=state.rules?.fields?.topic?.required===true,roomRequired=state.rules?.fields?.room?.required===true;
   dialog.innerHTML='<header class="paws-stage-header"><h2 id="paws-stage-title">Schedule Workflow · Testing</h2><button type="button" data-stage-action="close" aria-label="Close">Close</button></header>'+
    '<div class="paws-stage-body"><p class="paws-stage-banner">Synthetic, browser-local data only. One Course Session per approved ADC record. Never enter real student or staff data here.</p>'+
-   '<div class="paws-stage-flow"><span><strong>1 ADC</strong> · Publish schedule</span><span><strong>2 LAB</strong> · Rooms & groups</span><span><strong>3 ADFAD</strong> · Confirm faculty</span></div>'+
+   '<div class="paws-stage-flow"><span><strong>ADC</strong> · Publish schedule</span><span>Automatically creates LAB tasks for LAB Sessions</span><span>Automatically creates ADFAD Faculty tasks</span></div>'+
    (notice?'<p class="paws-stage-status" role="status">'+esc(notice)+'</p>':'')+
    (canADC?'<section class="paws-stage-card"><h3>Stage 1 · ADC — Schedule publication</h3><p>Required: <strong>Course, curriculum year, date and start/end time</strong>'+
    (titleRequired?', Title':'')+(roomRequired?', Room':'')+'. Missing optional details enter the responsible work queue. Faculty suggestions never assign DOE.</p>'+
@@ -70,19 +70,6 @@
       '</select></label><div class="paws-stage-actions"><button type="submit">Save ADC Draft</button>'+
       '<button type="button" data-stage-action="publish" '+(!draft?'disabled':'')+'>Publish saved schedule to Calendar</button></div></form>'+
       '<p class="paws-stage-muted">Save a draft before publishing. Published courses become visible in Calendar even when instructor and room are blank.</p></section>':'')+
-   (canADFAD?'<section class="paws-stage-card"><h3>Stage 3 · ADFAD — Faculty assignment / confirmation</h3>'+
-     '<p>LAB course must finish Stage 2 first. Confirm an ADC suggestion or choose another eligible Faculty. Enter credited hours explicitly; blank hours remain DOE pending.</p>'+
-     '<label>Published Course Session<select data-stage-session>'+option('','Select published Session',activeSession)+
-      state.sessions.map(item=>option(item.id,item.courseCode+' · '+dateTime(item)+' · '+item.sessionType+' · Faculty '+item.facultyStatus,activeSession)).join('')+'</select></label>'+
-     (s?'<div class="paws-stage-session"><p>'+summary(s)+'</p><p>ADC suggested: '+esc(s.suggestedFacultyIds.length?s.suggestedFacultyIds.map(id=>state.faculty.find(f=>f.facultyId===id)?.name||id).join('; '):'None')+'</p>'+
-       (s.sessionType==='LAB'&&s.labStatus!=='published'?'<p class="paws-stage-warning">LAB groups and rooms are not published yet. ADFAD confirmation will be blocked until Stage 2 is complete.</p>':'')+
-       '<div class="paws-stage-actions"><button type="button" data-stage-action="use-suggestions" '+(!s.suggestedFacultyIds.length?'disabled':'')+'>Use ADC suggestions</button>'+
-       '<button type="button" data-stage-action="add-faculty">Add faculty</button>'+
-       (s.sessionType==='LAB'?'<button type="button" data-stage-action="lab-open">Open Stage 2 · Lab Scheduling</button>':'')+
-       '</div><form data-stage-faculty-form>'+fields(facultyRows,'Faculty')+
-       '<label class="paws-stage-note">Availability review note (required only if time evidence is unknown)<textarea name="reviewNote" rows="2" placeholder="ADFAD review and evidence"></textarea></label>'+
-       '<div class="paws-stage-actions"><button type="submit">Confirm Faculty assignments</button></div></form></div>':'<p>Select a published Session to review suggestions or assign Faculty.</p>')+
-     '</section>':'')+
    '<section class="paws-stage-card"><h3>Published timetable (current academic year)</h3><p>Stage 1 publication appears in Calendar immediately. LAB students and room allocations are shown only after LAB Publish Changes; ADFAD confirmed instructors appear last.</p>'+
    '<div class="paws-stage-list">'+state.sessions.slice(-80).reverse().map(s=>'<div>'+summary(s)+'</div>').join('')+'</div></section></div>';
   bind();

@@ -42,15 +42,19 @@
    '<strong>'+esc(item.stage.toUpperCase())+' · '+esc(item.courseCode)+'</strong>'+
    '<span>'+esc((item.missing||[]).join(', '))+'</span><small>'+esc(item.date||'Date not provided')+
    (item.status==='waiting_for_lab'?' · Waiting for LAB':'')+'</small></button>');
+  const offices=[...new Set(workflowTasks.map(x=>x.stage).filter(x=>x==='lab'||x==='adfa'))];
+  const bulkActions=offices.length?'<div class="paws-task-bulk-actions">'+offices.map(office=>
+   '<button type="button" data-office-bulk="'+esc(office)+'">Download / Import '+esc(office.toUpperCase())+' template</button>').join('')+'</div>':'';
   const messages=errors.map(message=>`<p role="alert">${esc(message)}</p>`).join('')+(notice?`<p role="status">${esc(notice)}</p>`:'');
   const list=panel.querySelector('.workspace-task-list');
-  list.innerHTML=messages+(errors.length?'<button type="button" data-retry>Retry</button>':'')+issueCards.join('')+workflowCards.join('')+otherCards.join('')+(!loading&&!errors.length&&!issueCards.length&&!workflowCards.length&&!otherCards.length?'<p class="workspace-empty">No matching tasks in your authorized scope.</p>':'')+(nextCursor&&mode!=='requests'?`<button type="button" class="workspace-task-more" data-task-more${loading?' disabled':''}>Load more issues</button>`:'');
+  list.innerHTML=messages+bulkActions+(errors.length?'<button type="button" data-retry>Retry</button>':'')+issueCards.join('')+workflowCards.join('')+otherCards.join('')+(!loading&&!errors.length&&!issueCards.length&&!workflowCards.length&&!otherCards.length?'<p class="workspace-empty">No matching tasks in your authorized scope.</p>':'')+(nextCursor&&mode!=='requests'?`<button type="button" class="workspace-task-more" data-task-more${loading?' disabled':''}>Load more issues</button>`:'');
   list.querySelector('[data-retry]')?.addEventListener('click',()=>refresh());
   list.querySelector('[data-task-more]')?.addEventListener('click',()=>refresh({append:true}));
   list.querySelectorAll('[data-open-session]').forEach(node=>node.onclick=()=>adapter.openSession(node.dataset.openSession));
   list.querySelectorAll('[data-id]').forEach(node=>node.onclick=()=>node.dataset.kind==='requests'?root.PAWS_SWAP?.openDetail(node.dataset.id):adapter.openSession(node.dataset.id));
   list.querySelectorAll('[data-review-issue]').forEach(node=>node.onclick=()=>review(tasks.find(task=>task.issueKey===node.dataset.reviewIssue)));
   list.querySelectorAll('[data-workflow-session]').forEach(node=>node.onclick=()=>root.PAWS_SCHEDULE_BULK_UI?.openTask?.({sessionId:node.dataset.workflowSession,stage:node.dataset.workflowStage}));
+  list.querySelectorAll('[data-office-bulk]').forEach(node=>node.onclick=()=>root.PAWS_SCHEDULE_OFFICE_UI?.open?.(node.dataset.officeBulk));
  }
  async function review(task){
   if(!task?.canReview||reviewBusy||loading)return;
@@ -70,7 +74,7 @@
   button.hidden=false;if(!started){started=true;toggle(pref());}
   if(!append)clearData();loading=true;notice=message;render();
   if(!append){
-   const results=await Promise.allSettled([adapter.allSessions(),root.UCVM_PAWS_DATA.swapQueue(),root.PAWS_SCHEDULE_BULK_UI?.workQueue?.()||Promise.resolve([])]);
+   const results=await Promise.allSettled([adapter.allSessions(),root.UCVM_PAWS_DATA.swapQueue(),root.PAWS_SCHEDULE_OFFICE_UI?.workQueue?.()||root.PAWS_SCHEDULE_BULK_UI?.workQueue?.()||Promise.resolve([])]);
    if(!current(token))return;
    if(results[2].status==='fulfilled')workflowTasks=Array.isArray(results[2].value)?results[2].value:[];
    if(results[1].status==='fulfilled')requests=(results[1].value.requests||[]).filter(row=>!['applied','approved','rejected','withdrawn'].includes(String(row.status).toLowerCase())).map(row=>({id:row.requestId,kind:'requests',title:'SWAP · '+(row.courseCode||'Session'),reason:[row.status,row.nextStage].filter(Boolean).join(' · '),date:row.date}));
