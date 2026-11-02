@@ -172,7 +172,7 @@ function createScheduleWorkflow({store}={}){
     suggestedFacultyIds:clone(s.suggestedFacultyIds||[]),facultyStatus:s.facultyStatus||(arr(s.assignments).length?'confirmed':'pending'),
     facultyRevision:Number(s.facultyRevision||0),assignments:arr(s.assignments).map(x=>({facultyId:x.facultyId,teachingRole:x.teachingRole,creditedHours:x.creditedHours})),
     labStatus:s.sessionType==='LAB'?(labRelease?'published':'pending'):'not-applicable'};
-  }).sort((a,b)=>a.date.localeCompare(b.date)||a.startTime.localeCompare(b.startTime)||a.courseCode.localeCompare(b.courseCode));
+  }).sort((a,b)=>String(a.date??'').localeCompare(String(b.date??''))||String(a.startTime??'').localeCompare(String(b.startTime??''))||String(a.courseCode??'').localeCompare(String(b.courseCode??'')));
   return {capabilities:{canADC,canADFAD,canDeveloper:r==='developer'},academicYear:year(),courses,faculty,
     drafts:canADC?Object.values(bag().drafts).filter(x=>!x.publishedSessionId).map(clone):[],sessions};
  }
