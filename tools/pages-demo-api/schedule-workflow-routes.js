@@ -12,8 +12,10 @@ function createScheduleWorkflowRoutes({store,verify,findUser}={}){
    if(!u||u.active!==true||u.mustChangePassword!==false)return reply(403,{error:{code:'ROLE_DENIED',message:'An active ready Demo user is required.'}});
    if((!path||path==='/')&&request.method==='GET')return reply(200,service.list(decoded.uid));
    if(path==='/rules'&&request.method==='GET')return reply(200,service.getRules(decoded.uid));
+   if(path==='/office-export'&&request.method==='GET')return reply(200,service.officeExport(decoded.uid,url.searchParams.get('office')));
    const action={'/draft':'saveDraft','/publish':'publish','/suggest':'suggest','/faculty':'confirmFaculty',
-    '/preview-bulk':'previewBulk','/publish-bulk':'publishBulk','/update-rules':'setRules','/complete-details':'completeDetails'}[path];
+    '/preview-bulk':'previewBulk','/publish-bulk':'publishBulk','/update-rules':'setRules','/complete-details':'completeDetails',
+    '/preview-office-bulk':'previewOfficeBulk','/publish-office-bulk':'publishOfficeBulk'}[path];
    if(!action)return reply(404,{error:{code:'NOT_FOUND',message:'Workflow operation not found.'}});
    if(request.method!=='POST')return reply(405,{error:{code:'METHOD_NOT_ALLOWED',message:'POST required.'}});
    let body;try{const t=await request.text();if(t.length>1048576)throw Error('limit');body=JSON.parse(t)}catch(_){return reply(400,{error:{code:'INVALID_JSON',message:'Provide a valid workflow object smaller than 1 MB.'}})}

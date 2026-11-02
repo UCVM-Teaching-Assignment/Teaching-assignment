@@ -3,6 +3,7 @@
 // publishes; suggestions never create Teaching Assignments or DOE.
 const {resolveTeachingDoe}=require('../../server/src/domain/doe-calculator');
 const {uuidFor}=require('./ids.js');
+const {createOfficeBulk}=require('./schedule-office-bulk');
 const clone=x=>JSON.parse(JSON.stringify(x));
 const arr=x=>Array.isArray(x)?x:[];
 const value=x=>String(x==null?'':x).trim();
@@ -304,17 +305,22 @@ function createScheduleWorkflow({store}={}){
   return Boolean(arr(published?.stations).find(st=>st.sessionId===s.id&&arr(st.runs).some(run=>value(run.room||run.roomId))));
  }
  function workItemsFor(uid){
-  const r=role(actor(uid)),visible=r==='developer'||r==='owner'?['adc','adfa']:r==='adc'?['adc']:ADFAD.has(r)?['adfa']:[];
+  const u=actor(uid),r=role(u),isLAB=r==='lab'||arr(u.officeAccess).includes('lab');
+  const visible=r==='developer'||r==='owner'?['adc','lab','adfa']:r==='adc'?['adc']:isLAB?['lab']:ADFAD.has(r)?['adfa']:[];
   const policy=rules(),items=[];
+  const scoped=s=>arr(u.labScopes).some(scope=>scope.academicYear===s.academicYear&&String(scope.curriculumYear)===String(s.curriculumYear)&&scope.courseCode===s.courseCode);
   for(const s of arr(store.tables.sessions)){
    if(s.academicYear!==year()||s.scheduleStatus!=='published')continue;
-   const groups={};
+   const groups={},key=JSON.stringify({academicYear:s.academicYear,curriculumYear:String(s.curriculumYear),courseCode:s.courseCode,date:s.date});
+   const release=store.tables.extra?.labScheduling?.blocks?.[key]?.publications?.at(-1)?.public;
+   const labPublished=arr(release?.stations).some(st=>st.sessionId===s.id);
    const add=(stage,label)=>{
-    if(!visible.includes(stage))return;
+    if(!visible.includes(stage)||stage==='lab'&&!['developer','owner'].includes(r)&&!scoped(s))return;
     if(!groups[stage])groups[stage]={sessionId:s.id,stage,courseCode:s.courseCode,date:s.date,sessionType:s.sessionType,
      status:'ready',missing:[],scheduleVersion:Number(s.scheduleVersion||1)};
     groups[stage].missing.push(label);
    };
+   if(s.sessionType==='LAB'&&!labPublished)add('lab','Book room, assign student groups and roster');
    if(!value(s.topic))add(policy.fields.topic.todoOwner,policy.fields.topic.label);
    if(!value(s.room)&&!labBookedRoom(s))add(policy.fields.room.todoOwner,policy.fields.room.label);
    if(!arr(s.assignments).length){
@@ -323,13 +329,10 @@ function createScheduleWorkflow({store}={}){
      ?(hasSuggestion?'Confirm suggested faculty':'Assign faculty (no suggestion)')
      :custom+(hasSuggestion?' — Confirm suggestion':' — Assign faculty (no suggestion)'));
    }
-   if(groups.adfa&&s.sessionType==='LAB'){
-    const key=JSON.stringify({academicYear:s.academicYear,curriculumYear:String(s.curriculumYear),courseCode:s.courseCode,date:s.date});
-    if(!arr(store.tables.extra?.labScheduling?.blocks?.[key]?.publications).length)groups.adfa.status='waiting_for_lab';
-   }
+   if(groups.adfa&&s.sessionType==='LAB'&&!labPublished)groups.adfa.status='waiting_for_lab';
    items.push(...Object.values(groups));
   }
-  return items.sort((a,b)=>a.date.localeCompare(b.date)||a.courseCode.localeCompare(b.courseCode)||a.stage.localeCompare(b.stage));
+  return items.sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.courseCode).localeCompare(String(b.courseCode))||a.stage.localeCompare(b.stage));
  }
  function completeDetails(uid,p){
   const a=actor(uid),s=arr(store.tables.sessions).find(x=>x.id===p?.sessionId&&x.scheduleStatus==='published'&&x.academicYear===year());
@@ -356,25 +359,31 @@ function createScheduleWorkflow({store}={}){
   store.commit();return {sessionId:s.id,scheduleVersion:s.scheduleVersion,topic:s.topic,room:s.room};
  }
  function listing(uid){
-  const a=actor(uid),r=role(a),canADC=ADC.has(r),canADFAD=ADFAD.has(r);
-  if(!canADC&&!canADFAD)error('ROLE_DENIED','Only ADC, ADFAD and Developer can access the scheduling workflow.');
+  const a=actor(uid),r=role(a),canADC=ADC.has(r),canADFAD=ADFAD.has(r),canLAB=r==='lab'||arr(a.officeAccess).includes('lab');
+  if(!canADC&&!canADFAD&&!canLAB)error('ROLE_DENIED','Only ADC, LAB, ADFAD and Developer office queues can be accessed.');
   const courses=arr(store.tables.courses).map(c=>({courseCode:c.courseCode,courseName:c.courseName,curriculumYear:String(c.curriculumYear||'')}));
   const faculty=arr(store.tables.faculty).filter(f=>f.active===true).map(f=>({facultyId:f.facultyId,name:f.displayName||f.facultyId,
    activationDate:f.activationDate||null}));
   const lab=store.tables.extra?.labScheduling?.blocks||{};
-  const sessions=arr(store.tables.sessions).filter(s=>s.academicYear===year()).map(s=>{
+  const labOnly=canLAB&&!canADC&&!canADFAD;
+  const authorized=s=>arr(a.labScopes).some(scope=>scope.academicYear===s.academicYear&&String(scope.curriculumYear)===String(s.curriculumYear)&&scope.courseCode===s.courseCode);
+  const sessions=arr(store.tables.sessions).filter(s=>s.academicYear===year()&&(!labOnly||s.sessionType==='LAB'&&authorized(s))).map(s=>{
    const k=JSON.stringify({academicYear:s.academicYear,curriculumYear:String(s.curriculumYear),courseCode:s.courseCode,date:s.date});
-   const labRelease=lab[k]?.publications?.at(-1);
+   const release=lab[k]?.publications?.at(-1)?.public;
+   const ready=arr(release?.stations).some(st=>st.sessionId===s.id);
    return {id:s.id,academicYear:s.academicYear,courseCode:s.courseCode,curriculumYear:String(s.curriculumYear),
     date:s.date,startTime:s.startTime,endTime:s.endTime,sessionType:s.sessionType,topic:s.topic||'',room:s.room||'',
     scheduleStatus:s.scheduleStatus||'published',scheduleVersion:Number(s.scheduleVersion||1),
-    suggestedFacultyIds:clone(s.suggestedFacultyIds||[]),facultyStatus:s.facultyStatus||(arr(s.assignments).length?'confirmed':'pending'),
-    facultyRevision:Number(s.facultyRevision||0),assignments:arr(s.assignments).map(x=>({facultyId:x.facultyId,teachingRole:x.teachingRole,creditedHours:x.creditedHours})),
-    labStatus:s.sessionType==='LAB'?(labRelease?'published':'pending'):'not-applicable'};
+    suggestedFacultyIds:labOnly?[]:clone(s.suggestedFacultyIds||[]),facultyStatus:s.facultyStatus||(arr(s.assignments).length?'confirmed':'pending'),
+    facultyRevision:Number(s.facultyRevision||0),assignments:labOnly?[]:arr(s.assignments).map(x=>({facultyId:x.facultyId,teachingRole:x.teachingRole,creditedHours:x.creditedHours})),
+    labStatus:s.sessionType==='LAB'?(ready?'published':'pending'):'not-applicable'};
   }).sort((a,b)=>String(a.date??'').localeCompare(String(b.date??''))||String(a.startTime??'').localeCompare(String(b.startTime??''))||String(a.courseCode??'').localeCompare(String(b.courseCode??'')));
-  return {capabilities:{canADC,canADFAD,canDeveloper:r==='developer',canEditRules:['developer','owner'].includes(r)},academicYear:year(),courses,faculty,
-    rules:rules(),workItems:workItemsFor(uid),drafts:canADC?Object.values(bag().drafts).filter(x=>!x.publishedSessionId).map(clone):[],sessions};
+  return {capabilities:{canADC,canADFAD,canLAB,canDeveloper:r==='developer',canEditRules:['developer','owner'].includes(r)},academicYear:year(),courses,faculty:labOnly?[]:faculty,
+   rules:rules(),workItems:workItemsFor(uid),drafts:canADC?Object.values(bag().drafts).filter(x=>!x.publishedSessionId).map(clone):[],sessions};
  }
- return Object.freeze({list:listing,saveDraft,publish,suggest,confirmFaculty,previewBulk,publishBulk,getRules,setRules,completeDetails});
+ const office=createOfficeBulk({store});
+ return Object.freeze({list:listing,saveDraft,publish,suggest,confirmFaculty,previewBulk,publishBulk,getRules,setRules,completeDetails,
+  officeExport:office.officeExport,previewOfficeBulk:office.previewOfficeBulk,publishOfficeBulk:office.publishOfficeBulk});
+
 }
 module.exports={createScheduleWorkflow};
