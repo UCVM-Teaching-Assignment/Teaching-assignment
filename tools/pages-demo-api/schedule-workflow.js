@@ -68,6 +68,15 @@ function createScheduleWorkflow({store}={}){
     scheduleStatus:'published',scheduleVersion:1,schedulePublishedAt:store.nowIso(),
     schedulePublishedBy:uid,facultyStatus:'pending',facultyRevision:0,updatedAtUtc:store.nowIso()};
   store.tables.sessions.push(session);
+  // These two built-in LAB tester accounts must receive Stage 2 course
+  // access immediately, even when ADC publishes a previously unseen Course.
+  // Other LAB accounts and future years remain explicitly Owner-scoped.
+  if(session.sessionType==='LAB')for(const user of store.tables.users){
+   if(!['uid-lab-1','uid-lab-2'].includes(user.firebaseUid)||value(user.baseRole).toLowerCase()!=='lab'||user.active!==true)continue;
+   const scopes=arr(user.labScopes),scope={academicYear:session.academicYear,curriculumYear:String(session.curriculumYear),courseCode:session.courseCode};
+   if(!scopes.some(x=>['academicYear','curriculumYear','courseCode'].every(k=>String(x[k])===String(scope[k]))))scopes.push(scope);
+   user.labScopes=scopes;
+  }
   draft.publishedSessionId=id;
   store.audit({domain:'scheduling',changeType:'adc_schedule_published',actorFirebaseUid:uid,academicYear:session.academicYear,sessionId:id,
     after:{courseCode:session.courseCode,date:session.date,startTime:session.startTime,endTime:session.endTime,sessionType:session.sessionType}});

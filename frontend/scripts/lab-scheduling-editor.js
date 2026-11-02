@@ -27,7 +27,7 @@
  function localChange(fn){try{context.draft=capture();fn(context.draft);dirty=true;notice='Unsaved changes. Save Draft to validate before publishing.';render()}catch(error){message(error)}}
  async function mutate(path,payload){
   if(busy)return;busy=true;renderButtons();const token=generation;
-  try{const result=await api().request(path,{method:'POST',body:{...payload,requestId:id()}});if(token!==generation||owner!==api().identity()?.key||!dialog.open)return;notice=path==='/publish'?'Published. Public View now shows this revision.':'Saved in this browser Demo only.';if(result.draft){context=result;dirty=false;render()}else await refresh();root.dispatchEvent(new CustomEvent('paws-lab-published',{detail:{sessionId:selected}}))}
+  try{const result=await api().request(path,{method:'POST',body:{...payload,requestId:id()}});if(token!==generation||owner!==api().identity()?.key||!dialog.open)return;notice=path==='/publish'?'Published. Public View now shows this revision.':'Saved in this browser Demo only.';if(result.draft){context=result;dirty=false;render()}else await refresh();if(path==='/publish'){root.dispatchEvent(new CustomEvent('paws-lab-published',{detail:{sessionId:selected}}));root.UCVM_TIMETABLE_TESTING_HOOKS?.refresh?.()}}
   catch(error){if(token===generation)message(error)}finally{busy=false;renderButtons()}
  }
  function renderButtons(){if(!dialog)return;const fields=dialog.querySelector('[data-lab-form] fieldset');if(fields)fields.disabled=busy||context?.capabilities.canEdit!==true;dialog.querySelectorAll('[data-mutation]').forEach(b=>{b.disabled=busy||context?.capabilities.canEdit===false});const pub=dialog.querySelector('[data-action="publish"]');if(pub)pub.disabled=busy||dirty||context?.validation?.canPublish!==true}

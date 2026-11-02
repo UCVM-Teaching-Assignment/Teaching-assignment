@@ -92,3 +92,17 @@ test('LAB Session may not receive ADFAD faculty before a published LAB booking',
  assert.throws(()=>f.workflow.confirmFaculty('adfa',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lab Primary',creditedHours:2}]}),e=>e.code==='LAB_NOT_PUBLISHED');
  assert.equal(f.tables.sessions[0].assignments.length,0);
 });
+
+test('ADC newly publishes a LAB Course and built-in LAB testers have Stage 2 scopes without an Owner grant',()=>{
+ const f=fixture();
+ f.tables.users.push({firebaseUid:'uid-lab-1',baseRole:'lab',active:true,mustChangePassword:false,labScopes:[]});
+ f.tables.users.push({firebaseUid:'uid-lab-2',baseRole:'lab',active:true,mustChangePassword:false,labScopes:[]});
+ f.tables.users.push({firebaseUid:'lab-external',baseRole:'lab',active:true,mustChangePassword:false,labScopes:[]});
+ const s=published(f).session;
+ for(const id of ['uid-lab-1','uid-lab-2']){
+  assert.equal(f.lab.read(id,s.id).capabilities.canEdit,true);
+  assert.deepEqual(f.tables.users.find(u=>u.firebaseUid===id).labScopes[0],{academicYear:'2026-27',curriculumYear:'3',courseCode:'VETM 505'});
+ }
+ assert.equal(f.lab.read('lab-external',s.id).capabilities.canEdit,false);
+ assert.deepEqual(f.tables.users.find(u=>u.firebaseUid==='lab-external').labScopes,[]);
+});

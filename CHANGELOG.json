@@ -15,7 +15,9 @@
         "ADC can save separate draft sessions and publish Course/date/start/end to the Testing Calendar without requiring a Topic, room or Faculty; proposed Faculty are suggestions only.",
         "LAB editors book rooms and publish student groups after ADC, independent of Faculty assignment or AFC validation; live student rosters remain private.",
         "ADFAD confirms suggested or newly selected Faculty only after LAB publication (for new LAB sessions), explicitly records credited hours and reviews uncertain availability; teaching DOE is not multiplied by student groups.",
-        "Developer and Owner can exercise both ADC and ADFAD stages and the existing LAB editor; new Calendar Schedule Workflow entry and documented synthetic test path."
+        "Developer and Owner can exercise both ADC and ADFAD stages and the existing LAB editor; new Calendar Schedule Workflow entry and documented synthetic test path.",
+        "Automatically grant the two built-in LAB Demo testers scoped access to a newly ADC-published LAB Course; other LAB accounts remain Owner-granted.",
+        "Refresh Calendar only after published LAB changes, and enable Developer annual-year Owner controls for testing."
       ]
     },
     {
