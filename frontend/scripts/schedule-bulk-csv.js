@@ -77,5 +77,44 @@
   'Course Number,Year,Date,Start Time,End Time,Session Type,Session Title,Room Number,Suggested Faculty',
   'VTMD 304,2,2026-11-04,08:30,10:30,LEC,,,'
  ].join('\n')+'\n';
- return Object.freeze({parseBulkSchedule,template});
+ const OFFICE_COLUMNS={
+  lab:[['Session ID','sessionId'],['Course Number','courseNumber'],['Date','date'],
+   ['Start Time','startTime'],['End Time','endTime'],['Run Key','runKey'],['Room Number','room'],
+   ['Capacity','capacity'],['Attendance','attendance'],['Group Code','groupCode'],
+   ['Student IDs','studentIds'],['Student Names','studentNames'],['Expected Lab Revision','expectedRevision']],
+  adfa:[['Session ID','sessionId'],['Course Number','courseNumber'],['Date','date'],
+   ['Start Time','startTime'],['End Time','endTime'],['Faculty ID','facultyId'],
+   ['Teaching Role','teachingRole'],['Credited Hours','creditedHours'],
+   ['Review Note','reviewNote'],['Expected Faculty Revision','expectedRevision']]
+ };
+ const quoteCsv=v=>{
+  const s=String(v==null?'':v);
+  return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+ };
+ function officeTemplate(office,rows=[]){
+  const cols=OFFICE_COLUMNS[office];if(!cols)throw Error('Select LAB or ADFAD office.');
+  const header=cols.map(x=>quoteCsv(x[0])).join(',');
+  return [header,...rows.map(row=>cols.map(([,id])=>quoteCsv(row[id])).join(','))].join('\r\n')+'\r\n';
+ }
+ function parseOfficeCsv(office,text){
+  const cols=OFFICE_COLUMNS[office];if(!cols)throw Error('Select LAB or ADFAD office.');
+  const src=String(text||'');if(src.length>1048576)throw Error('Office import is limited to 1 MB.');
+  const data=rowsOf(src,delimiterFromHead(src.replace(/^\uFEFF/,'').split(/\r?\n/)[0]));
+  if(data.length<2)throw Error('Include header and at least one office assignment.');
+  const mapping=new Map(cols.map(([label,id])=>[key(label),id]));
+  const selected=data[0].map(label=>mapping.get(key(label))||null),seen=new Set();
+  for(const id of selected){if(id&&seen.has(id))throw Error('Duplicate column: '+id);if(id)seen.add(id);}
+  const required=office==='lab'
+   ?['sessionId','expectedRevision','runKey','startTime','endTime','room','capacity','attendance','groupCode','studentIds']
+   :['sessionId','expectedRevision','facultyId','teachingRole'];
+  for(const id of required)if(!seen.has(id))throw Error('Missing required office column: '+id);
+  const rows=data.slice(1).map((cells,index)=>{
+   if(cells.length!==selected.length)throw Error('Row '+(index+2)+' has '+cells.length+' columns; expected '+selected.length+'.');
+   const result={};for(let i=0;i<selected.length;i++)if(selected[i])result[selected[i]]=String(cells[i]||'').trim();
+   return result;
+  });
+  return {office,rows,headers:selected.filter(Boolean)};
+ }
+ return Object.freeze({parseBulkSchedule,template,officeTemplate,parseOfficeCsv});
+
 });
