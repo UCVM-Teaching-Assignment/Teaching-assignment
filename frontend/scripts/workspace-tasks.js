@@ -77,6 +77,7 @@
    const results=await Promise.allSettled([adapter.allSessions(),root.UCVM_PAWS_DATA.swapQueue(),root.PAWS_SCHEDULE_OFFICE_UI?.workQueue?.()||root.PAWS_SCHEDULE_BULK_UI?.workQueue?.()||Promise.resolve([])]);
    if(!current(token))return;
    if(results[2].status==='fulfilled')workflowTasks=Array.isArray(results[2].value)?results[2].value:[];
+   else errors.push('LAB/ADFAD Work Queue could not be loaded. Check the Testing API and retry.');
    if(results[1].status==='fulfilled')requests=(results[1].value.requests||[]).filter(row=>!['applied','approved','rejected','withdrawn'].includes(String(row.status).toLowerCase())).map(row=>({id:row.requestId,kind:'requests',title:'SWAP · '+(row.courseCode||'Session'),reason:[row.status,row.nextStage].filter(Boolean).join(' · '),date:row.date}));
    else errors.push('SWAP requests could not be loaded. Retry to refresh.');
    if(results[0].status==='fulfilled'){

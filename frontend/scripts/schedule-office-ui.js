@@ -120,13 +120,14 @@
   if(dialog?.open)dialog.close();
   office=target;focusId=sessionId;notice='';preview=null;parsed=null;editor='';faculty=[];
   dialog=root.document.createElement('dialog');dialog.className='paws-stage-dialog';dialog.setAttribute('aria-label',target.toUpperCase()+' Work Queue');
-  root.document.body.append(dialog);dialog.addEventListener('close',()=>{dialog.remove();dialog=null},{once:true});
+  const currentDialog=dialog;root.document.body.append(currentDialog);
+  currentDialog.addEventListener('close',()=>{currentDialog.remove();if(dialog===currentDialog)dialog=null},{once:true});
   dialog.showModal();dialog.innerHTML='<p role="status">Loading assigned office work…</p>';
   try{await load()}catch(e){dialog.innerHTML='<p role="alert">'+esc(report(e))+'</p><button type="button" data-close>Close</button>';dialog.querySelector('[data-close]').onclick=()=>dialog.close()}
  }
  async function workQueue(){
   const who=identity();if(!who||!['adc','lab','adfa_general','adfa_regular','developer','owner','administrator','admin'].includes(who.role))return [];
-  try{const state=await request();return state.workItems||[]}catch(_){return []}
+  const state=await request();return state.workItems||[]
  }
  function mount(){
   if(!root?.document||!root.UCVM_PAWS_DEMO_API)return;

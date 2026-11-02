@@ -138,8 +138,8 @@ function createOfficeBulk({store}){
     const ctx=lab.read(uid,record.s.id);
     if(!ctx.capabilities?.canEdit)throw codeError('ROLE_DENIED','LAB course scope is not assigned to this account.');
     const draft=labDraftFor(ctx,record.rows);
-    const result=lab.save(uid,{sessionId:record.s.id,expectedRevision:ctx.revision,requestId:'office-lab-preview-save:'+record.s.id,draft});
-    const published=lab.publish(uid,{sessionId:record.s.id,expectedRevision:result.revision,requestId:'office-lab-preview-publish:'+record.s.id});
+    const result=lab.save(uid,{sessionId:record.s.id,expectedRevision:ctx.revision,requestId:'office-lab-preview-save:'+record.s.id+':'+ctx.revision,draft});
+    const published=lab.publish(uid,{sessionId:record.s.id,expectedRevision:result.revision,requestId:'office-lab-preview-publish:'+record.s.id+':'+ctx.revision});
     changed.push({sessionId:record.s.id,version:published.version});
    }catch(e){
     errors.push({rowNumber:record.rowNumber,code:e.code||'LAB_VALIDATION',message:e.message,
