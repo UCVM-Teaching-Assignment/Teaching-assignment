@@ -63,8 +63,8 @@
       '</select></label><label>Date <input name="date" type="date" value="'+esc(d.date||'')+'"></label>'+
       '<label>Start <input name="startTime" type="time" value="'+esc(d.startTime||'')+'"></label>'+
       '<label>End <input name="endTime" type="time" value="'+esc(d.endTime||'')+'"></label>'+
-      '<label>Session title / Topic '+(titleRequired?'(required)':'(optional)')+' <input name="topic" value="'+esc(d.topic||'')+'" '+(titleRequired?'required':'')+'></label>'+
-      '<label>Room '+(roomRequired?'(required)':'(optional; LAB can book later)')+' <input name="room" value="'+esc(d.room||'')+'" '+(roomRequired?'required':'')+'></label>'+
+      '<label>Session title / Topic '+(titleRequired?'(required to publish)':'(optional)')+' <input name="topic" value="'+esc(d.topic||'')+'"></label>'+
+      '<label>Room '+(roomRequired?'(required to publish)':'(optional; LAB can book later)')+' <input name="room" value="'+esc(d.room||'')+'"></label>'+
       '<label>Suggested faculty (optional; Ctrl-click to select several)<select name="suggestions" multiple size="4">'+
        state.faculty.map(f=>'<option value="'+esc(f.facultyId)+'" '+((d.suggestedFacultyIds||[]).includes(f.facultyId)?'selected':'')+'>'+esc(f.name)+'</option>').join('')+
       '</select></label><div class="paws-stage-actions"><button type="submit">Save ADC Draft</button>'+
