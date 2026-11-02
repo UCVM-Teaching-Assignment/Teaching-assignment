@@ -160,3 +160,19 @@ test('LAB bulk import allows simultaneous stations in separate subspaces of one 
  assert.equal(published.stations.find(x=>x.sessionId===a.id).runs[0].subspace,'area a');
  assert.equal(published.stations.find(x=>x.sessionId===b.id).runs[0].subspace,'area b');
 });
+
+test('LAB export includes existing sibling LAB stations in same ADC-published scope',()=>{
+ const f=fixture(),s=publish(f);
+ f.tables.sessions.push({id:'legacy-lab-sibling',academicYear:'2026-27',curriculumYear:'3',courseCode:'VETM 505',date:'2026-11-03',
+  sessionType:'LAB',topic:'Legacy skills',room:null,startTime:'08:30:00',endTime:'10:30:00',assignments:[]});
+ const exported=f.workflow.officeExport('lab','lab').rows;
+ assert.deepEqual(exported.map(x=>x.sessionId).sort(),[s.id,'legacy-lab-sibling'].sort());
+ const filled=exported.map((row,i)=>labRow([row],{
+  runKey:'legacy-scope-run-'+i,room:'CSB Wards',subspace:i?'Area B':'Area A',
+  groupCode:String(i+1),studentIds:i?'TEST-03;TEST-04':'TEST-01;TEST-02',
+  studentNames:i?'Synthetic Three;Synthetic Four':'Synthetic One;Synthetic Two'}));
+ const preview=f.workflow.previewOfficeBulk('lab',{office:'lab',rows:filled});
+ assert.equal(preview.valid,true,JSON.stringify(preview.errors));
+ f.workflow.publishOfficeBulk('lab',{office:'lab',rows:filled,batchId:'lab-with-legacy-sibling'});
+ assert.equal(f.lab.publicView(s.id).stations.length,2);
+});
