@@ -58,15 +58,22 @@
  }
  function mapFacultySuggestions(rows,faculty){
   const pool=new Map();
+  const ambiguous=new Set();
   for(const person of faculty||[]){
    pool.set(text(person.facultyId).toLowerCase(),person.facultyId);
-   if(person.name)pool.set(text(person.name).toLowerCase(),person.facultyId);
+   if(person.name){
+    const alias=text(person.name).toLowerCase();
+    if(pool.has(alias)&&pool.get(alias)!==person.facultyId)ambiguous.add(alias);
+    else pool.set(alias,person.facultyId);
+   }
   }
   return rows.map((row,index)=>{
    const field=text(row.suggestedFaculty);
    if(!field){const copy={...row};delete copy.suggestedFaculty;return copy;}
    const ids=field.split(/[;|]/).map(x=>text(x)).filter(Boolean).map(candidate=>{
-    const match=pool.get(candidate.toLowerCase());
+    const token=candidate.toLowerCase();
+    if(ambiguous.has(token))throw Error('Row '+(index+2)+': ambiguous suggested Faculty "'+candidate+'". Use a unique Faculty ID.');
+    const match=pool.get(token);
     if(!match)throw Error('Row '+(index+2)+': suggested Faculty "'+candidate+'" is not in the active Faculty directory.');
     return match;
    });

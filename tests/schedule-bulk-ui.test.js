@@ -19,3 +19,8 @@ test('unknown Faculty names fail preview mapping rather than silently dropping s
  assert.throws(()=>ui.mapFacultySuggestions([{courseNumber:'VTMD 304',suggestedFaculty:'Unknown Person'}],[{facultyId:'f1',name:'Known Person'}]),/Row 2/);
  assert.deepEqual(ui.mapFacultySuggestions([{suggestedFaculty:'Known Person; f1'}],[{facultyId:'f1',name:'Known Person'}]),[{suggestedFacultyIds:['f1']}]);
 });
+
+test('two Faculty with identical display names require a unique Faculty ID',()=>{
+ assert.throws(()=>ui.mapFacultySuggestions([{suggestedFaculty:'Alex Smith'}],[{facultyId:'f1',name:'Alex Smith'},{facultyId:'f2',name:'Alex Smith'}]),/ambiguous/i);
+ assert.deepEqual(ui.mapFacultySuggestions([{suggestedFaculty:'f2'}],[{facultyId:'f1',name:'Alex Smith'},{facultyId:'f2',name:'Alex Smith'}]),[{suggestedFacultyIds:['f2']}]);
+});

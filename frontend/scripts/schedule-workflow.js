@@ -48,11 +48,13 @@
  function render(){
   if(!dialog||!state)return;
   const draft=savedDraft(),d=draft?.values||{},canADC=state.capabilities.canADC,canADFAD=state.capabilities.canADFAD,s=selected(activeSession);
+  const titleRequired=state.rules?.fields?.topic?.required===true,roomRequired=state.rules?.fields?.room?.required===true;
   dialog.innerHTML='<header class="paws-stage-header"><h2 id="paws-stage-title">Schedule Workflow · Testing</h2><button type="button" data-stage-action="close" aria-label="Close">Close</button></header>'+
    '<div class="paws-stage-body"><p class="paws-stage-banner">Synthetic, browser-local data only. One Course Session per approved ADC record. Never enter real student or staff data here.</p>'+
    '<div class="paws-stage-flow"><span><strong>1 ADC</strong> · Publish schedule</span><span><strong>2 LAB</strong> · Rooms & groups</span><span><strong>3 ADFAD</strong> · Confirm faculty</span></div>'+
    (notice?'<p class="paws-stage-status" role="status">'+esc(notice)+'</p>':'')+
-   (canADC?'<section class="paws-stage-card"><h3>Stage 1 · ADC — Schedule publication</h3><p>Required to publish: <strong>Course, date, start and end time</strong>. Topic, room and suggested faculty are optional. Suggestions do not create teaching assignments or DOE.</p>'+
+   (canADC?'<section class="paws-stage-card"><h3>Stage 1 · ADC — Schedule publication</h3><p>Required: <strong>Course, curriculum year, date and start/end time</strong>'+
+   (titleRequired?', Title':'')+(roomRequired?', Room':'')+'. Missing optional details enter the responsible work queue. Faculty suggestions never assign DOE.</p>'+
     '<label>Open draft<select data-stage-draft>'+option('','New schedule draft',draft?.id||'')+
       state.drafts.map(row=>option(row.id,row.values.courseCode+' '+dateTime(row.values)+' · revision '+row.revision,activeDraft)).join('')+'</select></label>'+
     '<form data-stage-draft-form class="paws-stage-grid"><label>Course code <select name="courseCode">'+
@@ -61,8 +63,8 @@
       '</select></label><label>Date <input name="date" type="date" value="'+esc(d.date||'')+'"></label>'+
       '<label>Start <input name="startTime" type="time" value="'+esc(d.startTime||'')+'"></label>'+
       '<label>End <input name="endTime" type="time" value="'+esc(d.endTime||'')+'"></label>'+
-      '<label>Session title / Topic (optional) <input name="topic" value="'+esc(d.topic||'')+'"></label>'+
-      '<label>Room (optional; LAB can book later) <input name="room" value="'+esc(d.room||'')+'"></label>'+
+      '<label>Session title / Topic '+(titleRequired?'(required)':'(optional)')+' <input name="topic" value="'+esc(d.topic||'')+'" '+(titleRequired?'required':'')+'></label>'+
+      '<label>Room '+(roomRequired?'(required)':'(optional; LAB can book later)')+' <input name="room" value="'+esc(d.room||'')+'" '+(roomRequired?'required':'')+'></label>'+
       '<label>Suggested faculty (optional; Ctrl-click to select several)<select name="suggestions" multiple size="4">'+
        state.faculty.map(f=>'<option value="'+esc(f.facultyId)+'" '+((d.suggestedFacultyIds||[]).includes(f.facultyId)?'selected':'')+'>'+esc(f.name)+'</option>').join('')+
       '</select></label><div class="paws-stage-actions"><button type="submit">Save ADC Draft</button>'+
