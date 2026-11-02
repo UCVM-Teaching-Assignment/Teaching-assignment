@@ -4,12 +4,12 @@
  const TYPES={instructor_overlap:'Instructor overlap',afc_unavailable:'Unavailable',duplicate_assignment:'Duplicate assignment',duplicate_session_assignment:'Duplicate session assignment',invalid_schedule:'Invalid schedule',missing_schedule:'Missing schedule',calendar_activity_overlap:'Working activity overlap',calendar_time_unknown:'Working time not provided'};
  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  let panel,button,adapter,generation=0,owner=null,started=false,year='',years=[],params={},query='',mode='all';
- let tasks=[],navigation=[],requests=[],total=0,nextCursor=null,errors=[],notice='',loading=false,reviewBusy=false,facets={faculty:[],courses:[]};
+ let tasks=[],navigation=[],requests=[],workflowTasks=[],total=0,nextCursor=null,errors=[],notice='',loading=false,reviewBusy=false,facets={faculty:[],courses:[]};
  const currentOwner=()=>adapter?.identity?.()||String(Boolean(adapter?.hasUser()));
  const current=token=>token===generation&&adapter?.hasUser()&&owner===currentOwner();
  const pref=()=>{try{return localStorage.getItem('paws-tasks-open')!=='false';}catch(_){return true;}};
  function toggle(open){panel.hidden=!open;button.setAttribute('aria-expanded',String(open));document.body.classList.toggle('workspace-tasks-open',open);try{localStorage.setItem('paws-tasks-open',String(open));}catch(_){}}
- function clearData(){tasks=[];navigation=[];requests=[];total=0;nextCursor=null;errors=[];reviewBusy=false;}
+ function clearData(){tasks=[];navigation=[];requests=[];workflowTasks=[];total=0;nextCursor=null;errors=[];reviewBusy=false;}
  function resetIdentity(){clearData();year='';years=[];params={};query='';mode='all';facets={faculty:[],courses:[]};started=false;panel.querySelector('[data-task-search]').value='';panel.querySelectorAll('[data-task-filter]').forEach(node=>{node.value='';});}
  function updateOptions(){
   const options=(values,key,label,selected,placeholder,selectedLabel)=>`${placeholder?'<option value="">'+esc(placeholder)+'</option>':''}`+values.map(row=>`<option value="${esc(row[key])}" data-label="${esc(row[label])}"${String(row[key])===selected?' selected':''}>${esc(row[label])}</option>`).join('')+(selected&&!values.some(row=>String(row[key])===selected)?`<option value="${esc(selected)}" data-label="${esc(selectedLabel||selected)}" selected>${esc(selectedLabel||selected)} (not in current issues)</option>`:'');
@@ -18,7 +18,7 @@
   facultySelect.innerHTML=options(facets.faculty.map(row=>({...row,displayName:showFaculty(row.displayName)})),'facultyKey','displayName',params.facultyKey,'All faculty in scope',selectedFaculty&&selectedFaculty.value===params.facultyKey?selectedFaculty.dataset.label:undefined);
   panel.querySelector('[data-task-filter="courseCode"]').innerHTML=options(facets.courses,'courseCode','courseCode',params.courseCode,'All courses');
  }
- function matchesSearch(item){return !query||[item.displayName,showFaculty(item.displayName),item.courseCode,item.date,item.type,item.title,item.reason,item.topic].join(' ').toLowerCase().includes(query);}
+ function matchesSearch(item){return !query||[item.displayName,showFaculty(item.displayName),item.courseCode,item.date,item.type,item.title,item.reason,item.topic,...(item.missing||[])].join(' ').toLowerCase().includes(query);}
  function navigationVisible(item){
   if(params.facultyKey||params.type||params.reviewStatus||params.undated==='only')return false;
   return (!params.courseCode||item.courseCode===params.courseCode)&&(!params.start||item.date>=params.start&&item.date<params.end);
@@ -30,21 +30,27 @@
  }
  function render(){
   if(!panel)return;
-  const visibleNavigation=navigation.filter(navigationVisible),count=total+visibleNavigation.length+requests.length;
+  const visibleNavigation=navigation.filter(navigationVisible),count=total+visibleNavigation.length+requests.length+workflowTasks.length;
   button.textContent=loading?'Tasks (…)':`Tasks${count||errors.length?' ('+count+(errors.length?'+':'')+')':''}`;
-  panel.querySelector('.workspace-task-caption').textContent=loading?'Loading authorized tasks…':`${total} schedule issues · ${tasks.length} loaded · All weeks`;
+  panel.querySelector('.workspace-task-caption').textContent=loading?'Loading authorized tasks…':`${total} schedule issues · ${workflowTasks.length} workflow to-dos · All weeks`;
   panel.querySelectorAll('[data-filter]').forEach(node=>node.setAttribute('aria-pressed',String(node.dataset.filter===mode)));
   const issueCards=mode==='requests'?[]:tasks.filter(matchesSearch).map(card);
   const otherItems=[...(mode==='requests'?[]:visibleNavigation),...(mode==='schedule'?[]:requests)].filter(matchesSearch);
   const otherCards=otherItems.map(item=>`<button type="button" class="workspace-task" data-id="${esc(item.id)}" data-kind="${esc(item.kind)}"><strong>${esc(item.title)}</strong><span>${esc(item.reason)}</span><small>${esc(item.date||'Date not provided')}</small>${item.topic?`<span class="workspace-task-topic">${esc(item.topic)}</span>`:''}</button>`);
+  const workflowCards=(mode==='requests'?[]:workflowTasks.filter(matchesSearch)).map(item=>
+   '<button type="button" class="workspace-task" data-workflow-session="'+esc(item.sessionId)+'" data-workflow-stage="'+esc(item.stage)+'">'+
+   '<strong>'+esc(item.stage.toUpperCase())+' · '+esc(item.courseCode)+'</strong>'+
+   '<span>'+esc((item.missing||[]).join(', '))+'</span><small>'+esc(item.date||'Date not provided')+
+   (item.status==='waiting_for_lab'?' · Waiting for LAB':'')+'</small></button>');
   const messages=errors.map(message=>`<p role="alert">${esc(message)}</p>`).join('')+(notice?`<p role="status">${esc(notice)}</p>`:'');
   const list=panel.querySelector('.workspace-task-list');
-  list.innerHTML=messages+(errors.length?'<button type="button" data-retry>Retry</button>':'')+issueCards.join('')+otherCards.join('')+(!loading&&!errors.length&&!issueCards.length&&!otherCards.length?'<p class="workspace-empty">No matching tasks in your authorized scope.</p>':'')+(nextCursor&&mode!=='requests'?`<button type="button" class="workspace-task-more" data-task-more${loading?' disabled':''}>Load more issues</button>`:'');
+  list.innerHTML=messages+(errors.length?'<button type="button" data-retry>Retry</button>':'')+issueCards.join('')+workflowCards.join('')+otherCards.join('')+(!loading&&!errors.length&&!issueCards.length&&!workflowCards.length&&!otherCards.length?'<p class="workspace-empty">No matching tasks in your authorized scope.</p>':'')+(nextCursor&&mode!=='requests'?`<button type="button" class="workspace-task-more" data-task-more${loading?' disabled':''}>Load more issues</button>`:'');
   list.querySelector('[data-retry]')?.addEventListener('click',()=>refresh());
   list.querySelector('[data-task-more]')?.addEventListener('click',()=>refresh({append:true}));
   list.querySelectorAll('[data-open-session]').forEach(node=>node.onclick=()=>adapter.openSession(node.dataset.openSession));
   list.querySelectorAll('[data-id]').forEach(node=>node.onclick=()=>node.dataset.kind==='requests'?root.PAWS_SWAP?.openDetail(node.dataset.id):adapter.openSession(node.dataset.id));
   list.querySelectorAll('[data-review-issue]').forEach(node=>node.onclick=()=>review(tasks.find(task=>task.issueKey===node.dataset.reviewIssue)));
+  list.querySelectorAll('[data-workflow-session]').forEach(node=>node.onclick=()=>root.PAWS_SCHEDULE_BULK_UI?.openTask?.({sessionId:node.dataset.workflowSession,stage:node.dataset.workflowStage}));
  }
  async function review(task){
   if(!task?.canReview||reviewBusy||loading)return;
@@ -64,8 +70,9 @@
   button.hidden=false;if(!started){started=true;toggle(pref());}
   if(!append)clearData();loading=true;notice=message;render();
   if(!append){
-   const results=await Promise.allSettled([adapter.allSessions(),root.UCVM_PAWS_DATA.swapQueue()]);
+   const results=await Promise.allSettled([adapter.allSessions(),root.UCVM_PAWS_DATA.swapQueue(),root.PAWS_SCHEDULE_BULK_UI?.workQueue?.()||Promise.resolve([])]);
    if(!current(token))return;
+   if(results[2].status==='fulfilled')workflowTasks=Array.isArray(results[2].value)?results[2].value:[];
    if(results[1].status==='fulfilled')requests=(results[1].value.requests||[]).filter(row=>!['applied','approved','rejected','withdrawn'].includes(String(row.status).toLowerCase())).map(row=>({id:row.requestId,kind:'requests',title:'SWAP · '+(row.courseCode||'Session'),reason:[row.status,row.nextStage].filter(Boolean).join(' · '),date:row.date}));
    else errors.push('SWAP requests could not be loaded. Retry to refresh.');
    if(results[0].status==='fulfilled'){
