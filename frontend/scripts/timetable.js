@@ -1698,6 +1698,12 @@
   }
 
   function switchCalendarView(next){
+    if(next==='compare'&&selectionMode){
+      // Comparison cannot inherit a multi-session edit/selection transaction.
+      selectionViewFlow.finish();selectionMode=false;reviewingSelection=false;
+      sessionSelection.clear();selectedSessionOriginals.clear();
+      document.body.classList.remove('session-selection-mode');updateSelectionControls();
+    }
     if(next==='compare'){
       // Start with the active Calendar week, then accept arbitrary additional periods.
       if(!multiWeekModel.size())multiWeekModel.add(selectedSemester,selectedWeek);
