@@ -109,6 +109,16 @@ function createLabService({store,annualState=()=>null}={}){
   if(ctx.archived)issue('ARCHIVED_YEAR','Archived Lab schedules are read-only.');
   const match=/^(\d{4})-(\d{2})$/.exec(ctx.scope.academicYear||'');
   if(!match||Number(match[2])!==(Number(match[1])+1)%100||ctx.scope.date<match[1]+'-05-01'||ctx.scope.date>=String(Number(match[1])+1)+'-05-01')issue('YEAR_SCOPE','The Session date must be inside its academic year.');
+  // New ADC-published LAB Sessions must record a resource request (or explicit
+  // "not required") before operational group publication. Older, imported LABs
+  // retain their existing behavior until an approved data migration.
+  for(const session of ctx.sessions){
+   if(!session.schedulePublishedBy)continue;
+   const request=store.tables.extra?.labResourceReservations?.requests?.[session.id];
+   const currentSource=JSON.stringify([session.academicYear,session.id,session.date,clock(session.startTime),clock(session.endTime)]);
+   if(!request||request.sourceToken!==currentSource||!['requested','confirmed','not_required'].includes(request.status))
+    issue('RESOURCE_REQUEST_REQUIRED','Submit LAB Reserve Notes (or select no animals required) before publishing this ADC-scheduled LAB.',session.id);
+  }
   const course=annual().annual?.[ctx.scope.academicYear]?.[ctx.scope.courseCode];
   if(ctx.scope.academicYear!==store.tables.academicYear){
    const release=list(course?.published).at(-1);
