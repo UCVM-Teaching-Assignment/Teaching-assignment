@@ -15,9 +15,14 @@
 .multi-week-card-heading{display:flex;flex-direction:column;gap:3px;min-width:0}
 .multi-week-card-heading h3{font-size:15px;font-weight:750;color:var(--text);margin:0}
 .multi-week-card-heading span{font-size:11px;color:var(--text-3)}
+.multi-week-card-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.multi-week-move{width:34px;height:34px;border:1px solid var(--border-2);border-radius:6px;background:var(--surface);color:var(--text);font-size:18px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.multi-week-move:hover:not(:disabled){background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
+.multi-week-move:disabled{opacity:.35;cursor:not-allowed}
+
 .multi-week-remove{width:34px;height:34px;flex:0 0 34px;align-self:flex-start;border:1px solid var(--border-2);border-radius:6px;font-size:22px;line-height:1;background:var(--surface);color:var(--text);display:flex;align-items:center;justify-content:center}
 .multi-week-remove:hover{background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
-.multi-week-remove:focus-visible,.multi-week-add:focus-visible,.multi-week-controls select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.multi-week-move:focus-visible,.multi-week-remove:focus-visible,.multi-week-add:focus-visible,.multi-week-controls select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .multi-week-card-body{position:relative}
 .multi-week-card-body .tg-body{height:470px;min-height:410px}
 .multi-week-loading,.multi-week-error,.multi-week-empty{padding:30px 20px;text-align:center;font-size:12px;color:var(--text-3)}
@@ -35,4 +40,7 @@
  .multi-week-controls select{width:100%}
  .multi-week-intro{flex-basis:100%}
  .multi-week-add{width:100%}
+ .multi-week-card-heading h3{font-size:13px}
+ .multi-week-card-actions{gap:4px}
+ .multi-week-move,.multi-week-remove{width:30px;height:30px;flex-basis:30px}
 }
