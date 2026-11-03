@@ -222,8 +222,8 @@
     const names=[['calendar','Calendar'],['teaching','Teaching'],['courses','Courses & Assignments'],['doe','DOE'],['roles','Roles'],['archive','Archive & AFC'],['catalog','Course Catalog'],['rollover','Rollover'],['review','Publish Review'],['compare','Year Comparison']];
     const visible=names.filter(n=>n[0]==='rollover'||n[0]==='review'?showStaff:n[0]==='archive'?(isAdfa(a.role)||['adc','lab'].includes(a.role)):n[0]==='catalog'?showStaff:n[0]==='courses'?(showStaff||a.role==='faculty'):true);
     let body='';try{body=({calendar:()=>viewCalendar(a,s),teaching:()=>viewTeaching(a,s),courses:()=>viewCourses(a,s),doe:()=>viewDoe(a,s),roles:()=>viewRoles(a,s),archive:()=>viewArchive(a,s),catalog:()=>viewCatalog(a,s),rollover:()=>viewRollover(a,s),review:()=>viewReview(a,s),compare:()=>viewComparison(a,s)})[tab]();}catch(error){body=wrap('Access',E(error.message))}
-    const createYear=a.role==='owner'&&s.years[selectedYear].status!=='archived'?'<button data-my-action="create-year" type="button">Create Next Year</button>':'';
-    const sampleButton=a.role==='owner'&&selectedYear==='2027-28'&&s.years[selectedYear].status!=='archived'&&!Object.keys(s.annual[selectedYear]||{}).length
+    const createYear=['owner','developer'].includes(a.role)&&s.years[selectedYear].status!=='archived'?'<button data-my-action="create-year" type="button">Create Next Year</button>':'';
+    const sampleButton=['owner','developer'].includes(a.role)&&selectedYear==='2027-28'&&s.years[selectedYear].status!=='archived'&&!Object.keys(s.annual[selectedYear]||{}).length
       ?'<button data-my-action="load-2027-28-sample" type="button">Load 2027-28 Sample Data</button>':'';
     const stage=s.years[selectedYear].status,transitions={planning:['review'],review:['planning','active'],active:['review']};
     const phaseControl=isAdfa(a.role)&&stage!=='archived'?'<label>Change phase '+select('phase',[stage,...(transitions[stage]||[])],x=>x,x=>PHASE_LABELS[x]).replace('<select ','<select data-my-phase ')+'</label>':'';

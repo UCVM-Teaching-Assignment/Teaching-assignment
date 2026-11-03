@@ -27,7 +27,15 @@ function sessionView(store, session, { includeAssignmentTargets = false, include
     id: session.id, academicYear: session.academicYear, curriculumYear: session.curriculumYear,
     courseCode: session.courseCode, courseName: session.courseName, topic: session.topic,
     sessionType: session.sessionType, date: session.date, startTime: session.startTime, endTime: session.endTime,
-    room: session.room, instructorNames: names.join('; ')
+    room: session.sessionType==='LAB'?(function(){
+      // Published LAB room allocations are displayed without mutating the
+      // canonical Session or exposing draft/roster information.
+      const key=JSON.stringify({academicYear:session.academicYear,curriculumYear:String(session.curriculumYear),courseCode:session.courseCode,date:session.date});
+      const published=store.tables.extra?.labScheduling?.blocks?.[key]?.publications?.at(-1)?.public;
+      const station=published?.stations?.find(s=>s.sessionId===session.id);
+      const rooms=[...new Set((station?.runs||[]).map(r=>[r.room,r.subspace].filter(Boolean).join(' / ')).filter(Boolean))];
+      return rooms.join('; ')||session.room;
+     })():session.room, instructorNames: names.join('; ')
   };
   if (includeAssignmentTargets) {
     const rows = session.assignments.filter(row => includeUnresolvedAssignmentLabels || row.facultyId);

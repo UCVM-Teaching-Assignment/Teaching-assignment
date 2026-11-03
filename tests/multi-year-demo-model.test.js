@@ -196,3 +196,11 @@ test('initial migration retains original synthetic Change History as read-only e
  assert.equal(events.find(e=>e.legacy).detail.original.changeId,'legacy1');
  assert.equal(data.history.length,1);
 });
+
+test('Developer has Owner-level annual workspace authority to create and archive synthetic years',()=>{
+ const m=engine(),developer={uid:'dev1',role:'developer'};
+ m.createYear(developer,'2027-28');
+ assert.equal(m.getState().years['2027-28'].status,'planning');
+ m.retireYear(developer,'2027-28',true);
+ assert.equal(m.getState().years['2027-28'].status,'archived');
+});

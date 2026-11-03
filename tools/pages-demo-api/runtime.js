@@ -29,6 +29,11 @@ function createDemoRuntime(store) {
   const findUser = r.users.findByUid;
   const writeGates = ALL_WRITES;
   const routes = require('./routes.js').compose({ store, r, verify, findUser, writeGates, pending });
+  const schedulingWorkflow = require('./schedule-workflow-routes').createScheduleWorkflowRoutes({store,verify,findUser});
+  const labScheduling = require('./lab-scheduling-routes').createLabRoutes({
+    store, verify, findUser,
+    calculateDoe: require('../../server/src/domain/doe-calculator').resolveTeachingDoe
+  });
   const timetable = createSwaFunctions({ api: createDataApi({
     verifyToken: verify, findUser,
     listSessions: r.sessions.list, updateSession: r.sessions.updateExisting, createSession: r.sessions.createNew,
@@ -41,6 +46,8 @@ function createDemoRuntime(store) {
   });
   const route = async request => {
     const pathname = new URL(request.url).pathname;
+    if (pathname === '/api/v1/schedule-workflow' || pathname.startsWith('/api/v1/schedule-workflow/')) return schedulingWorkflow(request);
+    if (pathname === '/api/v1/lab-scheduling' || pathname.startsWith('/api/v1/lab-scheduling/')) return labScheduling(request);
     const special = await routes.handle(pathname, request);
     if (special) return special;
     if (pathname.startsWith('/api/v1/dashboard/')) return dashboardRoutes(request);

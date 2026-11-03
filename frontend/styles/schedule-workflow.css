@@ -1,0 +1,46 @@
+.paws-stage-dialog{width:min(1060px,96vw);max-height:92vh;border:1px solid #cad1db;border-radius:10px;padding:0;color:#253244;background:#fff;box-shadow:0 20px 80px #0003}
+.paws-stage-dialog::backdrop{background:#14233899}
+.paws-stage-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 20px;background:#f4f6f9;border-bottom:1px solid #dbe0e8}
+.paws-stage-header h2{margin:0;font-size:18px;color:#192a44}
+.paws-stage-body{padding:18px 20px;max-height:78vh;overflow:auto}
+.paws-stage-banner{background:#fff6db;padding:9px 12px;border-left:3px solid #b88210;font-size:12px}
+.paws-stage-flow{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
+.paws-stage-flow span{flex:1;min-width:160px;background:#eaf1fb;padding:12px;border-radius:6px;font-size:13px}
+.paws-stage-card{padding:16px;margin-bottom:14px;border:1px solid #d6dfeb;border-radius:8px}
+.paws-stage-card h3{margin:0 0 10px;font-size:16px}.paws-stage-card p{font-size:13px}
+.paws-stage-card label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600}
+.paws-stage-card input,.paws-stage-card select,.paws-stage-card textarea{width:100%;min-width:0;padding:8px 9px;border:1px solid #b9c5d5;border-radius:5px;background:#fff;color:#222}
+.paws-stage-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+.paws-stage-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;grid-column:1/-1;margin:10px 0}
+.paws-stage-card button,.paws-stage-header button{border:1px solid #b5c4d8;padding:8px 12px;border-radius:5px;background:#eef3fb;color:#1c3858;cursor:pointer}
+.paws-stage-card button:hover,.paws-stage-header button:hover{background:#dceafc}.paws-stage-card button:disabled{opacity:.5;cursor:not-allowed}
+.paws-stage-status{background:#e8f2fd;padding:9px 12px;border-radius:5px;color:#194568}
+.paws-stage-warning{background:#fff0df;padding:9px;border-left:3px solid #d17823}
+.paws-stage-muted{color:#5b6879;font-size:12px}.paws-stage-session{margin:10px 0}
+.paws-stage-pills{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
+.paws-stage-pills span{font-size:11px;color:#4c5a70;background:#f0f2f7;padding:3px 7px;border-radius:4px}
+.paws-stage-faculty-row{display:grid;grid-template-columns:2fr 1.5fr 1fr auto;gap:10px;align-items:end;margin:10px 0}
+.paws-stage-note{margin-top:12px}.paws-stage-list{max-height:220px;overflow:auto;border:1px solid #e0e4ee;border-radius:5px}
+.paws-stage-list>div{padding:8px;border-bottom:1px solid #edf0f5;font-size:12px}
+@media(max-width:730px){.paws-stage-dialog{width:98vw}.paws-stage-body{padding:12px}.paws-stage-grid{grid-template-columns:1fr}.paws-stage-faculty-row{grid-template-columns:1fr 1fr}.paws-stage-faculty-row>button{grid-column:1/-1}.paws-stage-flow span{min-width:100%}}
+
+/* Bulk Import and Developer Dashboard */
+.paws-rule-field{border:1px solid #dbe0e8;border-radius:6px;padding:10px;min-width:0}
+.paws-rule-field legend{font-weight:700;font-size:13px;padding:0 4px}
+.paws-rule-field label{margin-bottom:8px}
+.paws-rule-field input[type=checkbox]{width:auto;min-width:16px;margin-right:6px}
+.paws-stage-bulk-open{margin:12px 0}
+.paws-bulk-table{width:100%;border-collapse:collapse;font-size:12px}
+.paws-bulk-table th,.paws-bulk-table td{border-bottom:1px solid #e4e9f0;padding:7px;text-align:left;vertical-align:top}
+.paws-bulk-table th{position:sticky;top:0;background:#eff3f8}
+.paws-task-open-row{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #dde4ec;padding:10px;background:#fff;color:#263a55;cursor:pointer}
+.paws-task-open-row:hover{background:#eef4fb}
+.paws-stage-card textarea[data-bulk-source]{width:100%;min-height:180px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+@media(max-width:730px){.paws-bulk-table{font-size:11px}.paws-rule-field{grid-column:1/-1}}
+
+/* Office Work Queue bulk assignment tools */
+.paws-office-textarea{width:100%;min-height:200px;font:12px/1.5 ui-monospace,Consolas,monospace;white-space:pre;overflow-x:auto}
+.paws-office-error{padding:9px 11px;margin:0;border-bottom:1px solid #eee;border-left:3px solid #b24531;background:#fff9f5;font-size:12px}
+.paws-office-directory{max-height:160px;overflow-y:auto;font-size:12px;padding:8px 14px}
+.paws-task-bulk-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}
+.paws-task-bulk-actions button{border:1px solid #b9c6d7;background:#f0f5fc;color:#193550;border-radius:5px;padding:8px 10px;cursor:pointer}

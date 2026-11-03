@@ -1,0 +1,51 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const flow=require('../frontend/scripts/schedule-workflow.js'),ui=require('../frontend/scripts/schedule-bulk-ui.js'),officeUI=require('../frontend/scripts/schedule-office-ui.js');
+const csv=require('../frontend/scripts/schedule-bulk-csv.js');
+test('Schedule Workflow is reserved for ADC and Developer; ADFAD and LAB work from their queue',()=>{
+ assert.equal(flow.allowedRole('adc'),true);assert.equal(flow.allowedRole('developer'),true);
+ assert.equal(flow.allowedRole('adfa_general'),false);assert.equal(flow.allowedRole('lab'),false);
+ assert.equal(officeUI.can('lab','lab'),true);assert.equal(officeUI.can('adfa_general','adfa'),true);
+ assert.equal(ui.roleAllowed('lab','bulk'),false);assert.equal(ui.roleAllowed('adfa_general','bulk'),false);
+});
+test('LAB export template roundtrips station runs and group roster IDs with Excel CSV quoting',()=>{
+ const rows=[{sessionId:'lab-test-id',courseNumber:'VETM 505',date:'2026-11-03',startTime:'08:30',endTime:'10:30',runKey:'run-1',room:'CSB Wards',capacity:'10',attendance:'groups',groupCode:'1',studentIds:'S1;S2',studentNames:'Synthetic 1;Synthetic 2',expectedRevision:0}];
+ const text=csv.officeTemplate('lab',rows);
+ const parsed=csv.parseOfficeCsv('lab',text);
+ assert.equal(parsed.rows.length,1);assert.equal(parsed.rows[0].groupCode,'1');assert.equal(parsed.rows[0].sessionId,'lab-test-id');
+});
+test('ADFAD export template roundtrips session IDs, roles, credited hours and revision',()=>{
+ const rows=[{sessionId:'teaching-id',courseNumber:'VTMD 304',date:'2026-11-03',startTime:'08:30',endTime:'10:30',facultyId:'f1',teachingRole:'Lecture',creditedHours:'2',reviewNote:'',expectedRevision:0}];
+ const text=csv.officeTemplate('adfa',rows);
+ const parsed=csv.parseOfficeCsv('adfa',text);
+ assert.deepEqual(parsed.rows[0],Object.fromEntries(Object.entries(rows[0]).map(([k,v])=>[k,String(v)])));
+});
+
+test('LAB office CSV preserves independent room subspaces when exporting a multi-station activity',()=>{
+ const row={sessionId:'s1',courseNumber:'VETM 505',date:'2026-11-03',startTime:'08:30',endTime:'10:30',runKey:'a',
+  room:'CSB Wards',subspace:'Area A',capacity:12,attendance:'Groups',groupCode:'1',studentIds:'S1',studentNames:'Synthetic',expectedRevision:0};
+ const result=csv.parseOfficeCsv('lab',csv.officeTemplate('lab',[row]));
+ assert.equal(result.rows[0].subspace,'Area A');
+});
+
+test('LAB bulk office workflow remains available under Lab Scheduling without a standalone toolbar queue',()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
+ const office=src('frontend/scripts/schedule-office-ui.js');
+ const lab=src('frontend/scripts/lab-scheduling-editor.js');
+ const entry=src('frontend/scripts/lab-scheduling-entry.js');
+ const tasks=src('frontend/scripts/workspace-tasks.js');
+ assert.match(office,/for\(const name of \['adfa'\]\)/);
+ assert.match(office,/getElementById\('paws-office-lab-queue'\)\?\.remove\(\)/);
+ assert.match(office,/function mountLab\(host/);
+ assert.match(office,/\/preview-office-bulk/);
+ assert.match(office,/\/publish-office-bulk/);
+ assert.match(office,/officeTemplate\(office,allRows\)/);
+ assert.match(lab,/data-lab-tab="single"/);
+ assert.match(lab,/data-lab-tab="bulk"/);
+ assert.match(lab,/PAWS_SCHEDULE_OFFICE_UI\.mountLab/);
+ assert.match(entry,/await editor\.open\(sessionId,options\)/);
+ assert.match(tasks,/Open Lab Scheduling · Bulk CSV/);
+ assert.equal(officeUI.can('lab','lab'),true);
+ assert.equal(officeUI.can('adfa_general','adfa'),true);
+});
