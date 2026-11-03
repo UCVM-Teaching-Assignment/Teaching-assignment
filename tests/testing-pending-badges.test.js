@@ -78,6 +78,7 @@ test('workflow tasks, bulk import and dialogs have T; original Tasks remains unc
  const office=source('frontend/scripts/schedule-office-ui.js');
  const workflow=source('frontend/scripts/schedule-workflow.js');
  const lab=source('frontend/scripts/lab-scheduling-editor.js');
+ const published=source('frontend/scripts/lab-scheduling-entry.js');
  assert.match(tasks,/esc\(item\.courseCode\)\+pendingBadge\(\)/);
  assert.match(tasks,/' template'\+pendingBadge\(\)/);
  assert.match(tasks,/button\.textContent=loading\?'Tasks/);
@@ -86,4 +87,5 @@ test('workflow tasks, bulk import and dialogs have T; original Tasks remains unc
  assert.match(office,/pendingBadge\(\)\+'<\/h2>/);
  assert.match(workflow,/Schedule Workflow · Testing'\+pendingBadge\(\)/);
  assert.equal((lab.match(/Lab Scheduling'\+pendingBadge\(\)/g)||[]).length,2);
+ assert.match(published,/Published v'\+escape\(p\.version\).*pendingBadge/);
 });
