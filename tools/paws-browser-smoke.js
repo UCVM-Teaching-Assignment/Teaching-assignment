@@ -179,14 +179,14 @@ async function main(){
        let observed=null;
        for(let i=0;i<35;i++){
          try{
-           const probe=await cdp.send('Runtime.evaluate',{expression:"(function(){try{const api=window.UCVM_PAWS_DEMO_API,stored=JSON.parse(localStorage.getItem('ucvm-pages-demo-paws-v1')||'null');if(!api||!stored)return{ready:false};const sessions=api.store.tables.sessions,activities=api.store.tables.activities.filter(x=>x.category==='ccc');return{ready:true,sessions:sessions.length,ccc:activities.length,persistedSessions:stored.sessions?.length,persistedCcc:stored.activities?.filter(x=>x.category==='ccc').length,lab:sessions.filter(s=>s.sessionType==='LAB').length,srl:sessions.filter(s=>s.sessionType==='SRL').length}}catch(e){return{ready:false,error:String(e.message||e)}}})()",returnByValue:true});
+           const probe=await cdp.send('Runtime.evaluate',{expression:"(function(){try{const api=window.UCVM_PAWS_DEMO_API,stored=JSON.parse(localStorage.getItem('ucvm-pages-demo-paws-v1')||'null');if(!api||!stored)return{ready:false};const sessions=api.store.tables.sessions,activities=api.store.tables.activities.filter(x=>x.category==='ccc');return{ready:true,sessions:sessions.length,ccc:activities.length,packed:stored.extra?.testingDemoPackedFixture?.version===1,persistedSessions:stored.sessions?.length,persistedCcc:stored.activities?.filter(x=>x.category==='ccc').length,lab:sessions.filter(s=>s.sessionType==='LAB').length,srl:sessions.filter(s=>s.sessionType==='SRL').length}}catch(e){return{ready:false,error:String(e.message||e)}}})()",returnByValue:true});
            if(probe.result?.value?.ready&&probe.result.value.sessions===1937){observed=probe.result.value;break;}
          }catch(_){}
          await wait(250);
        }
-       if(!observed||observed.sessions!==1937||observed.ccc!==413||observed.persistedSessions!==1937||observed.persistedCcc!==413||!observed.lab||!observed.srl)
-         problems.push(label+': Data Load did not persist Beta-density Teaching/CCC records: '+JSON.stringify(observed));
-       else console.log('ok   Load Test Data persisted 1937 Course Sessions (LAB/SRL) and 413 CCC slots after reload');
+       if(!observed||observed.sessions!==1937||observed.ccc!==413||!observed.packed||observed.persistedSessions>=1937||observed.persistedCcc>=413||!observed.lab||!observed.srl)
+         problems.push(label+': Data Load did not regenerate persisted compact Teaching/CCC fixtures: '+JSON.stringify(observed));
+       else console.log('ok   Load Test Data persisted a compact fixture and regenerated 1937 Course Sessions plus 413 CCC slots after reload');
        try{
          const reset=await cdp.send('Runtime.evaluate',{expression:"(function(){try{const api=window.UCVM_PAWS_DEMO_API;const again=api.testingOnly.loadDenseCalendar('uid-developer');api.reset();return{ok:again.addedSessions===0&&again.addedCCC===0}}catch(e){return{ok:false,error:String(e.message||e)}}})()",returnByValue:true});
          if(!reset.result?.value?.ok)problems.push(label+': Data Load idempotence/reset failed: '+JSON.stringify(reset.result?.value));
