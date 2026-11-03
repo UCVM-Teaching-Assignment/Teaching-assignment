@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-11-03",
+      "pr": 107,
+      "title": "Multi-Week Comparison in the Testing Calendar",
+      "changes": [
+        "Added a Testing-only Compare Weeks view where users can add any available Spring, Fall or Winter week, including nonconsecutive Fall and Winter weeks, and stack calendars vertically.",
+        "Each selected week has its own top-right X to remove only that week; the normal Week grid layout, session details and calendar colors are reused.",
+        "Fetches authorized session data independently for each selected week and keeps results scoped to the current Demo identity.",
+        "Existing Year, Course, Activity type, Search and My Timetable filters apply; comparison does not export or bulk-edit a different calendar range.",
+        "Added unit and staged browser tests for Fall Week 1 versus Winter Week 5, repeat selection, unlimited card count, loading and individual removal. The feature is browser-local Testing only, with no Beta, SQL or DOE changes."
+      ]
+    },
+    {
+      "date": "2026-11-03",
       "pr": 106,
       "title": "One-click eligible annual Role confirmations in the Testing Demo",
       "changes": [
