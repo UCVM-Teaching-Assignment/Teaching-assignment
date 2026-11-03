@@ -467,7 +467,7 @@
     return identity;
   }
   // Testing site only: hooks for testing-only-features.js.
-  window.UCVM_TIMETABLE_TESTING_HOOKS=Object.freeze({render:()=>render(),currentUser:()=>currentUser,viewMode:()=>viewMode,refresh:()=>refreshSessionScope()});
+  window.UCVM_TIMETABLE_TESTING_HOOKS=Object.freeze({render:()=>render(),currentUser:()=>currentUser,viewMode:()=>viewMode,refresh:()=>{invalidateAllSessions();return refreshSessionScope();}});
   let listSessionMode = 'ALL';
   let listAcademicYear = '';
   let lastFacultyTeachingView = 'day';
@@ -639,7 +639,7 @@
     }
   }
 
-  function refreshSessionScope(){if(viewMode==='compare'){render();return Promise.resolve(true)}if(currentUser)return subscribeSessions();render();return Promise.resolve(true)}
+  function refreshSessionScope(){if(viewMode==='compare'){clearComparisonCache();render();return Promise.resolve(true)}if(currentUser)return subscribeSessions();render();return Promise.resolve(true)}
   async function ensureAllSessions({refresh=false,notify=true}={}){
     const ownerUid=String(currentUser?.uid||'');
     if(!ownerUid)return[];
@@ -1429,10 +1429,11 @@
     const identity=syncComparisonIdentity(),epoch=comparisonEpoch,key=period.key;
     if(comparisonRows.has(key)||comparisonPending.has(key))return;
     const request=++comparisonRequestId,start=ymd(weekStart(period.week,period.semester)),
-      end=ymd(addDays(weekStart(period.week,period.semester),4)),range={start,end};
+      end=ymd(addDays(weekStart(period.week,period.semester),6));
     comparisonPending.set(key,request);
-    const cached=cachedSessionsForRange(currentUser,range);
-    Promise.resolve(cached!==null?cached:fetchPawsSessions({start,end:ymd(addDays(parseYmd(end),1))})).then(rows=>{
+    // Comparison is a fresh authorized request per week. Never use the all-year
+    // prefetch snapshot here: an ADC publication can make that cache stale.
+    Promise.resolve().then(()=>fetchPawsSessions({start,end:ymd(addDays(parseYmd(end),1))})).then(rows=>{
       if(comparisonEpoch!==epoch||comparisonIdentity()!==identity||!multiWeekModel.has(key)||comparisonPending.get(key)!==request)return;
       comparisonRows.set(key,{status:'ready',rows:Array.isArray(rows)?rows:[]});
     }).catch(error=>{
@@ -1464,6 +1465,7 @@
       '<label for="comparison-semester">Semester<select id="comparison-semester">'+semesterOptions+'</select></label>'+
       '<label for="comparison-week">Week<select id="comparison-week">'+weekOptions+'</select></label>'+
       '<button type="button" class="multi-week-add" id="comparison-add-week">+ Add Week</button>'+
+      '<button type="button" class="multi-week-refresh" id="comparison-refresh-all">Refresh all weeks</button>'+
       '<label for="comparison-order">Sort weeks<select id="comparison-order">'+
       '<option value="custom">Custom order</option>'+
       '<option value="asc">Earliest to latest</option>'+
@@ -1473,7 +1475,7 @@
       'This view shows scheduled sessions and enabled closures; Other Work activities are available in the regular Calendar.</p>'+
       '<div class="multi-week-stack" id="multi-week-stack">';
     for(const [position,period] of periods.entries()){
-      const start=weekStart(period.week,period.semester),end=addDays(start,4),
+      const start=weekStart(period.week,period.semester),end=addDays(start,6),
         startText=ymd(start),endText=ymd(end),loadedWeek=comparisonRows.get(period.key),
         label=period.semester.charAt(0).toUpperCase()+period.semester.slice(1)+' Week '+period.week;
       let body='';
@@ -1486,16 +1488,29 @@
       }else{
         const fullSource=window.UCVM_TESTING_ONLY?.calendarRows
           ?window.UCVM_TESTING_ONLY.calendarRows(loadedWeek.rows):loadedWeek.rows;
-        const rows=filteredSessions(fullSource,{semesterOverride:period.semester,ignoreMonth:true,skipTypeRebuild:true})
-          .filter(row=>row.date>=startText&&row.date<=endText);
+        const weeklySource=fullSource.filter(row=>row.date>=startText&&row.date<=endText);
+        const rows=filteredSessions(weeklySource,{semesterOverride:period.semester,ignoreMonth:true,skipTypeRebuild:true});
+        const grid=rows.filter(row=>calendarTimingDisposition(row).disposition==='grid' && [1,2,3,4,5].includes(parseYmd(row.date).getDay()));
+        const checkNeeded=rows.filter(row=>!grid.includes(row));
+        const weekend=rows.filter(row=>[0,6].includes(parseYmd(row.date).getDay()));
+        const filteredOut=weeklySource.length-rows.length;
         displayData.push(...rows);
-        body=weekGridMarkup(start,rows,{showCheckNeeded:true})+
-          '<span class="multi-week-status">'+rows.length+' session'+(rows.length===1?'':'s')+' in this filtered week.</span>';
+        // Keep the Mon-Fri time grid intact; show weekend sessions separately,
+        // including their original dates and clickable Session details.
+        const weekendMarkup=weekend.length?'<section class="multi-week-weekend"><h4>Weekend sessions ('+weekend.length+')</h4>'+
+          weekend.map(row=>'<button type="button" class="btn btn-secondary untimed-session" data-session-id="'+escapeHtml(row.id)+'">'+
+          escapeHtml([row.date,row.course,row.type,row.topic,row.start&&row.end?row.start+'-'+row.end:'Time not provided'].filter(Boolean).join(' · '))+
+          '</button>').join('')+'</section>':'';
+        body=weekGridMarkup(start,rows.filter(row=>![0,6].includes(parseYmd(row.date).getDay())),{showCheckNeeded:true})+
+          weekendMarkup+'<span class="multi-week-status">Total: '+weeklySource.length+
+          ' · Displayed: '+grid.length+' · Check Needed: '+checkNeeded.length+
+          ' · Filtered Out: '+filteredOut+' · Weekend: '+weekend.length+'</span>';
       }
       html+='<section class="multi-week-card" data-comparison-period="'+escapeHtml(period.key)+'" aria-label="'+escapeHtml(label)+'">'+
         '<header class="multi-week-card-header"><div class="multi-week-card-heading"><h3>'+escapeHtml(label)+'</h3>'+
         '<span>'+escapeHtml(formatDate(start))+' – '+escapeHtml(formatDate(end))+', '+end.getFullYear()+'</span></div>'+
         '<div class="multi-week-card-actions">'+
+        '<button type="button" class="multi-week-refresh" data-week-refresh="'+escapeHtml(period.key)+'" aria-label="Refresh '+escapeHtml(label)+'">Refresh</button>'+
         (canReorder?'<button type="button" class="multi-week-move" data-week-move="'+escapeHtml(period.key)+
           '" data-week-direction="up" aria-label="Move '+escapeHtml(label)+' up" title="Move week up"'+(position===0?' disabled':'')+'>↑</button>'+
           '<button type="button" class="multi-week-move" data-week-move="'+escapeHtml(period.key)+
@@ -1540,6 +1555,13 @@
     });
     host.querySelectorAll('[data-week-retry]').forEach(button=>button.onclick=()=>{
       comparisonRows.delete(button.dataset.weekRetry);render();
+    });
+    host.querySelector('#comparison-refresh-all').onclick=()=>{clearComparisonCache();render();};
+    host.querySelectorAll('[data-week-refresh]').forEach(button=>button.onclick=()=>{
+      // Do not let an in-flight response repopulate a manually refreshed card.
+      comparisonPending.delete(button.dataset.weekRefresh);
+      comparisonRows.delete(button.dataset.weekRefresh);
+      render();
     });
     renderedSessions=[...new Map(displayData.map(row=>[String(row.id),row])).values()];
     bindSessionBlocks();
