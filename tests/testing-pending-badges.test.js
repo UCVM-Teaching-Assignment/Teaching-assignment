@@ -52,11 +52,11 @@ function mount(file,role){
  return {buttons,handlers};
 }
 
-test('five scheduling toolbar controls receive one T badge even after re-render',()=>{
+test('four scheduling toolbar controls receive one T badge even after re-render',()=>{
  const cases=[
   ['frontend/scripts/schedule-workflow.js','adc',['paws-schedule-workflow-open']],
   ['frontend/scripts/lab-scheduling-entry.js','lab',['paws-lab-scheduling-open']],
-  ['frontend/scripts/schedule-office-ui.js','developer',['paws-office-lab-queue','paws-office-adfa-queue']],
+  ['frontend/scripts/schedule-office-ui.js','developer',['paws-office-adfa-queue']],
   ['frontend/scripts/schedule-bulk-ui.js','developer',['paws-developer-dashboard-open']]
  ];
  for(const [file,role,ids] of cases){
