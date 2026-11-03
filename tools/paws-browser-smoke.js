@@ -154,11 +154,10 @@ async function main(){
      else console.log('ok   Multi-Week Comparison stacks Fall W1 / Winter W5; removing one week preserves the other');
    }
    if(check.page==='index.html'&&check.uid==='uid-fac-001'&&ok){
-     const result=await cdp.send('Runtime.evaluate',{expression:"(function verifyFacultyComparisonPermissions(){try{"+
-       "const button=document.getElementById('cal-compare-btn');if(!button)return{ok:false,error:'Compare Weeks missing'};button.click();"+
-       "if(!document.getElementById('comparison-order'))return{ok:false,error:'Faculty sort selector missing'};"+
-       "if(document.querySelectorAll('[data-week-move]').length)return{ok:false,error:'Admin-only move arrows visible to Faculty'};"+
-       "return{ok:true};}catch(error){return{ok:false,error:String(error?.message||error)}}})()",returnByValue:true});
+     // A prior Owner test may leave the global year in future-year preview.
+     // Wait for the actual Faculty identity and restore the regular 2026-27
+     // Calendar before asserting permission-scoped comparison controls.
+     const result=await cdp.send('Runtime.evaluate',{expression:"(async function verifyFacultyComparisonPermissions(){\n  try {\n    const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));\n    const hooks=window.UCVM_TIMETABLE_TESTING_HOOKS;\n    for(let i=0;i<40&&!hooks?.currentUser?.();i++)await sleep(100);\n    const user=hooks?.currentUser?.();\n    if(!user)return{ok:false,error:'Faculty role profile did not initialize'};\n    const picker=document.getElementById('paws-global-academic-year');\n    if(picker&&picker.value!=='2026-27'){\n      picker.value='2026-27';\n      picker.dispatchEvent(new Event('change',{bubbles:true}));\n      await sleep(250);\n    }\n    const button=document.getElementById('cal-compare-btn');\n    if(!button)return{ok:false,error:'Compare Weeks missing'};\n    button.click();\n    let control=null;\n    for(let i=0;i<25;i++){\n      control=document.getElementById('comparison-order');\n      if(control)break;\n      await sleep(100);\n    }\n    if(!control)return{ok:false,error:'Faculty sort selector missing after waiting for profile and year',role:user.role,active:button.classList.contains('active'),year:picker?.value};\n    if(document.querySelectorAll('[data-week-move]').length)return{ok:false,error:'Admin-only move arrows visible to Faculty'};\n    return{ok:true};\n  }catch(error){return{ok:false,error:String(error?.message||error)}}\n})()",awaitPromise:true,returnByValue:true});
      if(!result.result?.value?.ok)problems.push(label+': Faculty week comparison permissions failed: '+JSON.stringify(result.result?.value||result.exceptionDetails||'no result').slice(0,500));
      else console.log('ok   Faculty can sort comparison weeks but cannot manually move cards');
    }
