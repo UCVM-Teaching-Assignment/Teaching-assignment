@@ -1,0 +1,38 @@
+/* PAWS Testing: multiple independent academic week calendars stacked vertically. */
+.multi-week-compare{padding:14px;display:flex;flex-direction:column;gap:14px;background:var(--surface-2)}
+.multi-week-controls{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface);padding:14px 16px}
+.multi-week-intro{margin-right:auto;min-width:170px}
+.multi-week-intro h2{font-size:17px;font-weight:750;margin:0 0 3px;color:var(--text)}
+.multi-week-intro p{font-size:11px;color:var(--text-3);margin:0}
+.multi-week-controls label{font-size:11px;font-weight:700;color:var(--text-2);display:flex;flex-direction:column;gap:5px}
+.multi-week-controls select{padding:8px 10px;min-width:115px;border:1px solid var(--border-2);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:12px}
+.multi-week-add{padding:9px 14px;border:1px solid var(--accent);border-radius:var(--radius);background:var(--accent);font-size:12px;font-weight:700;color:#fff;white-space:nowrap}
+.multi-week-add:hover{filter:brightness(.9)}
+.multi-week-note{margin:0;font-size:11px;color:var(--text-3);line-height:1.5}
+.multi-week-stack{display:flex;flex-direction:column;gap:16px}
+.multi-week-card{border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.multi-week-card-header{display:flex;align-items:flex-start;gap:12px;justify-content:space-between;padding:12px 14px;background:var(--surface-2);border-bottom:1px solid var(--border)}
+.multi-week-card-heading{display:flex;flex-direction:column;gap:3px;min-width:0}
+.multi-week-card-heading h3{font-size:15px;font-weight:750;color:var(--text);margin:0}
+.multi-week-card-heading span{font-size:11px;color:var(--text-3)}
+.multi-week-remove{width:34px;height:34px;flex:0 0 34px;align-self:flex-start;border:1px solid var(--border-2);border-radius:6px;font-size:22px;line-height:1;background:var(--surface);color:var(--text);display:flex;align-items:center;justify-content:center}
+.multi-week-remove:hover{background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
+.multi-week-remove:focus-visible,.multi-week-add:focus-visible,.multi-week-controls select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.multi-week-card-body{position:relative}
+.multi-week-card-body .tg-body{height:470px;min-height:410px}
+.multi-week-loading,.multi-week-error,.multi-week-empty{padding:30px 20px;text-align:center;font-size:12px;color:var(--text-3)}
+.multi-week-error{color:#9d252b}
+.multi-week-empty{border:1px dashed var(--border-2);border-radius:var(--radius-lg);background:var(--surface)}
+.multi-week-status{display:block;font-size:11px;padding:8px 14px;border-top:1px solid var(--border);color:var(--text-3)}
+@media(max-width:900px){
+ .multi-week-compare{padding:8px}
+ .multi-week-controls{gap:8px}
+ .multi-week-card-body{overflow-x:auto}
+ .multi-week-card-body .tg-wrap,.multi-week-card-body .tg-body{min-width:690px}
+}
+@media(max-width:500px){
+ .multi-week-controls label{flex:1 1 120px}
+ .multi-week-controls select{width:100%}
+ .multi-week-intro{flex-basis:100%}
+ .multi-week-add{width:100%}
+}
