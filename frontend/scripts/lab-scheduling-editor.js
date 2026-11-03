@@ -32,6 +32,95 @@
   catch(error){if(token===generation)message(error)}finally{busy=false;renderButtons()}
  }
  function renderButtons(){if(!dialog)return;const fields=dialog.querySelector('[data-lab-form] fieldset');if(fields)fields.disabled=busy||context?.capabilities.canEdit!==true;dialog.querySelectorAll('[data-mutation]').forEach(b=>{b.disabled=busy||context?.capabilities.canEdit===false});const pub=dialog.querySelector('[data-action="publish"]');if(pub)pub.disabled=busy||dirty||context?.validation?.canPublish!==true}
+ function resourceWarnings(items){
+  return items?.length?'<div class="lab-resource-warnings" role="alert">'+items.map(w=>
+   '<p><strong>'+E(w.code)+'</strong> · '+E(w.message)+'</p>').join('')+'</div>':'<p class="lab-muted">No capacity warning from the saved requests. Animal availability is not confirmed.</p>';
+ }
+ function renderResources(){
+  const editable=resource?.capabilities?.canEdit===true,canReview=resource?.capabilities?.canReview===true,
+   request=resource?.request,policy=resource?.policy||{horsePoolSize:38,horseRestHours:24,petProfessorThreshold:30,petWindowHours:48},
+   check=resource?.assessment,haveSource=!!resource?.session,disabled=editable?'':' disabled',
+   status=request?.status||'not submitted';
+  const selectedOptions=options(items,x=>x.sessionId,x=>x.academicYear+' / Year '+x.curriculumYear+' / '+x.courseCode+' / '+x.date+' / '+x.topic,selected);
+  const resourceForm=haveSource?
+   '<section class="lab-resource-panel"><div class="lab-resource-summary"><strong>Reservation status: '+E(status)+'</strong><span>'+E(resource.session.date)+' · '+E(resource.session.start)+'–'+E(resource.session.end)+'</span></div>'+
+   (resource.sourceChanged?'<p class="lab-resource-warnings" role="alert">ADC changed the approved Session. Resubmit the request before confirming animal assignments.</p>':'')+
+   '<p class="lab-muted">Step 1: Send Reserve Notes before organizing the lab groups. Use 0 for a resource you do not need. A request is not an animal-use approval.</p>'+
+   '<div class="lab-resource-grid"><label>Horses required (synthetic pool '+E(policy.horsePoolSize)+')<input data-resource-horses type="number" min="0" max="'+E(policy.horsePoolSize)+'" step="1" value="'+E(request?.horseCount||0)+'"'+disabled+'></label>'+
+   '<label>Pet Professors required<input data-resource-pet type="number" min="0" max="1000" step="1" value="'+E(request?.petProfessorCount||0)+'"'+disabled+'></label></div>'+
+   '<label>Reserve Notes<textarea data-resource-notes rows="4" maxlength="2000" placeholder="Animal type, procedure, number of groups, handling/equipment needs and specific instructions"'+disabled+'>'+E(request?.notes||'')+'</textarea></label>'+
+   '<p class="lab-muted">Horse IDs are assigned only by a resource reviewer. A horse cannot be confirmed again until at least '+E(policy.horseRestHours)+' hours after its previous use ends.</p>'+
+   '<div class="lab-resource-actions"><button type="button" data-resource-preview'+disabled+'>Preview availability</button><button type="button" data-resource-submit'+disabled+'>Send Reservation Request</button></div>'+
+   '<div data-resource-feedback role="status">'+E(notice)+'</div><div data-resource-preview-result aria-live="polite"></div>'+
+   '<div class="lab-resource-summary"><span>Synthetic horses currently unallocated for this time and rest window: <strong>'+E(check?.availableHorseCount??'—')+'</strong></span><span>Pet Professor demand in rolling '+E(policy.petWindowHours)+' hours: <strong>'+E(check?.petWindowDemand??0)+'</strong> / warning above '+E(policy.petProfessorThreshold)+'</span></div>'+
+   resourceWarnings(check?.warnings)+
+   (canReview&&request&&['requested','confirmed','rejected'].includes(status)?
+    '<details class="lab-resource-review"><summary>Owner / Developer: review reservation (Testing simulation)</summary>'+
+    '<p class="lab-muted">Confirming horses requires exact synthetic IDs H01–H'+E(policy.horsePoolSize)+'. Staff must validate animal care eligibility separately. No email is sent.</p>'+
+    '<label>Assigned Demo Horse IDs (comma separated)<input data-resource-horse-ids value="'+E((request.horseIds||[]).join(', '))+'"></label>'+
+    '<label>Review Notes<textarea data-resource-review-note rows="2" maxlength="1000">'+E(request.reviewNote||'')+'</textarea></label>'+
+    '<div class="lab-resource-actions"><button type="button" data-resource-confirm'+disabled+'>Confirm synthetic reservation</button><button type="button" data-resource-reject'+disabled+'>Reject request</button></div>'+
+    '<p class="lab-muted">Available horse IDs (simulation): '+E((check?.availableHorseIds||[]).join(', '))+'</p></details>':'')+
+   (canReview&&editable?'<details class="lab-resource-review"><summary>Owner / Developer: editable resource rules</summary>'+
+    '<div class="lab-resource-grid"><label>Horse pool<input type="number" min="1" max="200" step="1" data-resource-pool value="'+E(policy.horsePoolSize)+'"></label>'+
+    '<label>Minimum horse rest (hours)<input type="number" min="24" max="168" step="1" data-resource-rest value="'+E(policy.horseRestHours)+'"></label>'+
+    '<label>Pet Professor warning above<input type="number" min="1" max="1000" step="1" data-resource-threshold value="'+E(policy.petProfessorThreshold)+'"></label>'+
+    '<label>Rolling window (hours)<input type="number" min="1" max="168" step="1" data-resource-window value="'+E(policy.petWindowHours)+'"></label></div>'+
+    '<button type="button" data-resource-policy>Save synthetic resource rules</button></details>':'')+
+   '</section>':'<p>No authorized LAB resource details available. Select a LAB Session within your course scope.</p>';
+  dialog.innerHTML='<header class="lab-dialog-header"><h2 id="paws-lab-title">Lab Scheduling'+pendingBadge()+'</h2><button type="button" data-action="close">Close</button></header>'+
+   '<div class="lab-dialog-body"><nav class="lab-tabs" aria-label="Lab Scheduling modes"><button type="button" data-lab-tab="resources" aria-selected="true">1. Resource Request</button><button type="button" data-lab-tab="single" aria-selected="false">2. Student Groups / Runs</button><button type="button" data-lab-tab="bulk" aria-selected="false">Bulk CSV</button></nav>'+
+   '<p class="lab-warning">Testing Demo only — synthetic horses and pet counts. Submission is stored in this browser; it does not send an email, make a real booking or authorize animal use.</p>'+
+   '<label class="lab-wide">Course / LAB Session<select data-resource-select><option value="">Select a LAB Session</option>'+selectedOptions+'</select></label>'+
+   resourceForm+'<button type="button" data-resource-continue>Continue to Student Groups / Runs</button></div>';
+  bindResources();
+ }
+ async function resourceAction(route,payload,success){
+  if(busy||!resource?.capabilities?.canEdit)return;
+  busy=true;const token=generation;
+  const buttons=dialog.querySelectorAll('[data-resource-submit],[data-resource-preview],[data-resource-confirm],[data-resource-reject],[data-resource-policy]');
+  buttons.forEach(node=>node.disabled=true);
+  try{
+   const response=await api().request(route,{method:'POST',body:{...payload,requestId:id()}});
+   if(token!==generation||owner!==api().identity()?.key||!dialog.open)return;
+   if(route==='/resource-preview'){
+    const result=dialog.querySelector('[data-resource-preview-result]');
+    if(result)result.innerHTML='<p class="lab-muted">Available synthetic horses: '+E(response.availableHorseCount)+'; Pet Professor demand: '+E(response.petWindowDemand)+'</p>'+resourceWarnings(response.warnings);
+   }else{
+    resource=route==='/resource-rules'?await api().request('/resources?sessionId='+encodeURIComponent(selected)):response;
+    notice=success;render();
+   }
+  }catch(e){
+   const error=dialog.querySelector('[data-resource-feedback]');
+   if(error){error.textContent=e.message;error.setAttribute('role','alert')}else message(e);
+  }finally{busy=false;buttons.forEach(node=>{if(node.isConnected)node.disabled=false})}
+ }
+ function bindResources(){
+  dialog.querySelector('[data-action="close"]').onclick=clear;
+  const next=t=>{tab=t;render()};
+  dialog.querySelector('[data-lab-tab="single"]').onclick=()=>next('single');
+  dialog.querySelector('[data-lab-tab="bulk"]').onclick=()=>next('bulk');
+  dialog.querySelector('[data-resource-continue]').onclick=()=>next('single');
+  dialog.querySelector('[data-resource-select]').onchange=async e=>{selected=e.target.value;notice='';try{await refresh()}catch(err){message(err)}};
+  const valueFor=name=>dialog.querySelector('[data-resource-'+name+']')?.value;
+  const draft=()=>({sessionId:selected,expectedVersion:resource?.request?.version||0,
+   horseCount:Number(valueFor('horses')),petProfessorCount:Number(valueFor('pet')),
+   notes:valueFor('notes')||''});
+  dialog.querySelector('[data-resource-preview]')?.addEventListener('click',()=>resourceAction('/resource-preview',draft(),''));
+  dialog.querySelector('[data-resource-submit]')?.addEventListener('click',()=>resourceAction('/resource-request',draft(),'Reserve Notes submitted to the synthetic queue. Awaiting animal resource confirmation; no external message sent.'));
+  const review=decision=>resourceAction('/resource-review',{
+   sessionId:selected,expectedVersion:resource?.request?.version||0,decision,
+   horseIds:(valueFor('horse-ids')||'').split(/[\s,;]+/).filter(Boolean),
+   reviewNote:valueFor('review-note')||''
+  },decision==='confirm'?'Synthetic reservation confirmed. Actual animal care approval is still required.':'Resource request rejected. LAB may revise and resubmit.');
+  dialog.querySelector('[data-resource-confirm]')?.addEventListener('click',()=>review('confirm'));
+  dialog.querySelector('[data-resource-reject]')?.addEventListener('click',()=>review('reject'));
+  dialog.querySelector('[data-resource-policy]')?.addEventListener('click',()=>resourceAction('/resource-rules',{
+   sessionId:selected,expectedRevision:resource.policyRevision,
+   horsePoolSize:Number(valueFor('pool')),horseRestHours:Number(valueFor('rest')),
+   petProfessorThreshold:Number(valueFor('threshold')),petWindowHours:Number(valueFor('window'))
+  },'Synthetic resource rules updated.'));
+ }
  function render(){
   if(!dialog?.open)return;
   const editable=context?.capabilities?.canEdit===true,draft=context?.draft;
