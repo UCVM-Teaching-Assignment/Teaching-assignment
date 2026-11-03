@@ -140,6 +140,7 @@
 .testing-only-pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;background:#e2e8f0;color:#0f172a}
 .testing-only-pill.good{background:#dcfce7;color:#14532d}.testing-only-pill.warn{background:#fef3c7;color:#78350f}.testing-only-pill.bad{background:#fee2e2;color:#7f1d1d}
 .testing-only-status{font-size:12.5px;margin:8px 0;white-space:pre-wrap}.testing-only-status.is-error{color:#b91c1c}
+.testing-only-density-status{font-size:11px;color:var(--text-3,#64748b);white-space:nowrap}.testing-only-density-status.is-error{color:#b91c1c;font-weight:700}
 .testing-only-check{display:inline-flex;align-items:center;gap:5px;font-size:13px;white-space:nowrap}
 .testing-only-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;z-index:2147483001;background:#1e293b;color:#fff;padding:9px 14px;border-radius:8px;font-size:13px;transition:.2s}
 .testing-only-toast.show{opacity:1;transform:translateX(-50%)}.testing-only-toast.is-error{background:#991b1b}
