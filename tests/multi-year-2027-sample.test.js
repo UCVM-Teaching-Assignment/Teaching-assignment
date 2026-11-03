@@ -111,3 +111,28 @@ test('demo reset restores the 2027-28 sample and erases only local multi-year ed
  assert.equal(m.getState().annual['2027-28']['VTMD 422'].working.length,3);
  assert.equal(m.getState().annual['2026-27']['VTMD 200'].working.length,1);
 });
+
+test('site migration removes untouched automatically loaded 2027 sample Sessions without deleting academic-year settings',()=>{
+ const local=storage();
+ const auto=make({storage:local,sampleYear2027:true});
+ assert.equal(Object.keys(auto.getState().annual['2027-28']).length,3);
+ const normal=make({storage:local,sampleYear2027:false});
+ const after=normal.getState();
+ assert.equal(after.years['2027-28'].status,'planning');
+ assert.deepEqual(after.annual['2027-28'],{});
+ assert.ok(!after.afc.some(row=>row.afcRecordId==='sample-2027-28-afc'));
+ assert.equal(Object.values(after.annual['2026-27']).flatMap(course=>course.working).length,1);
+});
+test('site migration preserves manually edited sample-year records rather than silently deleting user changes',()=>{
+ const local=storage();
+ const auto=make({storage:local,sampleYear2027:true});
+ auto.addSession(adfa,'2027-28','VTMD 422',{id:'custom-2028',date:'2028-02-08',topic:'Tester-added Session'});
+ const reopened=make({storage:local,sampleYear2027:false});
+ assert.ok(reopened.getState().annual['2027-28']['VTMD 422'].working.some(x=>x.id==='custom-2028'));
+});
+test('normal Testing workspace does not auto-seed 2027 examples or expose a sample-load shortcut',()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const script=fs.readFileSync(path.join(__dirname,'../frontend/scripts/multi-year-demo.js'),'utf8');
+ assert.match(script,/sampleYear2027:false/);
+ assert.doesNotMatch(script,/data-my-action="load-2027-28-sample"/);
+});

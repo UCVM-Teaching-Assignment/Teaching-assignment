@@ -428,7 +428,7 @@
   window.PAWS_SWAP?.configure({getUser:()=>currentUser,onChanged:async()=>{
     invalidateAllSessions();await Promise.all([refreshSessionScope(),window.PAWS_SWAP.refreshPending()]);render();window.PAWS_TASKS?.refresh();
   }});
-  window.PAWS_TASKS?.configure({hasUser:()=>Boolean(currentUser),identity:()=>currentUser?.uid||'',academicYear:()=>listAcademicYear,allSessions:()=>ensureAllSessions({refresh:true,notify:false}),disposition:calendarTimingDisposition,reason:unpositionedReason,openSession:async id=>{
+  window.PAWS_TASKS?.configure({hasUser:()=>Boolean(currentUser),identity:()=>currentUser?.uid||'',role:()=>currentUser?.role||'',academicYear:()=>listAcademicYear,allSessions:()=>ensureAllSessions({refresh:true,notify:false}),disposition:calendarTimingDisposition,reason:unpositionedReason,openSession:async id=>{
     const ownerUid=currentUser?.uid;
     let rows;
     try{rows=await ensureAllSessions({refresh:true,notify:false});}
@@ -451,6 +451,21 @@
   let selectedYear = 'all';
   let selectedSemester = 'fall';
   let viewMode = 'week';
+  // Testing-only comparison keeps week choices and authorized cached rows in memory.
+  // Never serialize session records to localStorage or copy across signed-in identities.
+  const multiWeekModel=window.PAWS_MULTI_WEEK_COMPARISON.create({weekCount:WEEK_COUNT});
+  let comparisonSemester='fall',comparisonWeek=1,comparisonOrder='custom',comparisonScope='',comparisonEpoch=0,comparisonRequestId=0;
+  const comparisonRows=new Map(),comparisonPending=new Map();
+  function clearComparisonCache(){comparisonEpoch++;comparisonRows.clear();comparisonPending.clear();}
+  function comparisonIdentity(){return JSON.stringify([
+    currentUser?.uid||'',currentUser?.role||'',currentUser?.profile?.facultyId||'',
+    window.PAWS_SUPPORT?.contextId?.()||''
+  ]);}
+  function syncComparisonIdentity(){
+    const identity=comparisonIdentity();
+    if(identity!==comparisonScope){clearComparisonCache();comparisonScope=identity;}
+    return identity;
+  }
   // Testing site only: hooks for testing-only-features.js.
   window.UCVM_TIMETABLE_TESTING_HOOKS=Object.freeze({render:()=>render(),currentUser:()=>currentUser,viewMode:()=>viewMode,refresh:()=>refreshSessionScope()});
   let listSessionMode = 'ALL';
@@ -624,7 +639,7 @@
     }
   }
 
-  function refreshSessionScope(){if(currentUser)return subscribeSessions();render();return Promise.resolve(true)}
+  function refreshSessionScope(){if(viewMode==='compare'){render();return Promise.resolve(true)}if(currentUser)return subscribeSessions();render();return Promise.resolve(true)}
   async function ensureAllSessions({refresh=false,notify=true}={}){
     const ownerUid=String(currentUser?.uid||'');
     if(!ownerUid)return[];
@@ -660,6 +675,7 @@
     allSessionsLoadGeneration+=1;
     allSessionsCache=null;allSessionsOwnerUid='';allSessionsLoading=null;allSessionsLoadingUid='';
     sessionCacheRanges.length=0;sessionCacheDates.clear();
+    clearComparisonCache();
   }
   function swapNumeric(v){ if(v===undefined||v===null||v==='') return null; const n=Number(v); return Number.isFinite(n)?n:null; }
   function swapNameKey(v){ return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' '); }
@@ -1028,6 +1044,7 @@
     $('cal-week-btn').addEventListener('click', () => switchCalendarView('week'));
     $('cal-month-btn').addEventListener('click', () => switchCalendarView('month'));
     $('cal-list-btn').addEventListener('click', () => switchCalendarView('list'));
+    $('cal-compare-btn').addEventListener('click',()=>switchCalendarView('compare'));
     $('list-academic-year').addEventListener('change',event=>{listAcademicYear=event.target.value;render()});
     $('list-session-mode').addEventListener('change',event=>{listSessionMode=event.target.value;renderList()});
     $('color-toggle').addEventListener('click', () => { colorsOn = !colorsOn; $('color-toggle').textContent = `Colors: ${colorsOn ? 'On' : 'Off'}`; render(); });
@@ -1128,8 +1145,17 @@
     $('cal-week-btn').classList.toggle('active', viewMode === 'week');
     $('cal-month-btn').classList.toggle('active', viewMode === 'month');
     $('cal-list-btn').classList.toggle('active', viewMode === 'list');
+    $('cal-compare-btn').classList.toggle('active', viewMode === 'compare');
+    $('cal-compare-btn').setAttribute('aria-pressed',String(viewMode==='compare'));
     $('list-global-controls').classList.toggle('hidden', viewMode !== 'list');
-    $('cal-prev').disabled=viewMode==='list'; $('cal-next').disabled=viewMode==='list';
+    $('cal-prev').disabled=viewMode==='list'||viewMode==='compare'; $('cal-next').disabled=viewMode==='list'||viewMode==='compare';
+    $('cal-today').disabled=viewMode==='compare';
+    $('filter-month').disabled=viewMode==='compare';
+    $('week-mobile-select').disabled=viewMode==='compare';
+    document.querySelectorAll('[data-week],[data-semester]').forEach(node=>{node.disabled=viewMode==='compare'});
+    for(const id of ['export-csv','export-calendar','outlook-invite-btn'])$(id).disabled=viewMode==='compare';
+    const exportNote=$('compact-export-bar').querySelector('.compact-export-note');
+    if(exportNote)exportNote.textContent=viewMode==='compare'?'Return to a regular Calendar view to export.':'Uses the current filters.';
   }
 
   function moveCalendar(delta){
@@ -1145,7 +1171,7 @@
   }
 
   function filteredSessions(source=sessions, options={}) {
-    activityTypeFilter.setSessionTypes(source.filter(row=>!row.isWorkingActivity).map(row=>row.type));
+    if(!options.skipTypeRebuild)activityTypeFilter.setSessionTypes(source.filter(row=>!row.isWorkingActivity).map(row=>row.type));
     const q = $('search-input').value.trim().toLowerCase();
     const searchWords=q.split(/[\s,]+/).filter(Boolean);
     const month = $('filter-month').value;
@@ -1156,8 +1182,8 @@
       if(testingOnly?.keepSession&&!testingOnly.keepSession(s))return false;
       if(s.isWorkingActivity?!activityTypeFilter.matchesActivity(s.sourceActivity):!activityTypeFilter.matchesSession(s))return false;
       if ((!options.ignorePeriod||selectedYear==='rotation') && !(window.PAWS_ACTIVITY_PLACEMENT?.matchesYear(s,selectedYear)??(selectedYear==='all'||String(s.year)===selectedYear))) return false;
-      if (!options.ignorePeriod && !allSemesters && s.semester !== selectedSemester) return false;
-      if (!options.ignorePeriod && month !== 'all' && String(parseYmd(s.date).getMonth()) !== month) return false;
+      if (!options.ignorePeriod && !allSemesters && s.semester !== (options.semesterOverride||selectedSemester)) return false;
+      if (!options.ignorePeriod && !options.ignoreMonth && month !== 'all' && String(parseYmd(s.date).getMonth()) !== month) return false;
       if (courseFilterActive && !selectedCourses.has(String(s.course))) return false;
       if (myTimetableOnly && currentUser && !sessionBelongsToCurrentFaculty(s)) return false;
       if (searchWords.length && !searchWords.every(word=>`${s.course} ${s.topic} ${displayFacultyList(s.instructor||'')} ${s.room} ${s.type}`.toLowerCase().includes(word))) return false;
@@ -1194,12 +1220,16 @@
   function render() {
     if(searchDebouncer)searchDebouncer.cancel();
     renderCalendarView();
-    renderWorkingActivities();
+    if(viewMode==='compare'){
+      ++workingActivityRenderToken;
+      const lane=$('working-activities-lane');if(lane)lane.innerHTML='';
+    }else renderWorkingActivities();
     renderActiveContentFilters();
   }
 
   function renderCalendarView() {
-    if(viewMode==='day')renderDay();
+    if(viewMode==='compare')renderMultiWeekComparison();
+    else if(viewMode==='day')renderDay();
     else if(viewMode==='week')renderWeek();
     else if(viewMode==='month')renderMonth();
     else renderList();
@@ -1392,11 +1422,132 @@
     html+='</div></div>'+(window.PAWS_TASKS?'':unpositionedSessionsHtml(data));$('calendar-body').innerHTML=html;bindSessionBlocks();
   }
 
-  function renderWeek() {
-    const start = weekStart(selectedWeek, selectedSemester); const end = addDays(start, 4);
-    $('cal-label').textContent = `${selectedSemester === 'winter' ? 'Winter' : (selectedSemester === 'spring' ? 'Spring' : 'Fall')} Week ${selectedWeek} - ${formatDate(start)} to ${formatDate(end)}, ${end.getFullYear()}`;
-    const data = filteredSessions(calendarSourceSessions()).filter(s => s.isWorkingActivity?s.date>=ymd(start)&&s.date<=ymd(end):s.week===selectedWeek);
-    renderedSessions=data;
+  // Comparison is a read-only view over separately authorized weekly session ranges.
+  // Each week loads independently; a distant Winter week never forces a broad Fall-to-Winter query.
+  function loadComparisonPeriod(period){
+    if(!currentUser||!multiWeekModel.has(period.key))return;
+    const identity=syncComparisonIdentity(),epoch=comparisonEpoch,key=period.key;
+    if(comparisonRows.has(key)||comparisonPending.has(key))return;
+    const request=++comparisonRequestId,start=ymd(weekStart(period.week,period.semester)),
+      end=ymd(addDays(weekStart(period.week,period.semester),4)),range={start,end};
+    comparisonPending.set(key,request);
+    const cached=cachedSessionsForRange(currentUser,range);
+    Promise.resolve(cached!==null?cached:fetchPawsSessions({start,end:ymd(addDays(parseYmd(end),1))})).then(rows=>{
+      if(comparisonEpoch!==epoch||comparisonIdentity()!==identity||!multiWeekModel.has(key)||comparisonPending.get(key)!==request)return;
+      comparisonRows.set(key,{status:'ready',rows:Array.isArray(rows)?rows:[]});
+    }).catch(error=>{
+      if(comparisonEpoch!==epoch||comparisonIdentity()!==identity||!multiWeekModel.has(key)||comparisonPending.get(key)!==request)return;
+      console.warn('[Multi-week comparison] Failed to load an authorized weekly range',error?.code||'range_error');
+      comparisonRows.set(key,{status:'error',rows:[]});
+    }).finally(()=>{
+      if(comparisonPending.get(key)!==request)return;
+      comparisonPending.delete(key);
+      if(comparisonEpoch===epoch&&comparisonIdentity()===identity&&viewMode==='compare')renderCalendarView();
+    });
+  }
+  function renderMultiWeekComparison(){
+    const host=$('calendar-body');
+    const count=multiWeekModel.size();
+    $('cal-label').textContent='Comparing '+count+' week'+(count===1?'':'s');
+    renderedSessions=[];
+    if(!currentUser){host.textContent='Sign in to view authorized timetable weeks.';return;}
+    syncComparisonIdentity();
+    const periods=multiWeekModel.list(),displayData=[],canReorder=UCVM.admin(currentUser);
+    const loaded=periods.flatMap(p=>comparisonRows.get(p.key)?.rows||[]);
+    activityTypeFilter.setSessionTypes(loaded.filter(row=>!row.isWorkingActivity).map(row=>row.type));
+    const semesterOptions=window.PAWS_MULTI_WEEK_COMPARISON.SEMESTERS.map(term=>
+      '<option value="'+term+'">'+term.charAt(0).toUpperCase()+term.slice(1)+'</option>').join('');
+    const weekOptions=Array.from({length:WEEK_COUNT},(_,i)=>'<option value="'+(i+1)+'">Week '+(i+1)+'</option>').join('');
+    let html='<div class="multi-week-compare"><div class="multi-week-controls">'+
+      '<div class="multi-week-intro"><h2>Multi-Week Comparison'+(window.UCVM_TESTING_ONLY?.pendingBadge?.()||'')+'</h2>'+
+      '<p>Stack any number of academic weeks vertically.</p></div>'+
+      '<label for="comparison-semester">Semester<select id="comparison-semester">'+semesterOptions+'</select></label>'+
+      '<label for="comparison-week">Week<select id="comparison-week">'+weekOptions+'</select></label>'+
+      '<button type="button" class="multi-week-add" id="comparison-add-week">+ Add Week</button>'+
+      '<label for="comparison-order">Sort weeks<select id="comparison-order">'+
+      '<option value="custom">Custom order</option>'+
+      '<option value="asc">Earliest to latest</option>'+
+      '<option value="desc">Latest to earliest</option></select></label></div>'+
+      '<p class="multi-week-note">Uses the same Year, Course, Activity type, Search and My Timetable filters as Calendar. '+
+      'Each selected week has its own semester/date range. The main Semester/Week and Month filters are not applied here. '+
+      'This view shows scheduled sessions and enabled closures; Other Work activities are available in the regular Calendar.</p>'+
+      '<div class="multi-week-stack" id="multi-week-stack">';
+    for(const [position,period] of periods.entries()){
+      const start=weekStart(period.week,period.semester),end=addDays(start,4),
+        startText=ymd(start),endText=ymd(end),loadedWeek=comparisonRows.get(period.key),
+        label=period.semester.charAt(0).toUpperCase()+period.semester.slice(1)+' Week '+period.week;
+      let body='';
+      if(!loadedWeek){
+        body='<div class="multi-week-loading" role="status">Loading '+escapeHtml(label)+'…</div>';
+        loadComparisonPeriod(period);
+      }else if(loadedWeek.status==='error'){
+        body='<div class="multi-week-error" role="alert">Could not load this week. '+
+          '<button type="button" data-week-retry="'+escapeHtml(period.key)+'">Retry</button></div>';
+      }else{
+        const fullSource=window.UCVM_TESTING_ONLY?.calendarRows
+          ?window.UCVM_TESTING_ONLY.calendarRows(loadedWeek.rows):loadedWeek.rows;
+        const rows=filteredSessions(fullSource,{semesterOverride:period.semester,ignoreMonth:true,skipTypeRebuild:true})
+          .filter(row=>row.date>=startText&&row.date<=endText);
+        displayData.push(...rows);
+        body=weekGridMarkup(start,rows,{showCheckNeeded:true})+
+          '<span class="multi-week-status">'+rows.length+' session'+(rows.length===1?'':'s')+' in this filtered week.</span>';
+      }
+      html+='<section class="multi-week-card" data-comparison-period="'+escapeHtml(period.key)+'" aria-label="'+escapeHtml(label)+'">'+
+        '<header class="multi-week-card-header"><div class="multi-week-card-heading"><h3>'+escapeHtml(label)+'</h3>'+
+        '<span>'+escapeHtml(formatDate(start))+' – '+escapeHtml(formatDate(end))+', '+end.getFullYear()+'</span></div>'+
+        '<div class="multi-week-card-actions">'+
+        (canReorder?'<button type="button" class="multi-week-move" data-week-move="'+escapeHtml(period.key)+
+          '" data-week-direction="up" aria-label="Move '+escapeHtml(label)+' up" title="Move week up"'+(position===0?' disabled':'')+'>↑</button>'+
+          '<button type="button" class="multi-week-move" data-week-move="'+escapeHtml(period.key)+
+          '" data-week-direction="down" aria-label="Move '+escapeHtml(label)+' down" title="Move week down"'+(position===periods.length-1?' disabled':'')+'>↓</button>':'')+
+        '<button type="button" class="multi-week-remove" data-week-remove="'+escapeHtml(period.key)+'" '+
+        'aria-label="Close '+escapeHtml(label)+'" title="Remove this week">×</button></div></header>'+
+        '<div class="multi-week-card-body">'+body+'</div></section>';
+    }
+    html+='</div>';
+    if(!count)html+='<p class="multi-week-empty">No weeks selected. Choose a semester and week, then click Add Week.</p>';
+    html+='</div>';
+    host.innerHTML=html;
+    const semester=host.querySelector('#comparison-semester'),week=host.querySelector('#comparison-week');
+    semester.value=comparisonSemester;week.value=String(comparisonWeek);
+    const sort=host.querySelector('#comparison-order');sort.value=comparisonOrder;
+    sort.onchange=()=>{comparisonOrder=sort.value;if(comparisonOrder!=='custom')multiWeekModel.sort(comparisonOrder);render();};
+    semester.onchange=()=>{comparisonSemester=semester.value;};
+    week.onchange=()=>{comparisonWeek=Number(week.value);};
+    host.querySelector('#comparison-add-week').onclick=()=>{
+      comparisonSemester=semester.value;comparisonWeek=Number(week.value);
+      if(!multiWeekModel.add(comparisonSemester,comparisonWeek)){
+        toast('This week is already in the comparison.');
+        host.querySelector('[data-comparison-period="'+comparisonSemester+':'+comparisonWeek+'"]')?.scrollIntoView?.({behavior:'smooth',block:'nearest'});
+        return;
+      }
+      if(comparisonOrder!=='custom')multiWeekModel.sort(comparisonOrder);
+      render();
+    };
+    host.querySelectorAll('[data-week-move]').forEach(button=>button.onclick=()=>{
+      if(!UCVM.admin(currentUser))return;
+      const periodKey=button.dataset.weekMove,direction=button.dataset.weekDirection;
+      if(!multiWeekModel.move(periodKey,direction))return;
+      comparisonOrder='custom';
+      render();
+      const movedCard=[...host.querySelectorAll('[data-comparison-period]')].find(card=>card.dataset.comparisonPeriod===periodKey);
+      (movedCard?.querySelector('[data-week-direction="'+direction+'"]:not([disabled])')||
+       movedCard?.querySelector('[data-week-move]:not([disabled])'))?.focus();
+    });
+    host.querySelectorAll('[data-week-remove]').forEach(button=>button.onclick=()=>{
+      const key=button.dataset.weekRemove;
+      multiWeekModel.remove(key);comparisonRows.delete(key);comparisonPending.delete(key);render();
+    });
+    host.querySelectorAll('[data-week-retry]').forEach(button=>button.onclick=()=>{
+      comparisonRows.delete(button.dataset.weekRetry);render();
+    });
+    renderedSessions=[...new Map(displayData.map(row=>[String(row.id),row])).values()];
+    bindSessionBlocks();
+  }
+
+  // Share one canonical week grid between the normal Calendar and stacked comparison.
+  // This is presentation only; both views use the same placement and safety flags.
+  function weekGridMarkup(start,data,{showCheckNeeded=false}={}) {
     const DAY_START=CALENDAR_DAY_START, DAY_END=CALENDAR_DAY_END, SPAN=DAY_END-DAY_START; // 7:30am-5:00pm
     let html = '<div class="tg-wrap"><div class="tg-corner"></div>';
     for (let i = 0; i < 5; i++) {
@@ -1431,7 +1582,15 @@
       html += '</div>';
     }
     html += '</div>';
-    $('calendar-body').innerHTML = html+(window.PAWS_TASKS?'':unpositionedSessionsHtml(data));
+    return html+(showCheckNeeded?unpositionedSessionsHtml(data):'');
+  }
+
+  function renderWeek() {
+    const start = weekStart(selectedWeek, selectedSemester); const end = addDays(start, 4);
+    $('cal-label').textContent = `${selectedSemester === 'winter' ? 'Winter' : (selectedSemester === 'spring' ? 'Spring' : 'Fall')} Week ${selectedWeek} - ${formatDate(start)} to ${formatDate(end)}, ${end.getFullYear()}`;
+    const data = filteredSessions(calendarSourceSessions()).filter(s => s.isWorkingActivity?s.date>=ymd(start)&&s.date<=ymd(end):s.week===selectedWeek);
+    renderedSessions=data;
+    $('calendar-body').innerHTML=weekGridMarkup(start,data,{showCheckNeeded:!window.PAWS_TASKS});
     bindSessionBlocks();
   }
 
@@ -1561,6 +1720,17 @@
   }
 
   function switchCalendarView(next){
+    if(next==='compare'&&selectionMode){
+      // Comparison cannot inherit a multi-session edit/selection transaction.
+      selectionViewFlow.finish();selectionMode=false;reviewingSelection=false;
+      sessionSelection.clear();selectedSessionOriginals.clear();
+      document.body.classList.remove('session-selection-mode');updateSelectionControls();
+    }
+    if(next==='compare'){
+      // Start with the active Calendar week, then accept arbitrary additional periods.
+      if(!multiWeekModel.size())multiWeekModel.add(selectedSemester,selectedWeek);
+      comparisonSemester=selectedSemester;comparisonWeek=selectedWeek;
+    }
     viewMode=next;
     if(selectionMode&&reviewingSelection)reviewingSelection=false;
     if(roleIsFaculty(currentUser)&&(next==='day'||next==='list'))lastFacultyTeachingView=next;
@@ -1568,6 +1738,7 @@
   }
 
   async function startSessionSelection(){
+    if(viewMode==='compare'){toast('Return to the Week view to select and edit sessions.',true);return;}
     // Testing site only: Select Sessions saves through the single-session edit API.
     const testingSelection=Boolean(window.UCVM_TESTING_ONLY?.selectSessions&&window.UCVM_PAWS_DATA?.sessionEditEnabled?.());
     if(!testingSelection&&!requireSessionWrites())return;
@@ -2228,7 +2399,7 @@
           activityTypeFilter.resetForUser();
           resetWorkingCalendar();
           if($('working-activities-lane'))$('working-activities-lane').innerHTML='';
-          viewMode = 'week'; setViewButtons();
+          viewMode = 'week'; multiWeekModel.clear(); comparisonOrder='custom'; clearComparisonCache();comparisonScope=''; setViewButtons();
           myTimetableOnly = false;
           if (sessionUnsubscribe) { try { sessionUnsubscribe(); } catch (_) {} sessionUnsubscribe = null; }
           sessionRangeKey='';

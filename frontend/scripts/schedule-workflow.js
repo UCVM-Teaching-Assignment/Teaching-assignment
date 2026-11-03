@@ -107,7 +107,7 @@
     room:data.get('room'),suggestedFacultyIds:suggestions};
    const d=savedDraft();if(d)Object.assign(input,{draftId:d.id,expectedRevision:d.revision});
    const saved=await request('/draft',input);
-   activeDraft=saved.id;await refresh('ADC draft saved (revision '+saved.revision+'). This is not yet public.');
+   activeDraft=saved.id;await refresh('ADC draft saved (revision '+saved.revision+'). This is not yet public.');root.PAWS_TASKS?.refresh?.();
   });
  }
  async function onFaculty(event){
@@ -118,7 +118,7 @@
    const note=new FormData(event.currentTarget).get('reviewNote')||'';
    await request('/faculty',{sessionId:s.id,expectedRevision:s.facultyRevision,assignments,reviewNote:note});
    await refresh('ADFAD confirmed Faculty; Calendar teaching assignments updated.');
-   facultyRows=defaultFaculty();render();root.UCVM_TIMETABLE_TESTING_HOOKS?.refresh?.();
+   facultyRows=defaultFaculty();render();root.UCVM_TIMETABLE_TESTING_HOOKS?.refresh?.();root.PAWS_TASKS?.refresh?.();
   });
  }
  function bind(){
@@ -131,7 +131,7 @@
    if(!root.confirm('Publish Course, date and time to the shared Testing Calendar? This does not assign Faculty.'))return;
    const r=await request('/publish',{draftId:d.id,expectedRevision:d.revision});
    activeDraft='';activeSession=r.session.id;facultyRows=[];await refresh('ADC published '+r.session.courseCode+' · '+dateTime(r.session)+'. Open Calendar to see it.');
-   root.UCVM_TIMETABLE_TESTING_HOOKS?.refresh?.();
+   root.UCVM_TIMETABLE_TESTING_HOOKS?.refresh?.();root.PAWS_TASKS?.refresh?.();
   });
   const selectSession=dialog.querySelector('[data-stage-session]');
   if(selectSession)selectSession.onchange=e=>{activeSession=e.target.value;facultyRows=defaultFaculty();render()};

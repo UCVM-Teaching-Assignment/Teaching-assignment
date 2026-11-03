@@ -32,29 +32,40 @@
  function render(){
   if(!panel)return;
   const visibleNavigation=navigation.filter(navigationVisible),count=total+visibleNavigation.length+requests.length+workflowTasks.length;
-  button.textContent=loading?'Tasks (…)':`Tasks${count||errors.length?' ('+count+(errors.length?'+':'')+')':''}`;
-  panel.querySelector('.workspace-task-caption').textContent=loading?'Loading authorized tasks…':`${total} schedule issues · ${workflowTasks.length} workflow to-dos · All weeks`;
+  button.textContent=loading?'Work Queue (…)':`Work Queue${count||errors.length?' ('+count+(errors.length?'+':'')+')':''}`;
+  panel.querySelector('.workspace-task-caption').textContent=loading?'Loading authorized work…':`${total} schedule issues · ${workflowTasks.length} office to-dos · All weeks · Authorized scope`;
   panel.querySelectorAll('[data-filter]').forEach(node=>node.setAttribute('aria-pressed',String(node.dataset.filter===mode)));
   const issueCards=mode==='requests'?[]:tasks.filter(matchesSearch).map(card);
   const otherItems=[...(mode==='requests'?[]:visibleNavigation),...(mode==='schedule'?[]:requests)].filter(matchesSearch);
   const otherCards=otherItems.map(item=>`<button type="button" class="workspace-task" data-id="${esc(item.id)}" data-kind="${esc(item.kind)}"><strong>${esc(item.title)}</strong><span>${esc(item.reason)}</span><small>${esc(item.date||'Date not provided')}</small>${item.topic?`<span class="workspace-task-topic">${esc(item.topic)}</span>`:''}</button>`);
   const workflowCards=(mode==='requests'?[]:workflowTasks.filter(matchesSearch)).map(item=>
-   '<button type="button" class="workspace-task" data-workflow-session="'+esc(item.sessionId)+'" data-workflow-stage="'+esc(item.stage)+'">'+
-   '<strong>'+esc(item.stage.toUpperCase())+' · '+esc(item.courseCode)+pendingBadge()+'</strong>'+
-   '<span>'+esc((item.missing||[]).join(', '))+'</span><small>'+esc(item.date||'Date not provided')+
+   '<button type="button" class="workspace-task" '+
+   (item.kind==='import_adc_schedule'||item.kind==='publish_adc_draft'?
+     'data-workflow-adc="'+esc(item.kind)+'"':
+     'data-workflow-session="'+esc(item.sessionId)+'" data-workflow-stage="'+esc(item.stage)+'"')+'>'+
+   '<strong>'+esc(item.stage.toUpperCase())+' · '+esc(item.courseCode||'Course Schedule')+pendingBadge()+'</strong>'+
+   '<span>'+esc((item.missing||[]).join(', '))+'</span><small>'+esc(item.date||'Open task')+
    (item.status==='waiting_for_lab'?' · Waiting for LAB':'')+'</small></button>');
   const offices=[...new Set(workflowTasks.map(x=>x.stage).filter(x=>x==='lab'||x==='adfa'))];
   const bulkActions=offices.length?'<div class="paws-task-bulk-actions">'+offices.map(office=>
    '<button type="button" data-office-bulk="'+esc(office)+'">'+(office==='lab'?'Open Lab Scheduling · Bulk CSV':'Download / Import ADFAD template')+pendingBadge()+'</button>').join('')+'</div>':'';
   const messages=errors.map(message=>`<p role="alert">${esc(message)}</p>`).join('')+(notice?`<p role="status">${esc(notice)}</p>`:'');
   const list=panel.querySelector('.workspace-task-list');
-  list.innerHTML=messages+bulkActions+(errors.length?'<button type="button" data-retry>Retry</button>':'')+issueCards.join('')+workflowCards.join('')+otherCards.join('')+(!loading&&!errors.length&&!issueCards.length&&!workflowCards.length&&!otherCards.length?'<p class="workspace-empty">No matching tasks in your authorized scope.</p>':'')+(nextCursor&&mode!=='requests'?`<button type="button" class="workspace-task-more" data-task-more${loading?' disabled':''}>Load more issues</button>`:'');
+  const role=String(adapter?.role?.()||'').toLowerCase();
+  const waitingForADC=['lab','adfa_general','adfa_regular','administrator','admin'].includes(role)&&
+    !workflowTasks.length&&!navigation.length&&!tasks.length&&!requests.length;
+  list.innerHTML=messages+bulkActions+(errors.length?'<button type="button" data-retry>Retry</button>':'')+issueCards.join('')+workflowCards.join('')+otherCards.join('')+(!loading&&!errors.length&&!issueCards.length&&!workflowCards.length&&!otherCards.length?
+    '<p class="workspace-empty">'+(waitingForADC?'No office tasks yet. Waiting for ADC to publish the course schedule.':'No outstanding work in your authorized scope.')+'</p>':'')+(nextCursor&&mode!=='requests'?`<button type="button" class="workspace-task-more" data-task-more${loading?' disabled':''}>Load more issues</button>`:'');
   list.querySelector('[data-retry]')?.addEventListener('click',()=>refresh());
   list.querySelector('[data-task-more]')?.addEventListener('click',()=>refresh({append:true}));
   list.querySelectorAll('[data-open-session]').forEach(node=>node.onclick=()=>adapter.openSession(node.dataset.openSession));
   list.querySelectorAll('[data-id]').forEach(node=>node.onclick=()=>node.dataset.kind==='requests'?root.PAWS_SWAP?.openDetail(node.dataset.id):adapter.openSession(node.dataset.id));
   list.querySelectorAll('[data-review-issue]').forEach(node=>node.onclick=()=>review(tasks.find(task=>task.issueKey===node.dataset.reviewIssue)));
   list.querySelectorAll('[data-workflow-session]').forEach(node=>node.onclick=()=>root.PAWS_SCHEDULE_BULK_UI?.openTask?.({sessionId:node.dataset.workflowSession,stage:node.dataset.workflowStage}));
+  list.querySelectorAll('[data-workflow-adc]').forEach(node=>node.onclick=()=>{
+    // Starts the existing ADC editor; only that authorized workflow can publish.
+    root.PAWS_SCHEDULE_WORKFLOW?.open?.();
+  });
   list.querySelectorAll('[data-office-bulk]').forEach(node=>node.onclick=()=>node.dataset.officeBulk==='lab'?root.PAWS_LAB_SCHEDULING?.open?.(undefined,{tab:'bulk'}):root.PAWS_SCHEDULE_OFFICE_UI?.open?.('adfa'));
  }
  async function review(task){
@@ -105,9 +116,9 @@
  }
  function configure(options){
   adapter=options;if(panel)return;
-  button=document.createElement('button');button.type='button';button.className='workspace-tool';button.id='workspace-tasks-toggle';button.setAttribute('aria-controls','workspace-tasks');button.textContent='Tasks';document.querySelector('.timetable-top-actions').append(button);
-  panel=document.createElement('aside');panel.id='workspace-tasks';panel.className='workspace-tasks';panel.setAttribute('aria-label','Academic-year tasks');
-  panel.innerHTML=`<div class="workspace-task-heading"><h2>Tasks</h2><button type="button" data-close aria-label="Close tasks">×</button></div><p class="workspace-task-caption">All weeks · Your authorized scope</p><label class="workspace-task-search">Search loaded tasks<input type="search" data-task-search placeholder="Faculty, course or issue"></label><details class="workspace-task-filters"><summary>Schedule filters</summary><label>Academic year<select aria-label="Academic year" data-task-year></select></label><div class="workspace-task-date-filters"><label>From date<input type="date" data-task-filter="start"></label><label>Before date<input type="date" data-task-filter="end"></label></div><label>Faculty<select aria-label="Faculty" data-task-filter="facultyKey"></select></label><label>Course<select aria-label="Course" data-task-filter="courseCode"></select></label><label>Conflict type<select aria-label="Conflict type" data-task-filter="type"><option value="">All issue types</option>${Object.entries(TYPES).map(([value,label])=>`<option value="${esc(value)}">${esc(label)}</option>`).join('')}</select></label><label>Review status<select aria-label="Review status" data-task-filter="reviewStatus"><option value="">All active issues</option><option value="Unreviewed">Unreviewed</option><option value="Reviewed">Reviewed</option></select></label><label>Undated records<select aria-label="Undated records" data-task-filter="undated"><option value="">Include undated</option><option value="only">Undated only</option><option value="exclude">Dated only</option></select></label><p>Filters apply to schedule issues. SWAP requests use the search above.</p></details><div class="workspace-task-tabs"><button type="button" data-filter="all">All</button><button type="button" data-filter="schedule">Schedule</button><button type="button" data-filter="requests">Requests</button></div><div class="workspace-task-list" aria-live="polite"></div>`;
+  button=document.createElement('button');button.type='button';button.className='workspace-tool';button.id='workspace-tasks-toggle';button.setAttribute('aria-controls','workspace-tasks');button.textContent='Work Queue';document.querySelector('.timetable-top-actions').append(button);
+  panel=document.createElement('aside');panel.id='workspace-tasks';panel.className='workspace-tasks';panel.setAttribute('aria-label','Academic-year Work Queue');
+  panel.innerHTML=`<div class="workspace-task-heading"><h2>Work Queue</h2><button type="button" data-close aria-label="Close Work Queue">×</button></div><p class="workspace-task-caption">All weeks · Your authorized scope</p><label class="workspace-task-search">Search loaded tasks<input type="search" data-task-search placeholder="Faculty, course or issue"></label><details class="workspace-task-filters"><summary>Schedule filters</summary><label>Academic year<select aria-label="Academic year" data-task-year></select></label><div class="workspace-task-date-filters"><label>From date<input type="date" data-task-filter="start"></label><label>Before date<input type="date" data-task-filter="end"></label></div><label>Faculty<select aria-label="Faculty" data-task-filter="facultyKey"></select></label><label>Course<select aria-label="Course" data-task-filter="courseCode"></select></label><label>Conflict type<select aria-label="Conflict type" data-task-filter="type"><option value="">All issue types</option>${Object.entries(TYPES).map(([value,label])=>`<option value="${esc(value)}">${esc(label)}</option>`).join('')}</select></label><label>Review status<select aria-label="Review status" data-task-filter="reviewStatus"><option value="">All active issues</option><option value="Unreviewed">Unreviewed</option><option value="Reviewed">Reviewed</option></select></label><label>Undated records<select aria-label="Undated records" data-task-filter="undated"><option value="">Include undated</option><option value="only">Undated only</option><option value="exclude">Dated only</option></select></label><p>Filters apply to schedule issues. SWAP requests use the search above.</p></details><div class="workspace-task-tabs"><button type="button" data-filter="all">All</button><button type="button" data-filter="schedule">Schedule</button><button type="button" data-filter="requests">Requests</button></div><div class="workspace-task-list" aria-live="polite"></div>`;
   document.body.append(panel);button.onclick=()=>{toggle(panel.hidden);if(!panel.hidden)refresh();};panel.querySelector('[data-close]').onclick=()=>toggle(false);
   panel.querySelector('[data-task-search]').oninput=event=>{query=event.target.value.toLowerCase().trim();render();};
   panel.querySelector('[data-task-year]').onchange=event=>{year=event.target.value;refresh();};
@@ -115,5 +126,5 @@
   panel.querySelectorAll('[data-filter]').forEach(node=>node.onclick=()=>{mode=node.dataset.filter;render();});
   toggle(pref());render();
  }
- root.PAWS_TASKS=Object.freeze({configure,refresh});
+ root.PAWS_TASKS=Object.freeze({configure,refresh,open(){if(!panel||!adapter?.hasUser())return;toggle(true);refresh();}});
 })(window);

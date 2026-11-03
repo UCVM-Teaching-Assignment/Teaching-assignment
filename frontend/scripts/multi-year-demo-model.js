@@ -56,6 +56,27 @@
     let state;
     try{const saved=storage&&storage.getItem(STORAGE_KEY);if(saved){const decoded=JSON.parse(saved);if(decoded&&decoded.version===1&&decoded.years&&decoded.annual&&decoded.catalog)state=decoded}}catch(_){/* invalid local demo data; recreate safely */}
     if(!state)state=bootstrap(source);
+    // The earlier Testing UI auto-loaded a 2027-28 sample. Never silently
+    // discard a tester's manual changes; only remove known, untouched automatic
+    // sample rows and leave the academic-year settings and Roles intact.
+    if(!sampleYear2027){
+      const wasAutoLoaded=(state.audit||[]).some(e=>e.event==='synthetic_2027_28_sample_loaded'&&e.actor==='demo-synthetic-fixture');
+      const edited=(state.audit||[]).some(e=>e.year==='2027-28'&&
+        e.actor!=='demo-synthetic-fixture'&&
+        e.event!=='synthetic_2027_28_sample_loaded');
+      if(wasAutoLoaded&&!edited&&state.annual?.['2027-28']){
+        let changed=false;
+        for(const [code,row] of Object.entries(state.annual['2027-28'])){
+          if(row.sampleFixture&&Array.isArray(row.working)&&row.working.every(x=>String(x.id).startsWith('sample-2027-28-'))){
+            delete state.annual['2027-28'][code];changed=true;
+          }
+        }
+        if(changed){
+          state.afc=(state.afc||[]).filter(row=>row.afcRecordId!=='sample-2027-28-afc');
+          try{storage?.setItem(STORAGE_KEY,JSON.stringify(state));}catch(_) { /* in-memory cleanup retained */ }
+        }
+      }
+    }
     const persist=()=>{if(storage)storage.setItem(STORAGE_KEY,JSON.stringify(state))};
     const stamp=()=>now().toISOString();
     const getState=()=>clone(state);

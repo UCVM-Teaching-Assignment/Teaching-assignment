@@ -72,17 +72,17 @@ test('four scheduling toolbar controls receive one T badge even after re-render'
  }
 });
 
-test('workflow tasks, bulk import and dialogs have T; original Tasks remains unchanged',()=>{
+test('workflow tasks and team Work Queue retain T badges and their labels',()=>{
  const tasks=source('frontend/scripts/workspace-tasks.js');
  const bulk=source('frontend/scripts/schedule-bulk-ui.js');
  const office=source('frontend/scripts/schedule-office-ui.js');
  const workflow=source('frontend/scripts/schedule-workflow.js');
  const lab=source('frontend/scripts/lab-scheduling-editor.js');
  const published=source('frontend/scripts/lab-scheduling-entry.js');
- assert.match(tasks,/esc\(item\.courseCode\)\+pendingBadge\(\)/);
+ assert.match(tasks,/esc\(item\.courseCode\|\|'Course Schedule'\)\+pendingBadge\(\)/);
  assert.match(tasks,/Download \/ Import ADFAD template/);
  assert.match(tasks,/Open Lab Scheduling · Bulk CSV/);
- assert.match(tasks,/button\.textContent=loading\?'Tasks/);
+ assert.match(tasks,/button\.textContent=loading\?'Work Queue/);
  assert.match(bulk,/action\.innerHTML='Bulk Import CSV \/ Excel Paste'\+pendingBadge\(\)/);
  assert.match(bulk,/const heading=.*pendingBadge\(\)/);
  assert.match(office,/pendingBadge\(\)\+'<\/h2>/);
