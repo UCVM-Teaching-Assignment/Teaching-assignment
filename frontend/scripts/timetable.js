@@ -451,6 +451,21 @@
   let selectedYear = 'all';
   let selectedSemester = 'fall';
   let viewMode = 'week';
+  // Testing-only comparison keeps week choices and authorized cached rows in memory.
+  // Never serialize session records to localStorage or copy across signed-in identities.
+  const multiWeekModel=window.PAWS_MULTI_WEEK_COMPARISON.create({weekCount:WEEK_COUNT});
+  let comparisonSemester='fall',comparisonWeek=1,comparisonScope='',comparisonEpoch=0,comparisonRequestId=0;
+  const comparisonRows=new Map(),comparisonPending=new Map();
+  function clearComparisonCache(){comparisonEpoch++;comparisonRows.clear();comparisonPending.clear();}
+  function comparisonIdentity(){return JSON.stringify([
+    currentUser?.uid||'',currentUser?.role||'',currentUser?.profile?.facultyId||'',
+    window.PAWS_SUPPORT?.contextId?.()||''
+  ]);}
+  function syncComparisonIdentity(){
+    const identity=comparisonIdentity();
+    if(identity!==comparisonScope){clearComparisonCache();comparisonScope=identity;}
+    return identity;
+  }
   // Testing site only: hooks for testing-only-features.js.
   window.UCVM_TIMETABLE_TESTING_HOOKS=Object.freeze({render:()=>render(),currentUser:()=>currentUser,viewMode:()=>viewMode,refresh:()=>refreshSessionScope()});
   let listSessionMode = 'ALL';
@@ -624,7 +639,7 @@
     }
   }
 
-  function refreshSessionScope(){if(currentUser)return subscribeSessions();render();return Promise.resolve(true)}
+  function refreshSessionScope(){if(viewMode==='compare'){render();return Promise.resolve(true)}if(currentUser)return subscribeSessions();render();return Promise.resolve(true)}
   async function ensureAllSessions({refresh=false,notify=true}={}){
     const ownerUid=String(currentUser?.uid||'');
     if(!ownerUid)return[];
@@ -660,6 +675,7 @@
     allSessionsLoadGeneration+=1;
     allSessionsCache=null;allSessionsOwnerUid='';allSessionsLoading=null;allSessionsLoadingUid='';
     sessionCacheRanges.length=0;sessionCacheDates.clear();
+    clearComparisonCache();
   }
   function swapNumeric(v){ if(v===undefined||v===null||v==='') return null; const n=Number(v); return Number.isFinite(n)?n:null; }
   function swapNameKey(v){ return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' '); }
@@ -1028,6 +1044,7 @@
     $('cal-week-btn').addEventListener('click', () => switchCalendarView('week'));
     $('cal-month-btn').addEventListener('click', () => switchCalendarView('month'));
     $('cal-list-btn').addEventListener('click', () => switchCalendarView('list'));
+    $('cal-compare-btn').addEventListener('click',()=>switchCalendarView('compare'));
     $('list-academic-year').addEventListener('change',event=>{listAcademicYear=event.target.value;render()});
     $('list-session-mode').addEventListener('change',event=>{listSessionMode=event.target.value;renderList()});
     $('color-toggle').addEventListener('click', () => { colorsOn = !colorsOn; $('color-toggle').textContent = `Colors: ${colorsOn ? 'On' : 'Off'}`; render(); });
@@ -1128,8 +1145,14 @@
     $('cal-week-btn').classList.toggle('active', viewMode === 'week');
     $('cal-month-btn').classList.toggle('active', viewMode === 'month');
     $('cal-list-btn').classList.toggle('active', viewMode === 'list');
+    $('cal-compare-btn').classList.toggle('active', viewMode === 'compare');
+    $('cal-compare-btn').setAttribute('aria-pressed',String(viewMode==='compare'));
     $('list-global-controls').classList.toggle('hidden', viewMode !== 'list');
-    $('cal-prev').disabled=viewMode==='list'; $('cal-next').disabled=viewMode==='list';
+    $('cal-prev').disabled=viewMode==='list'||viewMode==='compare'; $('cal-next').disabled=viewMode==='list'||viewMode==='compare';
+    $('cal-today').disabled=viewMode==='compare';
+    $('filter-month').disabled=viewMode==='compare';
+    $('week-mobile-select').disabled=viewMode==='compare';
+    document.querySelectorAll('[data-week],[data-semester]').forEach(node=>{node.disabled=viewMode==='compare'});
   }
 
   function moveCalendar(delta){
@@ -1145,7 +1168,7 @@
   }
 
   function filteredSessions(source=sessions, options={}) {
-    activityTypeFilter.setSessionTypes(source.filter(row=>!row.isWorkingActivity).map(row=>row.type));
+    if(!options.skipTypeRebuild)activityTypeFilter.setSessionTypes(source.filter(row=>!row.isWorkingActivity).map(row=>row.type));
     const q = $('search-input').value.trim().toLowerCase();
     const searchWords=q.split(/[\s,]+/).filter(Boolean);
     const month = $('filter-month').value;
@@ -1156,8 +1179,8 @@
       if(testingOnly?.keepSession&&!testingOnly.keepSession(s))return false;
       if(s.isWorkingActivity?!activityTypeFilter.matchesActivity(s.sourceActivity):!activityTypeFilter.matchesSession(s))return false;
       if ((!options.ignorePeriod||selectedYear==='rotation') && !(window.PAWS_ACTIVITY_PLACEMENT?.matchesYear(s,selectedYear)??(selectedYear==='all'||String(s.year)===selectedYear))) return false;
-      if (!options.ignorePeriod && !allSemesters && s.semester !== selectedSemester) return false;
-      if (!options.ignorePeriod && month !== 'all' && String(parseYmd(s.date).getMonth()) !== month) return false;
+      if (!options.ignorePeriod && !allSemesters && s.semester !== (options.semesterOverride||selectedSemester)) return false;
+      if (!options.ignorePeriod && !options.ignoreMonth && month !== 'all' && String(parseYmd(s.date).getMonth()) !== month) return false;
       if (courseFilterActive && !selectedCourses.has(String(s.course))) return false;
       if (myTimetableOnly && currentUser && !sessionBelongsToCurrentFaculty(s)) return false;
       if (searchWords.length && !searchWords.every(word=>`${s.course} ${s.topic} ${displayFacultyList(s.instructor||'')} ${s.room} ${s.type}`.toLowerCase().includes(word))) return false;
@@ -1194,12 +1217,16 @@
   function render() {
     if(searchDebouncer)searchDebouncer.cancel();
     renderCalendarView();
-    renderWorkingActivities();
+    if(viewMode==='compare'){
+      ++workingActivityRenderToken;
+      const lane=$('working-activities-lane');if(lane)lane.innerHTML='';
+    }else renderWorkingActivities();
     renderActiveContentFilters();
   }
 
   function renderCalendarView() {
-    if(viewMode==='day')renderDay();
+    if(viewMode==='compare')renderMultiWeekComparison();
+    else if(viewMode==='day')renderDay();
     else if(viewMode==='week')renderWeek();
     else if(viewMode==='month')renderMonth();
     else renderList();
@@ -1567,6 +1594,11 @@
   }
 
   function switchCalendarView(next){
+    if(next==='compare'){
+      // Start with the active Calendar week, then accept arbitrary additional periods.
+      if(!multiWeekModel.size())multiWeekModel.add(selectedSemester,selectedWeek);
+      comparisonSemester=selectedSemester;comparisonWeek=selectedWeek;
+    }
     viewMode=next;
     if(selectionMode&&reviewingSelection)reviewingSelection=false;
     if(roleIsFaculty(currentUser)&&(next==='day'||next==='list'))lastFacultyTeachingView=next;
@@ -2234,7 +2266,7 @@
           activityTypeFilter.resetForUser();
           resetWorkingCalendar();
           if($('working-activities-lane'))$('working-activities-lane').innerHTML='';
-          viewMode = 'week'; setViewButtons();
+          viewMode = 'week'; multiWeekModel.clear(); clearComparisonCache();comparisonScope=''; setViewButtons();
           myTimetableOnly = false;
           if (sessionUnsubscribe) { try { sessionUnsubscribe(); } catch (_) {} sessionUnsubscribe = null; }
           sessionRangeKey='';
