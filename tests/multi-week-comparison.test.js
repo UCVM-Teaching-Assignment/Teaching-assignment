@@ -25,6 +25,33 @@ test('removing X from one period does not modify other selected weeks',()=>{
  assert.equal(state.add('winter',5),true);
  assert.deepEqual(state.list().map(x=>x.key),['fall:1','spring:14','winter:5']);
 });
+test('chronological sorting spans Spring, Fall and Winter and sorts week numbers numerically',()=>{
+ const model=create();
+ for(const [term,week] of [['winter',5],['fall',10],['spring',7],['fall',2],['winter',1]])model.add(term,week);
+ assert.deepEqual(model.sort('asc'),['spring:7','fall:2','fall:10','winter:1','winter:5']);
+ assert.deepEqual(model.list().map(x=>x.key),['spring:7','fall:2','fall:10','winter:1','winter:5']);
+ assert.deepEqual(model.sort('desc'),['winter:5','winter:1','fall:10','fall:2','spring:7']);
+ assert.throws(()=>model.sort('sideways'),/Invalid week sort direction/);
+ assert.equal(model.size(),5);
+});
+test('admin-facing arrow model moves only one selected card, respecting boundaries and missing keys',()=>{
+ const model=create();
+ model.add('fall',1);model.add('winter',5);model.add('spring',14);
+ assert.equal(model.move('fall:1','up'),false);
+ assert.equal(model.move('spring:14','down'),false);
+ assert.equal(model.move('winter:5','up'),true);
+ assert.deepEqual(model.list().map(x=>x.key),['winter:5','fall:1','spring:14']);
+ assert.equal(model.move('winter:5','down'),true);
+ assert.deepEqual(model.list().map(x=>x.key),['fall:1','winter:5','spring:14']);
+ assert.equal(model.move('spring:14','up'),true);
+ assert.deepEqual(model.list().map(x=>x.key),['fall:1','spring:14','winter:5']);
+ assert.equal(model.move('not-selected','up'),false);
+ assert.throws(()=>model.move('fall:1','diagonal'),/Invalid week move direction/);
+ assert.equal(model.size(),3);
+ assert.deepEqual(model.sort('asc'),['spring:14','fall:1','winter:5']);
+ assert.equal(model.move('fall:1','up'),true);
+ assert.deepEqual(model.list().map(x=>x.key),['fall:1','spring:14','winter:5']);
+});
 test('selection has no arbitrary UI cap: all 17 weeks in each academic semester can be added',()=>{
  const state=create();
  for(const semester of SEMESTERS)for(let w=1;w<=17;w++)assert.equal(state.add(semester,w),true);
@@ -66,6 +93,15 @@ test('Testing Calendar exposes one Compare Weeks mode plus branded test marker',
  assert.match(script,/data-week-remove/);
  assert.match(script,/aria-label="Close /);
  assert.match(script,/data-week-retry/);
+ assert.match(script,/id="comparison-order"/);
+ assert.match(script,/multiWeekModel\.sort\(comparisonOrder\)/);
+ assert.match(script,/multiWeekModel\.move\(periodKey,direction\)/);
+ assert.match(script,/data-week-move/);
+ assert.match(script,/data-week-direction="up"/);
+ assert.match(script,/data-week-direction="down"/);
+ assert.match(script,/canReorder=UCVM\.admin\(currentUser\)/);
+ assert.match(script,/if\(!UCVM\.admin\(currentUser\)\)return/);
+ assert.match(style,/\.multi-week-move:disabled/);
  assert.doesNotThrow(()=>new vm.Script(script));
 });
 test('the comparison reuses the exact Week grid renderer and each week loads independently',()=>{
