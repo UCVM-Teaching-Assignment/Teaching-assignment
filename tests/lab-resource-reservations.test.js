@@ -135,3 +135,14 @@ test('pending horse requests above 38 trigger a planning warning before any hors
  assert.equal(second.assessment.availableHorseCount,38);
  assert.ok(second.assessment.warnings.some(w=>w.code==='HORSE_REQUEST_DEMAND'));
 });
+
+test('confirmed horse allocation cannot be rewritten or revoked by request replay to bypass 24h rest',()=>{
+ const f=fixture();submit(f,'a',1,0);confirm(f,'a',['H01']);
+ const version=f.service.read('lab','a').request.version;
+ assert.throws(()=>f.service.submit('lab',{sessionId:'a',expectedVersion:version,
+  horseCount:0,petProfessorCount:0,notes:'',requestId:rid()}),e=>e.code==='RESERVATION_LOCKED');
+ assert.throws(()=>f.service.review('owner',{sessionId:'a',expectedVersion:version,
+  decision:'reject',horseIds:[],reviewNote:'Cancel',requestId:rid()}),e=>e.code==='RESERVATION_LOCKED');
+ assert.equal(f.service.read('lab','a').request.status,'confirmed');
+ assert.equal(f.service.read('lab','b').assessment.availableHorseIds.includes('H01'),false);
+});
