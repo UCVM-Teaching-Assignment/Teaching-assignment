@@ -52,7 +52,7 @@
    '<p class="lab-muted">Horse IDs are assigned only by a resource reviewer. A horse cannot be confirmed again until at least '+E(policy.horseRestHours)+' hours after its previous use ends.</p>'+
    '<div class="lab-resource-actions"><button type="button" data-resource-preview'+disabled+'>Preview availability</button><button type="button" data-resource-submit'+disabled+'>Send Reservation Request</button></div>'+
    '<div data-resource-feedback role="status">'+E(notice)+'</div><div data-resource-preview-result aria-live="polite"></div>'+
-   '<div class="lab-resource-summary"><span>Synthetic horses currently unallocated for this time and rest window: <strong>'+E(check?.availableHorseCount??'—')+'</strong></span><span>Pet Professor demand in rolling '+E(policy.petWindowHours)+' hours: <strong>'+E(check?.petWindowDemand??0)+'</strong> / warning above '+E(policy.petProfessorThreshold)+'</span></div>'+
+   '<div class="lab-resource-summary"><span>Synthetic horses currently unallocated: <strong>'+E(check?.availableHorseCount??'—')+'</strong></span><span>Horse requests across use/rest windows: <strong>'+E(check?.horseWindowDemand??0)+'</strong> / '+E(policy.horsePoolSize)+'</span><span>Pet Professor demand in rolling '+E(policy.petWindowHours)+' hours: <strong>'+E(check?.petWindowDemand??0)+'</strong> / warning above '+E(policy.petProfessorThreshold)+'</span></div>'+
    resourceWarnings(check?.warnings)+
    (canReview&&request&&['requested','confirmed','rejected'].includes(status)?
     '<details class="lab-resource-review"><summary>Owner / Developer: review reservation (Testing simulation)</summary>'+
