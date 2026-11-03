@@ -173,15 +173,40 @@
       const assignments=clone(input.assignments||[]).map(x=>({facultyId:x.facultyId||null,teachingRole:x.teachingRole||'',doeCredit:Number(x.doeCredit)||0}));
       for(const x of assignments){
         if(x.facultyId&&!faculty(x.facultyId))invalid('Unknown Faculty');
+        if(x.facultyId&&(!faculty(x.facultyId).active||!faculty(x.facultyId).appointmentValid))invalid('Inactive or ineligible Faculty cannot be assigned');
         if(x.facultyId&&faculty(x.facultyId)?.activationDate&&date<faculty(x.facultyId).activationDate)invalid('Faculty cannot be assigned before activation date');
       }
       row.working.push({id,courseCode:row.code,date,topic:normalized(input.topic),sessionType:normalized(input.sessionType),startTime:normalized(input.startTime),endTime:normalized(input.endTime),room:normalized(input.room),assignments});
       row.revision++;row.finalizedRevision=0;logged('session_added',a,year,{code:row.code,id});return id;
     }
     function editAssignment(a,year,code,id,fid){staff(a);editable(year);const row=annual(year,code);if(!canPublish(a,year,row))invalid('Course scope permission required');const s=row.working.find(x=>x.id===id);if(!s)invalid('Session not found');if(fid&&!faculty(fid))invalid('Unknown Faculty');
+      if(fid&&(!faculty(fid).active||!faculty(fid).appointmentValid))invalid('Inactive or ineligible Faculty cannot be assigned');
       if(fid&&faculty(fid)?.activationDate&&(!s.date||s.date<faculty(fid).activationDate))invalid('Faculty cannot be assigned before activation date');
       const old=s.assignments[0]||{};s.assignments=[{facultyId:fid||null,teachingRole:old.teachingRole||'Instructor',doeCredit:Number(old.doeCredit)||0}];
       row.revision++;row.finalizedRevision=0;logged('assignment_updated',a,year,{code:row.code,sessionId:id});return clone(s);
+    }
+
+    // Repair a *specific* ineligible, previously saved assignment without
+    // replacing other Faculty or silently changing that Session's DOE credit.
+    // Used by Publish Review to unblock old browser-local edits safely.
+    function resolveFacultyIssue(a,year,code,sessionId,priorFacultyId,nextFacultyId,expectedRevision){
+      staff(a);editable(year);const row=annual(year,code);
+      if(!canPublish(a,year,row))invalid('Course scope permission required');
+      if(Number(expectedRevision)!==row.revision)invalid('Working revision changed; reload Publish Review before fixing the assignment');
+      const session=row.working.find(s=>s.id===sessionId);
+      if(!session)invalid('The blocking Session no longer exists');
+      const index=(session.assignments||[]).findIndex(item=>item.facultyId===priorFacultyId);
+      if(index<0)invalid('The blocking Faculty assignment has changed; refresh Publish Review');
+      if(effectiveOn(faculty(priorFacultyId),session.date))invalid('This instructor is eligible; no ineligible assignment to repair');
+      const chosen=nextFacultyId||null;
+      if(chosen&&!faculty(chosen))invalid('Replacement Faculty not found');
+      if(chosen&&!effectiveOn(faculty(chosen),session.date))invalid('Replacement Faculty is inactive, ineligible or starts after this Session date');
+      if(chosen&&(session.assignments||[]).some((item,i)=>i!==index&&item.facultyId===chosen))invalid('Replacement is already assigned to this Session');
+      if(chosen)session.assignments[index].facultyId=chosen;
+      else session.assignments.splice(index,1);
+      row.revision++;row.finalizedRevision=0;
+      logged('ineligible_assignment_resolved',a,year,{code:row.code,sessionId,priorFacultyId,nextFacultyId:chosen});
+      return clone(session);
     }
     function finalizeCourse(a,year,code){adfa(a);editable(year);const row=annual(year,code);row.finalizedRevision=row.revision;logged('course_finalized',a,year,{code:row.code,revision:row.revision});return row.revision}
     function publishCourse(a,year,code){who(a);editable(year);const row=annual(year,code);if(!canPublish(a,year,row))invalid('Course publisher scope permission required');
@@ -254,7 +279,7 @@
     }
     function previewPublication(a,year,code){
       who(a);const y=inspect(year),row=annual(year,code),published=currentRelease(row),issues=[];
-      const problem=(severity,code,message,sessionId='')=>issues.push({severity,code,message,sessionId});
+      const problem=(severity,code,message,sessionId='',facultyId=null)=>issues.push({severity,code,message,sessionId,...(facultyId?{facultyId}:{})});
       if(y.status==='archived')problem('block','ARCHIVED','The academic year is archived');
       if(!canPublish(a,year,row))problem('block','SCOPE_DENIED','Course publication permission required');
       if(row.finalizedRevision!==row.revision)problem('block','NOT_FINALIZED','Current Working revision is not finalized');
@@ -288,8 +313,8 @@
         if(!s.room)problem('warn','UNASSIGNED_ROOM','Room not selected',s.id);
         for(const x of s.assignments||[]){
           const f=faculty(x.facultyId);
-          if(!f||!f.active||!f.appointmentValid)problem('block','INACTIVE_FACULTY','Instructor is inactive or ineligible',s.id);
-          if(date&&f?.activationDate&&date<f.activationDate)problem('block','FUTURE_FACULTY_START','Instructor starts after the Session date',s.id);
+          if(!f||!f.active||!f.appointmentValid)problem('block','INACTIVE_FACULTY',(!f?'Unknown Faculty assignment':f.name)+' is inactive or ineligible for '+(s.topic||'this Session')+' ('+(date||'unscheduled')+'). Replace or remove this assignment before publishing.',s.id,x.facultyId);
+          if(date&&f?.activationDate&&date<f.activationDate)problem('block','FUTURE_FACULTY_START',f.name+' starts '+f.activationDate+', after the Session date '+date+'. Choose an eligible replacement.',s.id,x.facultyId);
           if(date)for(const afc of state.afc){
             if(afc.active!==false&&afc.facultyId===x.facultyId&&date>=afc.startDate&&date<=afc.endDate)
               problem('warn','AFC_CONFLICT','Instructor has an AFC overlap',s.id);
@@ -382,7 +407,7 @@
     function getPreferredYear(a){who(a);const current=currentYear(now());if(isFaculty(a))return state.years[current]?current:Object.keys(state.years)[0];return state.years[state.preferences[a.uid]]?state.preferences[a.uid]:state.years[current]?current:Object.keys(state.years)[0]}
     function reset(){state=bootstrap(source);if(sampleYear2027)seed2027Sample({uid:'demo-synthetic-fixture',role:'owner'});persist();return getState()}
     if(sampleYear2027&&!state.years['2027-28'])seed2027Sample({uid:'demo-synthetic-fixture',role:'owner'});
-    return Object.freeze({getState,createYear,seed2027Sample,addCourse,previewRollover,rolloverCourse,setYearPhase,previewPublication,compareYears,updateCatalog,addSession,editAssignment,finalizeCourse,publishCourse,approvePolicy,publishDoe,setOverride,getTeaching,getCalendar,getDoe,getWorkingDoe,getConflicts,addAfc,retireYear,restoreYear,copyHistorical,confirmRole,setPreferredYear,getPreferredYear,reset,currentYear});
+    return Object.freeze({getState,createYear,seed2027Sample,addCourse,previewRollover,rolloverCourse,setYearPhase,previewPublication,compareYears,updateCatalog,addSession,editAssignment,resolveFacultyIssue,finalizeCourse,publishCourse,approvePolicy,publishDoe,setOverride,getTeaching,getCalendar,getDoe,getWorkingDoe,getConflicts,addAfc,retireYear,restoreYear,copyHistorical,confirmRole,setPreferredYear,getPreferredYear,reset,currentYear});
   }
   return Object.freeze({createEngine,STORAGE_KEY,currentYear,validateYear});
 });
