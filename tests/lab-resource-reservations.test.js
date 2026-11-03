@@ -125,3 +125,13 @@ test('unauthorized Faculty cannot inspect private Reserve Notes or mutate reques
  assert.throws(()=>f.service.submit('faculty',{sessionId:'a',expectedVersion:1,horseCount:0,petProfessorCount:0,notes:'',requestId:rid()}),e=>e.code==='ROLE_DENIED');
  assert.ok(!JSON.stringify(f.tables.history).includes('Synthetic sensitive animal handling notes'));
 });
+
+test('pending horse requests above 38 trigger a planning warning before any horse is allocated',()=>{
+ const f=fixture();
+ const first=submit(f,'a',25,0);
+ assert.equal(first.assessment.horseWindowDemand,25);
+ const second=submit(f,'e',20,0);
+ assert.equal(second.assessment.horseWindowDemand,45);
+ assert.equal(second.assessment.availableHorseCount,38);
+ assert.ok(second.assessment.warnings.some(w=>w.code==='HORSE_REQUEST_DEMAND'));
+});
