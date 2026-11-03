@@ -30,6 +30,9 @@
   const $ = id => doc.getElementById(id);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const badge = () => `<span class="testing-only-badge" title="${BADGE_TITLE}" aria-label="${BADGE_TITLE}">T</span>`;
+  // PR #102 features are available for Testing acceptance, not yet accepted for Beta.
+  const PENDING_TITLE = 'Testing in progress - not yet accepted';
+  const pendingBadge = () => `<span class="testing-only-badge" title="${PENDING_TITLE}" aria-label="${PENDING_TITLE}">T</span>`;
   const el = html => { const t = doc.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
   const hhmm = value => String(value || '').slice(0, 5);
   const num = (value, digits = 2) => (Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—');
@@ -863,6 +866,7 @@
   // -------------------------------------------------------------------- start
   root.UCVM_TESTING_ONLY = {
     selectSessions: true,
+    pendingBadge,
     keepSession: s => state.showCcc || !s.isCcc,
     allSemesters: viewMode => state.allSemesters && viewMode !== 'week' && viewMode !== 'day',
     calendarRows: rows => (state.showClosures ? rows.concat(closureRows()) : rows),
