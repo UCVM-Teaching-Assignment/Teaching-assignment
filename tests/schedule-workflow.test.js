@@ -3,6 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {createScheduleWorkflow}=require('../tools/pages-demo-api/schedule-workflow.js');
 const {createLabService}=require('../tools/pages-demo-api/lab-scheduling.js');
+const {createLabResourceReservations}=require('../tools/pages-demo-api/lab-resource-reservations.js');
 const {createSessionRepository}=require('../tools/pages-demo-api/repos/core.js');
 function fixture(){
  const people=['adc','lab','adfa','developer','owner','faculty'].map(role=>({firebaseUid:role,baseRole:role==='adfa'?'adfa_general':role,active:true,mustChangePassword:false,labScopes:role==='lab'?[{academicYear:'2026-27',curriculumYear:'3',courseCode:'VETM 505'}]:[]}));
@@ -14,6 +15,10 @@ function fixture(){
 }
 const proposal={academicYear:'2026-27',courseCode:'VETM 505',date:'2026-11-03',startTime:'08:30',endTime:'10:30',sessionType:'LAB',suggestedFacultyIds:['f1']};
 function published(f,who='adc'){const d=f.workflow.saveDraft(who,proposal);return f.workflow.publish(who,{draftId:d.id,expectedRevision:d.revision})}
+function reserveNone(f,session,who){
+ const svc=createLabResourceReservations({store:f.store,labService:f.lab});
+ return svc.submit(who,{sessionId:session.id,expectedVersion:0,horseCount:0,petProfessorCount:0,notes:'',requestId:'none-'+session.id});
+}
 test('ADC can publish a Course/date/time with no title, room or faculty, and Calendar receives one Session',async()=>{
  const f=fixture(),d=f.workflow.saveDraft('adc',proposal);
  assert.equal(f.tables.sessions.length,0,'Working Draft does not leak into Calendar');
@@ -47,7 +52,8 @@ test('stage 1 validates required course, date and exact start/end; rejects stale
  assert.throws(()=>f.workflow.publish('adc',{draftId:d.id,expectedRevision:d.revision}),e=>e.code==='DUPLICATE_SESSION');
 });
 test('LAB can publish group/room allocations before any faculty exists; ADFAD confirms a suggestion afterwards',async()=>{
- const f=fixture(),s=published(f).session,ctx=f.lab.read('lab',s.id),d=ctx.draft;
+ const f=fixture(),s=published(f).session;reserveNone(f,s,'lab');
+ const ctx=f.lab.read('lab',s.id),d=ctx.draft;
  d.groups=[{id:'g1',code:'1',members:[{id:'s1',name:'Synthetic Student'}]}];
  d.rooms=[{id:'r1',label:'Room A',resourceKey:'room-a',subspace:'',capacity:10}];
  d.stations[0].assignedGroupIds=['g1'];
@@ -64,7 +70,8 @@ test('LAB can publish group/room allocations before any faculty exists; ADFAD co
  assert.equal(calendar[0].room,'Room A');assert.equal(calendar[0].instructorNames,'Alice Faculty');
 });
 test('Developer can publish ADC schedule, edit LAB booking and confirm teaching assignments',()=>{
- const f=fixture(),s=published(f,'developer').session,ctx=f.lab.read('developer',s.id);
+ const f=fixture(),s=published(f,'developer').session;reserveNone(f,s,'developer');
+ const ctx=f.lab.read('developer',s.id);
  assert.equal(ctx.capabilities.canEdit,true);
  assert.throws(()=>f.workflow.confirmFaculty('adc',{sessionId:s.id,expectedRevision:0,assignments:[{facultyId:'f1',teachingRole:'Lab Secondary',creditedHours:6}]}),e=>e.code==='ROLE_DENIED');
  const draft=ctx.draft;draft.groups=[{id:'g1',code:'1',members:[{id:'test1',name:'Synthetic'}]}];draft.rooms=[{id:'room',label:'Room X',resourceKey:'room-x',subspace:'',capacity:4}];
