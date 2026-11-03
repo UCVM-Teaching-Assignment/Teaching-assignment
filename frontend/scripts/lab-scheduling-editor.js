@@ -87,8 +87,9 @@
     const result=dialog.querySelector('[data-resource-preview-result]');
     if(result)result.innerHTML='<p class="lab-muted">Available synthetic horses: '+E(response.availableHorseCount)+'; Pet Professor demand: '+E(response.petWindowDemand)+'</p>'+resourceWarnings(response.warnings);
    }else{
-    resource=route==='/resource-rules'?await api().request('/resources?sessionId='+encodeURIComponent(selected)):response;
-    notice=success;render();
+    // Re-read the authoritative LAB context so the new resource-step gate and
+    // Publish button reflect the just-submitted request immediately.
+    notice=success;await refresh();
    }
   }catch(e){
    const error=dialog.querySelector('[data-resource-feedback]');
