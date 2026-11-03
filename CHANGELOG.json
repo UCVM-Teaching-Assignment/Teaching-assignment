@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-11-02",
+      "pr": 103,
+      "title": "LAB animal resource requests and horse/Pet Professor booking warnings in Testing",
+      "changes": [
+        "Added a Resource Request step before Student Groups in Lab Scheduling for synthetic Horse and Pet Professor requests, with required Reserve Notes.",
+        "Tracks 38 synthetic horses individually; Owner/Developer confirmation rejects assignments that overlap or violate a minimum 24-hour rest window after previous use.",
+        "Shows an in-app warning when requested/confirmed Pet Professor demand exceeds 30 within a rolling 48 hours; the warning does not block requests.",
+        "Added per-Course authorized LAB request history, version/replay checks, synthetic confirmation/rejection and adjustable resource settings.",
+        "No real resource bookings, staff notifications, production animal records, canonical timetable or DOE changes; functionality is Testing-only."
+      ]
+    },
+    {
+      "date": "2026-11-02",
       "pr": 102,
       "title": "Lab group scheduling and publication in the Testing Demo",
       "changes": [
