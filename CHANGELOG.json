@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-11-02",
+      "pr": 104,
+      "title": "One floating Teaching Lists window for CCC, VISC and HICC–CC in Testing",
+      "changes": [
+        "Combined the separate CCC Schedule, VISC List and HICC–CC List links into one Teaching sidebar entry and large three-tab floating window.",
+        "Preserved CCC yearly search and Refresh, and VISC/HICC–CC directory sorting, status filters and authorized read-only data.",
+        "Added one Close control, Escape and outside-click closing, keyboard tab navigation, focus return and account-switch cleanup.",
+        "Reused the existing CCC and leadership endpoints without changing permissions, saved records, teaching calculations or DOE.",
+        "This is a synthetic PAWS Testing Frontend Demo UI change only; Beta and University data remain unchanged."
+      ]
+    },
+    {
+      "date": "2026-11-02",
       "pr": 102,
       "title": "Lab group scheduling and publication in the Testing Demo",
       "changes": [
