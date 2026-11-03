@@ -124,3 +124,62 @@ test('dense fixture Week 1 matches the actual Calendar semester dates and stays 
   assert.ok(t.sessions.every(x=>x.date>='2026-05-01'&&x.date<='2027-04-30'));
   assert.equal(t.sessions.filter(x=>x.date>='2027-01-04'&&x.date<='2027-01-08').length,37);
 });
+
+test('compact synthetic fixture persists 1,937 teaching sessions without storing thousands of duplicated rows',()=>{
+  const {createStore,STORAGE_KEY}=require('../tools/pages-demo-api/store.js');
+  const records=new Map(),storage={getItem:key=>records.get(key)||null,setItem:(key,value)=>records.set(key,value),removeItem:key=>records.delete(key)};
+  const store=createStore({storage,autoLoadFixture:true});
+  assert.equal(store.tables.sessions.filter(s=>s.academicYear==='2026-27').length,1937);
+  const persisted=JSON.parse(records.get(STORAGE_KEY));
+  assert.ok(persisted.sessions.length<50,'Deterministic synthetic rows should not be repeated in localStorage');
+  assert.equal(persisted.extra.testingDemoPackedFixture.version,1);
+  assert.ok(records.get(STORAGE_KEY).length<1000000,'Compact browser data must fit substantially below typical storage quota');
+  const recovered=createStore({storage,autoLoadFixture:true});
+  assert.equal(recovered.tables.sessions.length,1937);
+  assert.equal(recovered.tables.activities.filter(row=>row.category==='ccc').length,413);
+  assert.equal(recovered.densityStatus().storageOk,true);
+});
+
+test('synthetic Session edits, removals, CCC edits and real user-created rows survive compact reload',()=>{
+  const {createStore}=require('../tools/pages-demo-api/store.js');
+  const records=new Map(),storage={getItem:key=>records.get(key)||null,setItem:(key,val)=>records.set(key,val),removeItem:key=>records.delete(key)};
+  const store=createStore({storage,autoLoadFixture:true});
+  const session=store.tables.sessions.find(row=>row.syntheticFixture==='beta-density-synthetic-v1');
+  const ccc=store.tables.activities.find(row=>row.syntheticFixture==='beta-density-synthetic-v1'&&row.category==='ccc');
+  assert.ok(session&&ccc);
+  session.topic='Manually edited [Synthetic] topic';ccc.label='Manually edited CCC';
+  const removed=store.tables.sessions.find(row=>row.syntheticFixture==='beta-density-synthetic-v1'&&row.id!==session.id);
+  store.tables.sessions=store.tables.sessions.filter(row=>row.id!==removed.id);
+  store.tables.sessions.push({id:'manual-course-session',academicYear:'2026-27',curriculumYear:'2',courseCode:'VTMD 304',date:'2026-11-03',startTime:'08:30',endTime:'09:30',sessionType:'LEC',assignments:[],topic:'Own import',room:'Demo Room'});
+  store.commit();
+  const again=createStore({storage,autoLoadFixture:true}).tables;
+  assert.equal(again.sessions.find(row=>row.id===session.id).topic,'Manually edited [Synthetic] topic');
+  assert.equal(again.activities.find(row=>row.activityId===ccc.activityId).label,'Manually edited CCC');
+  assert.ok(!again.sessions.some(row=>row.id===removed.id),'Explicitly removed synthetic row must remain removed');
+  assert.ok(again.sessions.some(row=>row.id==='manual-course-session'&&row.topic==='Own import'));
+});
+
+test('strict localStorage quota accepts packed fixture where full payload is too large',()=>{
+  const {createStore,STORAGE_KEY}=require('../tools/pages-demo-api/store.js');
+  const data=new Map(),storage={getItem:key=>data.get(key)||null,setItem:(key,val)=>{
+    if(val.length>1000000)throw Error('QuotaExceededError');
+    data.set(key,val);
+  },removeItem:key=>data.delete(key)};
+  const initial=createStore({storage,autoLoadFixture:true});
+  assert.equal(initial.tables.sessions.length,1937);
+  assert.equal(initial.densityStatus().storageOk,true);
+  assert.ok(data.get(STORAGE_KEY).length<1000000);
+  const again=createStore({storage,autoLoadFixture:true});
+  assert.equal(again.tables.sessions.length,1937);
+});
+
+test('manually loading test data also writes compact fixture and survives page reload',()=>{
+  const {createStore,STORAGE_KEY}=require('../tools/pages-demo-api/store.js');
+  const {createTestingOnly}=require('../tools/pages-demo-api/testing-only.js');
+  const m=new Map(),storage={getItem:key=>m.get(key)||null,setItem:(key,val)=>m.set(key,val),removeItem:key=>m.delete(key)};
+  const store=createStore({storage});
+  assert.equal(store.tables.sessions.length,0);
+  assert.equal(createTestingOnly(store).loadDenseCalendar().totalSessions,1937);
+  assert.ok(JSON.parse(m.get(STORAGE_KEY)).extra.testingDemoPackedFixture);
+  assert.equal(createStore({storage}).tables.sessions.length,1937);
+});
