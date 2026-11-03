@@ -193,6 +193,32 @@ async function main(){
        }catch(e){problems.push(label+': Data Load reset failed: '+String(e.message||e))}
      }
    }
+   if(check.page==='index.html'&&check.uid==='uid-developer'&&ok){
+     // Regression for PR #109: the emptyCalendar smoke path never exercised
+     // the ordinary browser startup, where old localStorage quota errors left
+     // all 1,937 simulated teaching sessions invisible despite successful CI.
+     await cdp.send('Runtime.evaluate',{expression:"window.UCVM_PAWS_DEMO_API?.reset?.()",returnByValue:true});
+     await cdp.send('Page.navigate',{url:`${origin}/index.html`});
+     await waitForText(cdp,['PAWS Frontend Demo','Teaching Schedule']);
+     const probe=await cdp.send('Runtime.evaluate',{expression:"(async function verifyDefaultSyntheticTeaching(){\n"+
+       " try{const sleep=ms=>new Promise(r=>setTimeout(r,ms));\n"+
+       " const store=window.UCVM_PAWS_DEMO_API?.store;\n"+
+       " if(!store)return{ok:false,error:'Demo store unavailable'};\n"+
+       " const density=store.densityStatus();\n"+
+       " const saved=JSON.parse(localStorage.getItem('ucvm-pages-demo-paws-v1')||'null');\n"+
+       " if(density.totalSessions!==1937||!density.storageOk||!saved?.extra?.testingDemoPackedFixture)return{ok:false,error:'Synthetic fixture not compactly persisted on default startup',density,storedRows:saved?.sessions?.length};\n"+
+       " let weekly=[];for(let i=0;i<60;i++){try{weekly=await window.UCVM_PAWS_DATA.listSessions({start:'2026-11-02',end:'2026-11-07'});if(weekly.length>=60)break;}catch(_){}await sleep(100);}\n"+
+       " if(weekly.length!==74)return{ok:false,error:'November Course Sessions not readable through Calendar API',count:weekly.length,density};\n"+
+       " document.getElementById('cal-month-btn')?.click();\n"+
+       " for(let i=0;i<40;i++){if([...document.querySelectorAll('.cal-event')].some(e=>e.textContent.includes('[Synthetic]')))break;await sleep(100);}\n"+
+       " const showing=[...document.querySelectorAll('.cal-event')].filter(e=>e.textContent.includes('[Synthetic]')).length;\n"+
+       " return{ok:showing>=10,error:showing>=10?'':'Month grid does not show synthetic teaching sessions',showing,weekly:weekly.length,storedRows:saved.sessions.length};\n"+
+       " }catch(error){return{ok:false,error:String(error?.message||error)}}\n"+
+       "})()",awaitPromise:true,returnByValue:true});
+     if(!probe.result?.value?.ok)problems.push(label+': default synthetic calendar unavailable: '+JSON.stringify(probe.result?.value||probe.exceptionDetails||'no result').slice(0,700));
+     else console.log('ok   Default PAWS Testing loads packed synthetic data, 74 Fall W11 sessions via API and visible November Month teaching blocks');
+     await cdp.send('Runtime.evaluate',{expression:"window.UCVM_PAWS_DEMO_API?.reset?.()",returnByValue:true});
+   }
    console.log(`${ok&&!errors.length&&!apiCalls.length?'ok  ':'FAIL'} ${label}`);
    cdp.close();await fetch(`http://127.0.0.1:${port}/json/close/${target.id}`).catch(()=>{});
   }
