@@ -176,7 +176,7 @@
           '<input type="hidden" name="sessionId" value="'+E(issue.sessionId)+'">'+
           '<input type="hidden" name="priorFacultyId" value="'+E(issue.facultyId)+'">'+
           '<input type="hidden" name="expectedRevision" value="'+E(p.sourceRevision)+'">'+
-          '<label>Replacement <select name="nextFacultyId"><option value="">Remove invalid assignment (leave unassigned)</option>'+opts(replacements,f=>f.id,f=>f.name)+'</select></label>'+
+          '<label>Replacement <select name="nextFacultyId" required><option value="" disabled selected>Choose an eligible instructor or remove</option>'+opts(replacements,f=>f.id,f=>f.name)+'<option value="__remove__">Remove this assignment (leave unassigned)</option></select></label>'+
           '<button type="submit">Resolve</button></form>':issue.sessionId?
             '<button type="button" data-my-open-course="'+E(selectedCode)+'">Open Course</button>':'—';
         return [E(issue.severity.toUpperCase()),E(issue.code),E(issue.message)+(row?'<div class="paws-my-muted">'+E(row.date||'No date')+' · '+E(row.topic||'Untitled Session')+' · '+E(row.id)+'</div>':''),control];
@@ -256,7 +256,7 @@
     if(kind==='add-session')m.addSession(a,selectedYear,selectedCode,{date:values.date,topic:values.topic,sessionType:values.sessionType,startTime:'08:30',endTime:'09:30',room:'',assignments:values.facultyId?[{facultyId:values.facultyId,teachingRole:'Instructor',doeCredit:Number(values.doeCredit)}]:[]});
     if(kind==='edit-assignment')m.editAssignment(a,selectedYear,selectedCode,form.dataset.session,values.facultyId);
     if(kind==='resolve-faculty-issue'){
-      m.resolveFacultyIssue(a,selectedYear,selectedCode,values.sessionId,values.priorFacultyId,values.nextFacultyId,values.expectedRevision);
+      m.resolveFacultyIssue(a,selectedYear,selectedCode,values.sessionId,values.priorFacultyId,values.nextFacultyId==='__remove__'?'':values.nextFacultyId,values.expectedRevision);
       tab='review';message='Invalid instructor corrected in Working Draft. ADFAD must finalize the new revision before publishing.';
     }
     if(kind==='copy-historical'&&root.confirm('Copy the previous Published teacher into this Working Session?'))m.copyHistorical(a,selectedYear,selectedCode,form.dataset.session,values.sourceId);
