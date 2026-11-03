@@ -123,6 +123,6 @@ test('comparison honors existing filters and does not run normal export or write
  assert.match(script,/sessionBelongsToCurrentFaculty\(s\)/);
  assert.match(script,/for\(const id of \['export-csv','export-calendar','outlook-invite-btn'\]\)/);
  assert.match(script,/Return to the Week view to select and edit sessions/);
- assert.match(script,/multiWeekModel\.clear\(\); clearComparisonCache\(\);comparisonScope=''/);
+ assert.match(script,/multiWeekModel\.clear\(\); comparisonOrder='custom'; clearComparisonCache\(\);comparisonScope=''/);
  assert.match(script,/This view shows scheduled sessions and enabled closures/);
 });
