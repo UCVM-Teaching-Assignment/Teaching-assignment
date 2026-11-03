@@ -9,6 +9,7 @@
  const ADC=['adc','developer','owner'];
  const ADFAD=['developer','owner','adfa_general','adfa_regular','administrator','admin'];
  const allowedRole=role=>ADC.includes(String(role||'').toLowerCase());
+ const pendingBadge=()=>root?.UCVM_TESTING_ONLY?.pendingBadge?.()||'';
  const dateTime=s=>(s.date||'')+' '+String(s.startTime||'').slice(0,5)+'–'+String(s.endTime||'').slice(0,5);
  let dialog=null,state=null,activeDraft='',activeSession='',facultyRows=[],busy=false,notice='';
  const selected=s=>state?.sessions?.find(x=>x.id===s)||null;
@@ -49,7 +50,7 @@
   if(!dialog||!state)return;
   const draft=savedDraft(),d=draft?.values||{},canADC=state.capabilities.canADC,canADFAD=state.capabilities.canADFAD,s=selected(activeSession);
   const titleRequired=state.rules?.fields?.topic?.required===true,roomRequired=state.rules?.fields?.room?.required===true;
-  dialog.innerHTML='<header class="paws-stage-header"><h2 id="paws-stage-title">Schedule Workflow · Testing</h2><button type="button" data-stage-action="close" aria-label="Close">Close</button></header>'+
+  dialog.innerHTML='<header class="paws-stage-header"><h2 id="paws-stage-title">Schedule Workflow · Testing'+pendingBadge()+'</h2><button type="button" data-stage-action="close" aria-label="Close">Close</button></header>'+
    '<div class="paws-stage-body"><p class="paws-stage-banner">Synthetic, browser-local data only. One Course Session per approved ADC record. Never enter real student or staff data here.</p>'+
    '<div class="paws-stage-flow"><span><strong>ADC</strong> · Publish schedule</span><span>Automatically creates LAB tasks for LAB Sessions</span><span>Automatically creates ADFAD Faculty tasks</span></div>'+
    (notice?'<p class="paws-stage-status" role="status">'+esc(notice)+'</p>':'')+
@@ -166,7 +167,7 @@
   const host=root.document.querySelector('.timetable-top-actions');
   if(!host)return;
   let button=root.document.getElementById('paws-schedule-workflow-open');
-  if(!button){button=root.document.createElement('button');button.id='paws-schedule-workflow-open';button.className='masthead-link';button.type='button';button.textContent='Schedule Workflow';button.onclick=open;host.prepend(button)}
+  if(!button){button=root.document.createElement('button');button.id='paws-schedule-workflow-open';button.className='masthead-link';button.type='button';button.innerHTML='Schedule Workflow'+pendingBadge();button.onclick=open;host.prepend(button)}
   button.hidden=!allowedRole(identity()?.role);
   if(dialog?.open&&!allowedRole(identity()?.role))dialog.close();
  }
