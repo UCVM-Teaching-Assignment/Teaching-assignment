@@ -74,9 +74,14 @@ function createLabResourceReservations({store,labService}={}){
  }
  function assessment(src,horseCount,petProfessorCount){
   const free=available(src),peak=petDemand(src,petProfessorCount),p=policy(),warnings=[];
+  const current={start:src.startMs,end:src.endMs};
+  const horseWindowDemand=horseCount+Object.values(state().requests)
+   .filter(r=>r.sessionId!==src.sessionId&&active(r)&&r.horseCount>0&&conflicts(current,interval(r),p.horseRestHours))
+   .reduce((sum,r)=>sum+r.horseCount,0);
+  if(horseWindowDemand>p.horsePoolSize)warnings.push({code:'HORSE_REQUEST_DEMAND',severity:'warning',message:'Combined pending/confirmed horse requests total '+horseWindowDemand+' across overlapping use/rest windows, above the synthetic pool of '+p.horsePoolSize+'. Coordinate assignments.'});
   if(horseCount>free.length)warnings.push({code:'HORSE_CAPACITY',severity:'warning',message:'Only '+free.length+' of '+p.horsePoolSize+' synthetic horses are unallocated with the '+p.horseRestHours+'-hour rest buffer; requested '+horseCount+'. Animal staff must resolve before confirmation.'});
   if(peak>p.petProfessorThreshold)warnings.push({code:'PET_PROFESSOR_THRESHOLD',severity:'warning',message:'Pet Professor requests total '+peak+' within a rolling '+p.petWindowHours+'-hour window (warning threshold '+p.petProfessorThreshold+'). Coordinate availability before proceeding.'});
-  return {availableHorseCount:free.length,availableHorseIds:free,petWindowDemand:peak,warnings};
+  return {availableHorseCount:free.length,availableHorseIds:free,horseWindowDemand,petWindowDemand:peak,warnings};
  }
  function snapshot(uid,sessionId){
   const src=source(uid,sessionId);
