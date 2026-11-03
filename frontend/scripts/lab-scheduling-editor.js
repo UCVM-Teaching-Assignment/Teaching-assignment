@@ -39,12 +39,13 @@
  function renderResources(){
   const editable=resource?.capabilities?.canEdit===true,canReview=resource?.capabilities?.canReview===true,
    request=resource?.request,policy=resource?.policy||{horsePoolSize:38,horseRestHours:24,petProfessorThreshold:30,petWindowHours:48},
-   check=resource?.assessment,haveSource=!!resource?.session,disabled=editable?'':' disabled',
+   check=resource?.assessment,haveSource=!!resource?.session,disabled=editable&&request?.status!=='confirmed'?'':' disabled',
    status=request?.status||'not submitted';
   const selectedOptions=options(items,x=>x.sessionId,x=>x.academicYear+' / Year '+x.curriculumYear+' / '+x.courseCode+' / '+x.date+' / '+x.topic,selected);
   const resourceForm=haveSource?
    '<section class="lab-resource-panel"><div class="lab-resource-summary"><strong>Reservation status: '+E(status)+'</strong><span>'+E(resource.session.date)+' · '+E(resource.session.start)+'–'+E(resource.session.end)+'</span></div>'+
-   (resource.sourceChanged?'<p class="lab-resource-warnings" role="alert">ADC changed the approved Session. Resubmit the request before confirming animal assignments.</p>':'')+
+   (resource.sourceChanged?'<p class="lab-resource-warnings" role="alert">ADC changed the approved Session. A new reservation review is required before publication.</p>':'')+
+   (request?.status==='confirmed'?'<p class="lab-muted">Confirmed horse assignments are locked for animal-rest safety. Contact a resource reviewer for an amendment.</p>':'')+
    '<p class="lab-muted">Step 1: Send Reserve Notes before organizing the lab groups. Use 0 for a resource you do not need. A request is not an animal-use approval.</p>'+
    '<div class="lab-resource-grid"><label>Horses required (synthetic pool '+E(policy.horsePoolSize)+')<input data-resource-horses type="number" min="0" max="'+E(policy.horsePoolSize)+'" step="1" value="'+E(request?.horseCount||0)+'"'+disabled+'></label>'+
    '<label>Pet Professors required<input data-resource-pet type="number" min="0" max="1000" step="1" value="'+E(request?.petProfessorCount||0)+'"'+disabled+'></label></div>'+
@@ -54,7 +55,7 @@
    '<div data-resource-feedback role="status">'+E(notice)+'</div><div data-resource-preview-result aria-live="polite"></div>'+
    '<div class="lab-resource-summary"><span>Synthetic horses currently unallocated: <strong>'+E(check?.availableHorseCount??'—')+'</strong></span><span>Horse requests across use/rest windows: <strong>'+E(check?.horseWindowDemand??0)+'</strong> / '+E(policy.horsePoolSize)+'</span><span>Pet Professor demand in rolling '+E(policy.petWindowHours)+' hours: <strong>'+E(check?.petWindowDemand??0)+'</strong> / warning above '+E(policy.petProfessorThreshold)+'</span></div>'+
    resourceWarnings(check?.warnings)+
-   (canReview&&request&&['requested','confirmed','rejected'].includes(status)?
+   (canReview&&request&&status==='requested'?
     '<details class="lab-resource-review"><summary>Owner / Developer: review reservation (Testing simulation)</summary>'+
     '<p class="lab-muted">Confirming horses requires exact synthetic IDs H01–H'+E(policy.horsePoolSize)+'. Staff must validate animal care eligibility separately. No email is sent.</p>'+
     '<label>Assigned Demo Horse IDs (comma separated)<input data-resource-horse-ids value="'+E((request.horseIds||[]).join(', '))+'"></label>'+
