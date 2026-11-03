@@ -16,6 +16,11 @@ const WEEKS = Object.freeze([
 const COURSE_TARGET = WEEKS.reduce((sum, term) => sum + term.counts.reduce((a, b) => a + b, 0), 0);
 const CCC_TARGET = 413;
 const CCC_LOCUM_TARGET = 11;
+const BENCHMARK_CHECK_NEEDED = Object.freeze({ 'fall:0': 25, 'fall:4': 9, 'fall:5': 19, 'spring:3': 7 });
+function targetCheckNeeded(term, week, count) {
+  const benchmark = BENCHMARK_CHECK_NEEDED[term + ':' + week];
+  return benchmark === undefined ? Math.round(count * (term === 'spring' ? 0.25 : 0.20)) : benchmark;
+}
 const CYCLE = Object.freeze({
   spring: ['LAB', 'LAB', 'SRL', 'LAB', 'LEC', 'LAB', 'SRL', 'LAB', 'LAB', 'SRL'],
   fall: ['LEC', 'LAB', 'SRL', 'LEC', 'LAB', 'LEC', 'SRL', 'LAB', 'LEC', 'SRL'],
@@ -69,7 +74,7 @@ function makeAssignment(sessionId, person, role, index, startTime, endTime, type
   };
 }
 
-function makeSession(term, week, index, courses, faculty) {
+function makeSession(term, week, index, courses, faculty, forceUnknown) {
   const course = courses[(index + week * 3) % courses.length];
   let type = CYCLE[term.term][index % CYCLE[term.term].length];
   if (term.term === 'winter' && week === 12 && index % 29 === 4) type = 'OSCE';
@@ -79,7 +84,7 @@ function makeSession(term, week, index, courses, faculty) {
   const slots = SLOTS[type];
   const [rawStart, rawEnd] = slots[(index + Math.floor(index / courses.length) + week) % slots.length];
   // A small intentional Check Needed sample; never invent missing DOE time.
-  const unknown = (index + week * 17) % 31 === 0;
+  const unknown = forceUnknown === true;
   const startTime = unknown ? null : rawStart, endTime = unknown ? null : rawEnd;
   const id = uuidFor('dense-session:' + ACADEMIC_YEAR + ':' + term.term + ':' + week + ':' + index);
   const leadIndex = (week * 13 + index * 3) % faculty.length;
@@ -142,13 +147,14 @@ function applyDenseFixture(tables) {
   const active = tables.faculty.filter(person => person.active === true);
   if (!active.length) throw new Error('No active synthetic Faculty available.');
   const seenSessions = new Set(tables.sessions.map(row => String(row.id)));
-  const weekCounts = new Map();
+  const weekCounts = new Map(), weekUnknown = new Map();
   for (const row of tables.sessions) {
     if (row.academicYear !== ACADEMIC_YEAR) continue;
     const ref = weekOf(row.date);
     if (ref) {
       const key = ref.term.term + ':' + ref.week;
       weekCounts.set(key, (weekCounts.get(key) || 0) + 1);
+      if (!row.startTime || !row.endTime) weekUnknown.set(key, (weekUnknown.get(key) || 0) + 1);
     }
   }
   const addedByType = {}, additions = [];
@@ -159,10 +165,12 @@ function applyDenseFixture(tables) {
     term.counts.forEach((target, week) => {
       const key = term.term + ':' + week;
       const required = Math.max(0, target - (weekCounts.get(key) || 0));
+      const unknownNeeded = Math.min(required, Math.max(0, targetCheckNeeded(term.term, week, target) - (weekUnknown.get(key) || 0)));
       let added = 0, candidate = 0;
       while (added < required) {
         if (candidate > target * 4) throw new Error('Unable to allocate unique synthetic session IDs.');
-        const row = makeSession(term, week, candidate++, courses, active);
+        const unknown = required > 0 && Math.floor((added + 1) * unknownNeeded / required) > Math.floor(added * unknownNeeded / required);
+        const row = makeSession(term, week, candidate++, courses, active, unknown);
         if (seenSessions.has(row.id)) continue;
         seenSessions.add(row.id); additions.push(row); added++;
         addedByType[row.sessionType] = (addedByType[row.sessionType] || 0) + 1;
@@ -195,4 +203,4 @@ function applyDenseFixture(tables) {
   };
 }
 
-module.exports = { FIXTURE, WEEKS, COURSE_TARGET, CCC_TARGET, CCC_LOCUM_TARGET, applyDenseFixture, weekOf, clinicDates };
+module.exports = { FIXTURE, WEEKS, COURSE_TARGET, CCC_TARGET, CCC_LOCUM_TARGET, BENCHMARK_CHECK_NEEDED, applyDenseFixture, weekOf, clinicDates };
