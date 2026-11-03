@@ -2,6 +2,19 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-03",
+      "pr": 105,
+      "title": "Fix Academic Year Demo publication blockers and ineligible Faculty corrections",
+      "changes": [
+        "Show the affected Faculty member, Session, date and topic alongside each ineligible instructor publication blocker.",
+        "Add a targeted replacement/removal control in Publish Review that preserves other assignments and DOE credit and requires a new ADFAD Finalize.",
+        "Prevent new inactive/ineligible Faculty assignments while retaining the future-activation date checks.",
+        "Treat unassigned and legacy null instructor placeholders as warnings rather than incorrectly blocking them as inactive Faculty.",
+        "Display DOE impact with two decimal places without modifying calculation rules or prior published data.",
+        "This change is limited to synthetic browser-local PAWS Testing data; existing saved browser work is preserved, and PAWS Beta is unchanged."
+      ]
+    },
+    {
       "date": "2026-11-02",
       "pr": 102,
       "title": "Lab group scheduling and publication in the Testing Demo",

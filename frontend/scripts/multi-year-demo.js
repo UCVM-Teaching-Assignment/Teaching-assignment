@@ -25,6 +25,8 @@
   function state(){return load().getState();}
   function current(){return state().annual[selectedYear]||{};}
   const facultyName=(s,id)=>s.faculty.find(f=>f.id===id)?.name||id||'Unassigned';
+  const eligibleFaculty=(s,date)=>s.faculty.filter(f=>f.active&&f.appointmentValid&&(!f.activationDate||date>=f.activationDate));
+  const doeNumber=value=>Number.isFinite(Number(value))?Number(value).toFixed(2):'—';
   function canEditCourse(s,a,code){if(isAdfa(a.role))return true;const fid=a.facultyId||s.users.find(u=>u.uid===a.uid)?.facultyId;return (s.roles[selectedYear]||[]).some(r=>r.status==='confirmed'&&r.facultyId===fid&&['HICC','Course Coordinator'].includes(r.roleType)&&r.scope.toUpperCase().startsWith(code));}
   function label(s,code){const row=s.annual[selectedYear]?.[code];if(!row)return code;const pub=row.published.at(-1);return code+' · '+row.title+(pub?' · Published v'+pub.version:(row.working.length?' · Draft':' · Empty Draft'))+(pub&&row.revision!==pub.revision?' · Changes Pending':'');}
   function table(headers,rows){if(!rows.length)return '<p class="paws-my-empty">No records for this view.</p>';
@@ -116,14 +118,14 @@
         input('Date','date','date','min="'+selectedYear.slice(0,4)+'-05-01" max="'+String(Number(selectedYear.slice(0,4))+1)+'-04-30"')+
         input('Topic','topic','text','placeholder="Topic / Session"')+
         '<label class="paws-my-field"><span>Type</span>'+select('sessionType',['LEC','SRL','LAB','Other'],x=>x,x=>x)+'</label>'+
-        '<label class="paws-my-field"><span>Faculty</span>'+select('facultyId',[{id:'',name:'Unassigned'},...s.faculty],f=>f.id,f=>f.name)+'</label>'+
+        '<label class="paws-my-field"><span>Faculty</span>'+select('facultyId',[{id:'',name:'Unassigned'},...s.faculty.filter(f=>f.active&&f.appointmentValid)],f=>f.id,f=>f.name)+'</label>'+
         input('DOE credit','doeCredit','number','value="0" step="0.5"')+
         '<button type="submit">Add Session</button></form>';
     }
     body+=table(['Date / Topic','Assignments','Working actions'],sessionRows.slice(0,50).map(item=>{
       const editor=canEdit&&yearState!=='archived';
       const currentNames=(item.assignments||[]).map(x=>facultyName(s,x.facultyId)).join('; ');
-      const edit=editor?'<form data-my-form="edit-assignment" data-session="'+E(item.id)+'" class="paws-my-inline">'+select('facultyId',[{id:'',name:'Unassigned'},...s.faculty],f=>f.id,f=>f.name)+'<button type="submit">Set Instructor</button></form>':'';
+      const edit=editor?'<form data-my-form="edit-assignment" data-session="'+E(item.id)+'" class="paws-my-inline">'+select('facultyId',[{id:'',name:'Unassigned'},...eligibleFaculty(s,item.date)],f=>f.id,f=>f.name)+'<button type="submit">Set Instructor</button></form>':'';
       const historic=editor&&historical.length?'<form data-my-form="copy-historical" data-session="'+E(item.id)+'" class="paws-my-inline">'+select('sourceId',historical,x=>x.id,x=>(x.topic||x.date)+' · '+(x.assignments||[]).map(y=>facultyName(s,y.facultyId)).join('; '))+'<button type="submit">Copy last year</button></form>':'';
       return [E(item.date)+' · '+E(item.topic),E(currentNames||'Unassigned'),edit+historic];
     }));
@@ -165,8 +167,21 @@
     let content='<p><strong>'+E(selectedCode)+'</strong> · Working revision '+E(p.sourceRevision)+' · Current Published '+E(p.currentPublishedVersion||'None')+'</p>'+
       '<div class="paws-my-stats"><span>Added <b>'+E(d.added)+'</b></span><span>Removed <b>'+E(d.removed)+'</b></span><span>Modified <b>'+E(d.modified)+'</b></span><span>Instructor changes <b>'+E(d.assignmentChanges)+'</b></span></div>'+
       wrap('Working vs Published · Session differences',table(['Change','Topic','Session'],d.changes.slice(0,120).map(x=>[E(x.kind+(x.instructorChanged?' · instructor changed':'')),E(x.topic),E(x.sessionId)])))+
-      wrap('Validation summary',p.issues.length?table(['Severity','Issue','Details'],p.issues.map(x=>[E(x.severity.toUpperCase()),E(x.code),E(x.message)])):'<p class="paws-my-pass">No blocking issues or warnings.</p>')+
-      wrap('DOE impact · Published calculation on release',table(['Faculty','Before','After','Change'],p.doeImpact.map(x=>[E(facultyName(s,x.facultyId)),E(x.before),E(x.after),E(x.delta)])));
+      wrap('Validation summary',p.issues.length?table(['Severity','Issue','Details','Resolve'],p.issues.map(issue=>{
+        const row=s.annual[selectedYear][selectedCode].working.find(session=>session.id===issue.sessionId);
+        const repairable=['INACTIVE_FACULTY','FUTURE_FACULTY_START'].includes(issue.code)&&issue.facultyId&&row&&s.years[selectedYear].status!=='archived';
+        const current=issue.facultyId&&row?.assignments?.find(item=>item.facultyId===issue.facultyId);
+        const replacements=repairable?eligibleFaculty(s,row.date).filter(f=>f.id!==issue.facultyId&&!row.assignments.some(x=>x!==current&&x.facultyId===f.id)):[];
+        const control=repairable?'<form data-my-form="resolve-faculty-issue" class="paws-my-inline">'+
+          '<input type="hidden" name="sessionId" value="'+E(issue.sessionId)+'">'+
+          '<input type="hidden" name="priorFacultyId" value="'+E(issue.facultyId)+'">'+
+          '<input type="hidden" name="expectedRevision" value="'+E(p.sourceRevision)+'">'+
+          '<label>Replacement <select name="nextFacultyId" required><option value="" disabled selected>Choose an eligible instructor or remove</option>'+opts(replacements,f=>f.id,f=>f.name)+'<option value="__remove__">Remove this assignment (leave unassigned)</option></select></label>'+
+          '<button type="submit">Resolve</button></form>':issue.sessionId?
+            '<button type="button" data-my-open-course="'+E(selectedCode)+'">Open Course</button>':'—';
+        return [E(issue.severity.toUpperCase()),E(issue.code),E(issue.message)+(row?'<div class="paws-my-muted">'+E(row.date||'No date')+' · '+E(row.topic||'Untitled Session')+' · '+E(row.id)+'</div>':''),control];
+      })):'<p class="paws-my-pass">No blocking issues or warnings.</p>')+
+      wrap('DOE impact · Published calculation on release',table(['Faculty','Before','After','Change'],p.doeImpact.map(x=>[E(facultyName(s,x.facultyId)),E(doeNumber(x.before)),E(doeNumber(x.after)),E(doeNumber(x.delta))])));
     if(s.years[selectedYear].status!=='archived')content+='<p class="paws-my-muted">Publish updates only this Course. If Published DOE is already enabled it recalculates from the new release, retaining manual Overrides for ADFAD review.</p><button data-my-action="publish-confirm" '+(p.canPublish?'':'disabled')+' type="button">'+(p.currentPublishedVersion?'Publish Changes':'Publish Course')+'</button>';
     return wrap('Publish Changes · Review & Validation',content);
   }
@@ -240,6 +255,10 @@
     if(kind==='add-course')m.addCourse(a,selectedYear,values.code);
     if(kind==='add-session')m.addSession(a,selectedYear,selectedCode,{date:values.date,topic:values.topic,sessionType:values.sessionType,startTime:'08:30',endTime:'09:30',room:'',assignments:values.facultyId?[{facultyId:values.facultyId,teachingRole:'Instructor',doeCredit:Number(values.doeCredit)}]:[]});
     if(kind==='edit-assignment')m.editAssignment(a,selectedYear,selectedCode,form.dataset.session,values.facultyId);
+    if(kind==='resolve-faculty-issue'){
+      m.resolveFacultyIssue(a,selectedYear,selectedCode,values.sessionId,values.priorFacultyId,values.nextFacultyId==='__remove__'?'':values.nextFacultyId,values.expectedRevision);
+      tab='review';message='Invalid instructor corrected in Working Draft. ADFAD must finalize the new revision before publishing.';
+    }
     if(kind==='copy-historical'&&root.confirm('Copy the previous Published teacher into this Working Session?'))m.copyHistorical(a,selectedYear,selectedCode,form.dataset.session,values.sourceId);
     if(kind==='override')m.setOverride(a,selectedYear,values.facultyId,values.value);
     if(kind==='add-afc')m.addAfc(a,{afcRecordId:'demo-afc-'+Date.now(),facultyId:values.facultyId,startDate:values.startDate,endDate:values.endDate,active:true});

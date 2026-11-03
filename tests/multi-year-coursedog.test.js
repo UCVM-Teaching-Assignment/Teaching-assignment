@@ -136,12 +136,34 @@ test('cross-year comparison respects Published-only data and self-only faculty D
  assert.equal(another.rows.length,1);assert.equal(another.rows[0].facultyId,'f3');
 });
 
-test('validation blocks publication with ineligible instructors',()=>{
- const m=build();m.createYear(owner,'2027-28');m.addCourse(adfa,'2027-28','VTMD 306');
- m.addSession(adfa,'2027-28','VTMD 306',{date:'2027-09-01',topic:'Lab',assignments:[{facultyId:'f2',doeCredit:2}]});
- m.finalizeCourse(adfa,'2027-28','VTMD 306');
- assert.ok(m.previewPublication(adfa,'2027-28','VTMD 306').issues.some(x=>x.code==='INACTIVE_FACULTY'&&x.severity==='block'));
+test('validation blocks legacy stored ineligible assignments but accepts a targeted repair',()=>{
+ const map=new Map(),storage={getItem:key=>map.get(key)||null,setItem:(key,data)=>map.set(key,data)};
+ const create=()=>createEngine({source,storage,now:()=>new Date('2026-10-29T12:00:00Z')});
+ const setup=create();setup.createYear(owner,'2027-28');setup.addCourse(adfa,'2027-28','VTMD 306');
+ setup.addSession(adfa,'2027-28','VTMD 306',{id:'legacy',date:'2027-09-01',topic:'Lab',
+  assignments:[{facultyId:'f1',doeCredit:2,teachingRole:'Instructor'}]});
+ // Represent the already-persisted browser-local legacy state without disabling a guard.
+ const key='paws-multi-year-demo-v1',saved=JSON.parse(map.get(key));
+ saved.annual['2027-28']['VTMD 306'].working[0].assignments.push({facultyId:'f2',doeCredit:3,teachingRole:'Lab support'});
+ map.set(key,JSON.stringify(saved));
+ const m=create();m.finalizeCourse(adfa,'2027-28','VTMD 306');
+ const before=m.previewPublication(adfa,'2027-28','VTMD 306');
+ const issue=before.issues.find(x=>x.code==='INACTIVE_FACULTY'&&x.severity==='block');
+ assert.equal(issue.sessionId,'legacy');assert.equal(issue.facultyId,'f2');
+ assert.match(issue.message,/Hart, Morgan/);
  assert.throws(()=>m.publishCourse(lead,'2027-28','VTMD 306'),/validation/i);
+ assert.throws(()=>m.resolveFacultyIssue(faculty1,'2027-28','VTMD 306','legacy','f2','f3',before.sourceRevision),/permission/i);
+ assert.throws(()=>m.resolveFacultyIssue(adfa,'2027-28','VTMD 306','legacy','f2','f2',before.sourceRevision),/ineligible/i);
+ m.resolveFacultyIssue(adfa,'2027-28','VTMD 306','legacy','f2','f3',before.sourceRevision);
+ const repaired=m.getState().annual['2027-28']['VTMD 306'].working[0];
+ assert.deepEqual(repaired.assignments.map(x=>[x.facultyId,x.doeCredit]),[['f1',2],['f3',3]]);
+ const after=m.previewPublication(adfa,'2027-28','VTMD 306');
+ assert.ok(after.issues.some(x=>x.code==='NOT_FINALIZED'));
+ assert.ok(!after.issues.some(x=>x.code==='INACTIVE_FACULTY'));
+ m.finalizeCourse(adfa,'2027-28','VTMD 306');
+ assert.equal(m.previewPublication(adfa,'2027-28','VTMD 306').canPublish,true);
+ assert.equal(m.publishCourse(lead,'2027-28','VTMD 306').version,1);
+ assert.equal(m.getState().audit.at(-2).event,'course_finalized');
 });
 
 test('publication validation flags same-year overlaps with another annual Course',()=>{
