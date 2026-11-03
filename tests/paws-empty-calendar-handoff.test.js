@@ -128,7 +128,9 @@ test('failed fixture persistence must not replace existing saved sessions',()=>{
  initial.sessions.push({...row,topic:'Do not lose this edit'});
  const memoryValue=JSON.stringify(initial);
  const storage={getItem:()=>memoryValue,setItem:()=>{throw Error('quota exceeded')},removeItem:()=>{}};
- const loaded=createStore({storage,autoLoadFixture:true}).tables;
- assert.equal(loaded.sessions.length,1);
- assert.equal(loaded.sessions[0].topic,'Do not lose this edit');
+ const store=createStore({storage,autoLoadFixture:true});
+ const loaded=store.tables;
+ assert.ok(loaded.sessions.some(s=>s.id===row.id&&s.topic==='Do not lose this edit'));
+ assert.ok(loaded.sessions.some(s=>s.syntheticFixture==='beta-density-synthetic-v1'),'In-memory synthetic sessions remain visible despite quota error');
+ assert.equal(store.densityStatus().storageOk,false,'Persistence warning is explicit rather than quietly showing an empty Calendar');
 });
