@@ -55,7 +55,7 @@
   list.querySelectorAll('[data-id]').forEach(node=>node.onclick=()=>node.dataset.kind==='requests'?root.PAWS_SWAP?.openDetail(node.dataset.id):adapter.openSession(node.dataset.id));
   list.querySelectorAll('[data-review-issue]').forEach(node=>node.onclick=()=>review(tasks.find(task=>task.issueKey===node.dataset.reviewIssue)));
   list.querySelectorAll('[data-workflow-session]').forEach(node=>node.onclick=()=>root.PAWS_SCHEDULE_BULK_UI?.openTask?.({sessionId:node.dataset.workflowSession,stage:node.dataset.workflowStage}));
-  list.querySelectorAll('[data-office-bulk]').forEach(node=>node.onclick=()=>root.PAWS_SCHEDULE_OFFICE_UI?.open?.(node.dataset.officeBulk));
+  list.querySelectorAll('[data-office-bulk]').forEach(node=>node.onclick=()=>node.dataset.officeBulk==='lab'?root.PAWS_LAB_SCHEDULING?.open?.(undefined,{tab:'bulk'}):root.PAWS_SCHEDULE_OFFICE_UI?.open?.('adfa'));
  }
  async function review(task){
   if(!task?.canReview||reviewBusy||loading)return;
