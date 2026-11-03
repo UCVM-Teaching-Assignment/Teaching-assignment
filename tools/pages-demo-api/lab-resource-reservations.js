@@ -119,6 +119,7 @@ function createLabResourceReservations({store,labService}={}){
   const src=source(uid,p.sessionId,true),prev=state().requests[src.sessionId]||null;
   const proof=receipt(uid,'submit',p);if(proof.old)return copy(proof.old.result);
   if(Number(p.expectedVersion)!==(prev?.version||0))fail('STALE_REVISION','Resource request changed; reload before submitting.');
+  if(prev?.status==='confirmed')fail('RESERVATION_LOCKED','This confirmed horse allocation is locked to preserve its rest history. Request an authorized amendment before changing it.');
   const horse=validCount(p.horseCount,policy().horsePoolSize,'Horse quantity'),
     pet=validCount(p.petProfessorCount,1000,'Pet Professor quantity'),notes=value(p.notes);
   if(notes.length>2000)fail('INVALID_REQUEST','Reserve Notes must be at most 2000 characters.');
@@ -138,6 +139,7 @@ function createLabResourceReservations({store,labService}={}){
   if(!prev)fail('NOT_FOUND','LAB must submit a resource request first.');
   const proof=receipt(uid,'review',p);if(proof.old)return copy(proof.old.result);
   if(Number(p.expectedVersion)!==prev.version)fail('STALE_REVISION','The resource request has changed. Reload.');
+  if(prev.status!=='requested')fail('RESERVATION_LOCKED','Only pending requests may be confirmed or rejected. Confirmed animal allocations require a separately reviewed amendment.');
   if(prev.sourceToken!==src.sourceToken)fail('SOURCE_CHANGED','ADC schedule changed. LAB must resubmit the reservation.');
   if(!['confirm','reject'].includes(p.decision))fail('INVALID_REQUEST','Choose confirm or reject.');
   if(prev.status==='not_required')fail('INVALID_REQUEST','No animal resources were requested.');
