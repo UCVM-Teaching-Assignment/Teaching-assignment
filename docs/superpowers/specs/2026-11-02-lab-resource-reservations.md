@@ -31,6 +31,8 @@ LAB time is inherited from ADC's approved date/start/end. Any changed source req
 
 LAB staff request horses by quantity and enter Reserve Notes. The reviewer assigns specific synthetic Horse IDs. Requests are not confirmed animal allocations. Requests that exceed currently unallocated horse numbers can be submitted with a warning, but confirmation rejects unavailable, duplicate or unknown IDs.
 
+Confirmed allocations are immutable in this Testing version so LAB edits cannot erase 24-hour rest records. A later production release needs a separately authorized amendment/cancellation process retaining history. Source changes after confirmation are flagged for review; staff cannot silently rebook.
+
 Pet Professors are a pooled resource category. For example, LAB A requests 18 and LAB B requests 14 within 48h: demand is 32, and both LABs show a warning on refresh. Neither request is silently rejected.
 
 When both quantities are 0, submission records Not required. Otherwise Reserve Notes must be provided. Request versions prevent lost updates; unique request IDs prevent repeated writes.
