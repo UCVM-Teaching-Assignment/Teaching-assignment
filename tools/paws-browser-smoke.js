@@ -102,6 +102,43 @@ async function main(){
      else console.log('ok   homepage Change Log opens as a large window, shows PR updates and closes');
    }
    if(check.page==='index.html'&&check.uid==='uid-developer'&&ok){
+     // Multi-Week Comparison: independently selected Fall/Winter weeks, stacked and closable.
+     const result=await cdp.send('Runtime.evaluate',{expression:"(async function verifyMultiWeekComparison(){\n"+
+       " try{\n"+
+       " const toggle=document.getElementById('cal-compare-btn');\n"+
+       " if(!toggle)return {ok:false,error:'Compare Weeks button missing'};\n"+
+       " toggle.click();\n"+
+       " document.querySelectorAll('[data-week-remove]').forEach(button=>button.click());\n"+
+       " function add(semester,week){\n"+
+       "   const term=document.getElementById('comparison-semester'),number=document.getElementById('comparison-week');\n"+
+       "   if(!term||!number)return false;\n"+
+       "   term.value=semester;term.dispatchEvent(new Event('change'));\n"+
+       "   number.value=String(week);number.dispatchEvent(new Event('change'));\n"+
+       "   document.getElementById('comparison-add-week')?.click();return true;\n"+
+       " }\n"+
+       " if(!add('fall',1)||!add('winter',5))return {ok:false,error:'Add Week controls missing'};\n"+
+       " let keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
+       " if(keys.join(',')!=='fall:1,winter:5')return {ok:false,error:'Fall/Winter periods not stacked in order',keys};\n"+
+       " for(let i=0;i<60;i++){\n"+
+       "  const cards=[...document.querySelectorAll('[data-comparison-period]')];\n"+
+       "  if(cards.every(card=>card.querySelector('.tg-body')||card.querySelector('.multi-week-error')))break;\n"+
+       "  await new Promise(resolve=>setTimeout(resolve,100));\n"+
+       " }\n"+
+       " const cards=[...document.querySelectorAll('[data-comparison-period]')];\n"+
+       " if(!cards.every(card=>card.querySelector('.tg-body')))return {ok:false,error:'Weekly grid missing after loading',statuses:cards.map(x=>x.textContent.slice(0,130))};\n"+
+       " const close=document.querySelector('[data-week-remove=\"fall:1\"]');\n"+
+       " if(!close||!close.getAttribute('aria-label').includes('Fall Week 1'))return {ok:false,error:'Close X missing'};\n"+
+       " close.click();keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
+       " if(keys.join(',')!=='winter:5')return {ok:false,error:'Closing one week removed the wrong card',keys};\n"+
+       " document.getElementById('cal-week-btn').click();\n"+
+       " if(document.getElementById('cal-compare-btn').classList.contains('active'))return {ok:false,error:'Week view not restored'};\n"+
+       " return {ok:true};\n"+
+       " }catch(error){return {ok:false,error:String(error?.message||error)}}\n"+
+       "})()",awaitPromise:true,returnByValue:true});
+     if(!result.result?.value?.ok)problems.push(label+': Multi-Week Comparison browser check failed: '+JSON.stringify(result.result?.value||result.exceptionDetails||'no result').slice(0,500));
+     else console.log('ok   Multi-Week Comparison stacks Fall W1 / Winter W5; removing one week preserves the other');
+   }
+   if(check.page==='index.html'&&check.uid==='uid-developer'&&ok){
      // Real staged-browser test: approve a seeded ADFA SWAP with synthetic data.
      const executed=await cdp.send('Runtime.evaluate',{expression:"(async function demoApprovalBrowserProbe(){\n  try{\n    const api=window.UCVM_PAWS_DATA,swap=window.PAWS_SWAP;\n    if(!api?.swapQueue||!swap?.openDetail)return{ok:false,error:'SWAP client not ready'};\n    const queue=await api.swapQueue();\n    const request=(queue.requests||[]).find(r=>r.nextStage==='adfa'&&r.status==='pending'&&r.changes?.replacementCandidateKey);\n    if(!request)return{ok:false,error:'No seeded final ADFA request'};\n    await swap.openDetail(request.requestId);\n    const approve=document.querySelector('.sql-swap-approval-dialog [data-decision=\"approve\"]');\n    if(!approve)return{ok:false,error:'Approve button not rendered'};\n    if(approve.disabled)return{ok:false,error:'Approve disabled',preview:document.querySelector('[data-approval-doe]')?.innerText||''};\n    const reason=document.querySelector('.sql-swap-approval-dialog [data-override]');\n    if(reason)reason.value='Synthetic conflict reviewed by Developer';\n    approve.click();\n    const confirm=document.querySelector('.sql-swap-approval-dialog [data-confirm-action]');\n    if(!confirm)return{ok:false,error:'Approval confirmation not shown'};\n    confirm.click();\n    for(let i=0;i<50;i++){\n      await new Promise(resolve=>setTimeout(resolve,150));\n      const detail=await api.swapDetail(request.requestId);\n      if(detail.request?.status==='applied')return{ok:true,status:'applied',requestId:request.requestId};\n    }\n    return{ok:false,error:'Approval did not reach applied state'};\n  }catch(error){return{ok:false,error:String(error?.message||error)};}\n})()",awaitPromise:true,returnByValue:true});
      const result=executed.result?.value;
