@@ -4,13 +4,16 @@
     {
       "date": "2026-11-03",
       "pr": 107,
-      "title": "Multi-Week Comparison in the Testing Calendar",
+      "title": "Testing Calendar comparison, empty start and team Work Queues",
       "changes": [
         "Added a Testing-only Compare Weeks view where users can add any available Spring, Fall or Winter week, including nonconsecutive Fall and Winter weeks, and stack calendars vertically.",
         "Each selected week has its own top-right X to remove only that week; the normal Week grid layout, session details and calendar colors are reused.",
         "Fetches authorized session data independently for each selected week and keeps results scoped to the current Demo identity.",
         "Existing Year, Course, Activity type, Search and My Timetable filters apply; comparison does not export or bulk-edit a different calendar range.",
-        "Added unit and staged browser tests for Fall Week 1 versus Winter Week 5, repeat selection, unlimited card count, loading and individual removal. The feature is browser-local Testing only, with no Beta, SQL or DOE changes."
+        "Added unit and staged browser tests for Fall Week 1 versus Winter Week 5, repeat selection, unlimited card count, loading and individual removal. The feature is browser-local Testing only, with no Beta, SQL or DOE changes.",
+        "Removed automatically generated starter Course Sessions from the browser-local Calendar and disabled the default University Closure overlay; existing saved starter rows are removed by exact fixture ID while preserving user-created imports and drafts.",
+        "ADC starts with a Schedule Workflow import task; after an ADC draft or publication, role-scoped outstanding tasks route LAB to Lab Scheduling and ADFAD to its Faculty assignment Work Queue.",
+        "Unified Work Queue shortcuts for ADC, LAB, ADFAD and other authorized Demo roles with live task counts and status; no real university data or production permissions are changed."
       ]
     },
     {
