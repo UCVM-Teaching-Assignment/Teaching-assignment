@@ -16,6 +16,7 @@ function fixture(){
  const doc={activeElement:launcher,getElementById(id){return ids[id]||null;}};
  const tabs=['ccc','visc','hicc'].map(kind=>({
   dataset:{teachingTab:kind},tabIndex:-1,attributes:{},isConnected:true,
+  addEventListener(k,fn){events['tab:'+kind+':'+k]=fn;},
   setAttribute(k,v){this.attributes[k]=String(v);},
   focus(){doc.activeElement=this;},
   getClientRects(){return [1];},
