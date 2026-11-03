@@ -218,7 +218,7 @@
     const summary=preview?'<div class="paws-my-panel">'+
       '<p><strong>Draft: '+E(preview.pending)+'</strong> · Eligible: '+E(preview.eligibleIds.length)+' · Needs individual review: '+E(preview.skipped.length)+' · Already confirmed: '+E(preview.alreadyConfirmed)+'</p>'+
       (!archived?'<button type="button" data-my-action="confirm-all-roles" '+(preview.eligibleIds.length?'':'disabled')+
-        '>Confirm All Eligible Drafts ('+E(preview.eligibleIds.length)+')</button>':'')+
+        '>Confirm All Eligible Drafts ('+E(preview.eligibleIds.length)+')'+(root.UCVM_TESTING_ONLY?.pendingBadge?.()||'')+'</button>':'')+
       (preview.partialYear?'<p class="paws-my-muted">Includes '+E(preview.partialYear)+' prior partial-year appointment(s). Clicking bulk confirm records ADFAD approval for their renewed dates.</p>':'')+
       (preview.skipped.length?'<p class="paws-my-muted">Ineligible, missing or future-start appointments are skipped; review them individually. No personnel eligibility rules are bypassed.</p>':'')+
       '<p class="paws-my-muted">Applies to all eligible Draft roles in '+E(selectedYear)+', including rows beyond the 200 visible below. Browser-local Demo only.</p></div>':'';
