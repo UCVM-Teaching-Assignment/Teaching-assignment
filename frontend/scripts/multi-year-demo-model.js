@@ -480,5 +480,16 @@
     if(sampleYear2027&&!state.years['2027-28'])seed2027Sample({uid:'demo-synthetic-fixture',role:'owner'});
     return Object.freeze({getState,createYear,seed2027Sample,addCourse,previewRollover,rolloverCourse,setYearPhase,previewPublication,compareYears,updateCatalog,addSession,editAssignment,resolveFacultyIssue,finalizeCourse,publishCourse,approvePolicy,publishDoe,setOverride,getTeaching,getCalendar,getDoe,getWorkingDoe,getConflicts,addAfc,retireYear,restoreYear,copyHistorical,confirmRole,previewRoleConfirmations,confirmRolesBulk,setPreferredYear,getPreferredYear,reset,currentYear});
   }
-  return Object.freeze({createEngine,STORAGE_KEY,currentYear,validateYear});
+  // UX-04: a missing DOE value is shown as a dash, never as 0.00; unknown
+  // session credit is reported as not recorded rather than counted as 0.
+  const knownNumber=value=>value===null||value===undefined||value===''||!Number.isFinite(Number(value))?null:Number(value);
+  function formatDoeNumber(value){const n=knownNumber(value);return n===null?'—':n.toFixed(2);}
+  function sessionDoeCredit(assignments){
+    const values=(Array.isArray(assignments)?assignments:[]).map(a=>knownNumber(a&&a.doeCredit));
+    const known=values.filter(v=>v!==null);
+    if(!known.length)return 'Not recorded';
+    const total=known.reduce((n,v)=>n+v,0).toFixed(2);
+    return known.length===values.length?total:total+' + not recorded';
+  }
+  return Object.freeze({createEngine,STORAGE_KEY,currentYear,validateYear,formatDoeNumber,sessionDoeCredit});
 });

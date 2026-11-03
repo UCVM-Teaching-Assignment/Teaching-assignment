@@ -190,6 +190,19 @@ function formatDoe(value) {
   return parsed === null ? 'DOE unavailable' : `${parsed.toFixed(2)}%`;
 }
 
+// UX-04: an absent role DOE piece is not an error. Say what is absent; keep a real 0.
+const ROLE_DOE_ABSENT = { mapped: 'Not mapped', override: 'No override', calculated: 'Not calculated', effective: 'Needs Review' };
+function formatRoleDoe(value, kind) {
+  const parsed = number(value);
+  return parsed === null ? (ROLE_DOE_ABSENT[kind] || 'DOE unavailable') : `${parsed.toFixed(2)}%`;
+}
+
+// UX-04: hours are sums of decimals; show at most two decimals, and missing as a dash.
+function formatHours(value) {
+  const parsed = number(value);
+  return parsed === null ? '—' : String(Math.round(parsed * 100) / 100);
+}
+
 
 function campusToday(now = new Date()) {
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US', {timeZone:'America/Edmonton',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now).map(part=>[part.type,part.value]));
@@ -255,5 +268,5 @@ function lookupMetricsText(facultyId,metrics,today=campusToday()) {
   return count+' upcoming AFC'+leave+' · Remaining DOE: '+remaining;
 }
 
-  return { groupTeachingAssignments, teachingDoeEvidence, effectiveRoleDoe, summarizeDoe, formatDoe, normalizeCurriculumYear, campusToday, lookupUpcomingAfc, lookupRemainingDoe, fetchLookupMetrics, lookupMetricsText };
+  return { groupTeachingAssignments, teachingDoeEvidence, effectiveRoleDoe, summarizeDoe, formatDoe, formatRoleDoe, formatHours, normalizeCurriculumYear, campusToday, lookupUpcomingAfc, lookupRemainingDoe, fetchLookupMetrics, lookupMetricsText };
 });
