@@ -10,7 +10,8 @@
         "Tracks 38 synthetic horses individually; Owner/Developer confirmation rejects assignments that overlap or violate a minimum 24-hour rest window after previous use.",
         "Shows an in-app warning when requested/confirmed Pet Professor demand exceeds 30 within a rolling 48 hours; the warning does not block requests.",
         "Added per-Course authorized LAB request history, version/replay checks, synthetic confirmation/rejection and adjustable resource settings.",
-        "No real resource bookings, staff notifications, production animal records, canonical timetable or DOE changes; functionality is Testing-only."
+        "No real resource bookings, staff notifications, production animal records, canonical timetable or DOE changes; functionality is Testing-only.",
+        "New ADC-published LAB Sessions must submit Reserve Notes or explicitly choose no animals before Single Activity or Bulk CSV group publication; legacy sessions remain compatible."
       ]
     },
     {
