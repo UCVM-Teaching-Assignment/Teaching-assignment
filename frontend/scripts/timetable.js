@@ -428,7 +428,7 @@
   window.PAWS_SWAP?.configure({getUser:()=>currentUser,onChanged:async()=>{
     invalidateAllSessions();await Promise.all([refreshSessionScope(),window.PAWS_SWAP.refreshPending()]);render();window.PAWS_TASKS?.refresh();
   }});
-  window.PAWS_TASKS?.configure({hasUser:()=>Boolean(currentUser),identity:()=>currentUser?.uid||'',academicYear:()=>listAcademicYear,allSessions:()=>ensureAllSessions({refresh:true,notify:false}),disposition:calendarTimingDisposition,reason:unpositionedReason,openSession:async id=>{
+  window.PAWS_TASKS?.configure({hasUser:()=>Boolean(currentUser),identity:()=>currentUser?.uid||'',role:()=>currentUser?.role||'',academicYear:()=>listAcademicYear,allSessions:()=>ensureAllSessions({refresh:true,notify:false}),disposition:calendarTimingDisposition,reason:unpositionedReason,openSession:async id=>{
     const ownerUid=currentUser?.uid;
     let rows;
     try{rows=await ensureAllSessions({refresh:true,notify:false});}
