@@ -9,6 +9,7 @@
  const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[ch]));
  const ADMINS=['developer','owner'],ADC=['adc','developer','owner'],ADFAD=['developer','owner','adfa_general','adfa_regular','administrator','admin'];
  const roleAllowed=(role,which)=>which==='rules'?ADMINS.includes(role):which==='bulk'?ADC.includes(role):ADC.includes(role)||ADFAD.includes(role);
+ const pendingBadge=()=>root?.UCVM_TESTING_ONLY?.pendingBadge?.()||'';
  let bulkDialog=null,rulesDialog=null,taskDialog=null,bulkText='',preview=null,parsedRows=null,batchId='',view=null,notice='',busy=false;
  function identity(){
   const demo=root?.UCVM_PAWS_DEMO_API,u=root?.firebase?.auth?.().currentUser;
@@ -42,7 +43,7 @@
    const link=root.document.createElement('link');link.rel='stylesheet';link.href='schedule-workflow.css';link.dataset.stageStyle='1';root.document.head.append(link);
   }
  }
- const heading=(name,close)=>'<header class="paws-stage-header"><h2>'+esc(name)+'</h2><button type="button" data-close-stage="'+esc(close)+'">Close</button></header>';
+ const heading=(name,close)=>'<header class="paws-stage-header"><h2>'+esc(name)+pendingBadge()+'</h2><button type="button" data-close-stage="'+esc(close)+'">Close</button></header>';
  function newDialog(title){
   styles();
   const d=root.document.createElement('dialog');d.className='paws-stage-dialog';
@@ -225,13 +226,13 @@
   if(!dialog||!state)return;
   const adc=dialog.querySelector('[data-stage-draft-form]')?.closest('section');
   if(adc){
-   const action=root.document.createElement('button');action.type='button';action.className='paws-stage-bulk-open';action.textContent='Bulk Import CSV / Excel Paste';
+   const action=root.document.createElement('button');action.type='button';action.className='paws-stage-bulk-open';action.innerHTML='Bulk Import CSV / Excel Paste'+pendingBadge();
    action.onclick=openBulk;adc.insertBefore(action,adc.querySelector('[data-stage-draft-form]'));
   }
   const tasks=(state.workItems||[]),holder=dialog.querySelector('.paws-stage-body');
   if(tasks.length&&holder){
    const section=root.document.createElement('section');section.className='paws-stage-card';
-   section.innerHTML='<h3>ADC Work Queue ('+tasks.length+')</h3>'+
+   section.innerHTML='<h3>ADC Work Queue ('+tasks.length+')'+pendingBadge()+'</h3>'+
     '<div class="paws-stage-list">'+tasks.slice(0,100).map(t=>
      '<button type="button" class="paws-task-open-row" data-stage-task-id="'+esc(t.sessionId)+'" data-stage-task-role="'+esc(t.stage)+'">'+
      '<strong>'+esc(t.stage.toUpperCase())+'</strong> '+esc(t.courseCode)+' · '+esc(t.date)+' · '+esc(t.missing.join(', '))+
@@ -244,7 +245,7 @@
   if(!root?.document||!root.UCVM_PAWS_DEMO_API)return;
   const host=root.document.querySelector('.timetable-top-actions');if(!host)return;
   let button=root.document.getElementById('paws-developer-dashboard-open');
-  if(!button){button=root.document.createElement('button');button.type='button';button.id='paws-developer-dashboard-open';button.className='masthead-link';button.textContent='Developer Dashboard';button.onclick=openRules;host.prepend(button);}
+  if(!button){button=root.document.createElement('button');button.type='button';button.id='paws-developer-dashboard-open';button.className='masthead-link';button.innerHTML='Developer Dashboard'+pendingBadge();button.onclick=openRules;host.prepend(button);}
   button.hidden=!identity()||!ADMINS.includes(identity().role);
   if(rulesDialog?.open&&button.hidden)rulesDialog.close();
  }
