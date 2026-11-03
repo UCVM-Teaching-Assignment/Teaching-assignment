@@ -15,7 +15,8 @@
         "ADFAD can view and download work immediately after ADC publish; LAB Sessions show Waiting for LAB until operational group publication is complete.",
         "Role-based office scopes restrict LAB roster access; public Calendar displays published rooms/groups and confirmed instructors, never private student identities.",
         "Developer Dashboard keeps editable versioned ADC import rules and optional-field task ownership; four core publication fields stay required.",
-        "All changes remain browser-local PAWS Testing Demo only; PAWS Beta, production SQL and real rosters are unchanged."
+        "All changes remain browser-local PAWS Testing Demo only; PAWS Beta, production SQL and real rosters are unchanged.",
+        "Orange T badges now identify the new ADC schedule workflow, LAB scheduling, LAB/ADFAD work queues, Developer rule controls, CSV bulk imports and workflow tasks while Testing acceptance is pending."
       ]
     },
     {
