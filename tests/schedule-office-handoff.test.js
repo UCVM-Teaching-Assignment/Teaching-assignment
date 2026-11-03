@@ -168,9 +168,11 @@ test('LAB bulk import allows simultaneous stations in separate subspaces of one 
 });
 
 test('LAB export includes existing sibling LAB stations in same ADC-published scope',()=>{
- const f=fixture(),s=publish(f);reserveNone(f,s);
+ const f=fixture(),s=publish(f);
  f.tables.sessions.push({id:'legacy-lab-sibling',academicYear:'2026-27',curriculumYear:'3',courseCode:'VETM 505',date:'2026-11-03',
   sessionType:'LAB',topic:'Legacy skills',room:null,startTime:'08:30:00',endTime:'10:30:00',assignments:[]});
+ // Submit the reservation after both stations exist so the source snapshot is current.
+ reserveNone(f,s);
  const exported=f.workflow.officeExport('lab','lab').rows;
  assert.deepEqual(exported.map(x=>x.sessionId).sort(),[s.id,'legacy-lab-sibling'].sort());
  const filled=exported.map((row,i)=>labRow([row],{
