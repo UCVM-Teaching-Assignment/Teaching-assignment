@@ -11,6 +11,7 @@
  const ADFAD=['adfa_general','adfa_regular','administrator','admin','developer','owner'];
  const ADC=['adc','developer','owner'];
  const can=(role,office)=>office==='lab'?LAB.includes(role):office==='adfa'?ADFAD.includes(role):ADC.includes(role);
+ const pendingBadge=()=>root?.UCVM_TESTING_ONLY?.pendingBadge?.()||'';
  let dialog=null,office='',exported=[],allRows=[],editor='',preview=null,parsed=null,batchId='',busy=false,notice='',focusId='',faculty=[];
  function identity(){
   const demo=root?.UCVM_PAWS_DEMO_API,user=root?.firebase?.auth?.().currentUser;
@@ -51,7 +52,7 @@
      '<p class="paws-office-error"><strong>Row '+esc(e.rowNumber)+' · '+esc(e.code)+'</strong>: '+esc(e.message)+
      (e.issues?.length?'<br>'+esc(e.issues.join('; ')):'')+'</p>').join('')+'</div>':''):'';
   dialog.innerHTML='<header class="paws-stage-header"><h2>'+esc(isLab?'LAB Work Queue · Bulk Allocations':'ADFAD Work Queue · Bulk Faculty Assignments')+
-   '</h2><button type="button" data-office-close>Close</button></header>'+
+   pendingBadge()+'</h2><button type="button" data-office-close>Close</button></header>'+
    '<div class="paws-stage-body"><p class="paws-stage-banner">Synthetic Testing Demo. This is an office task queue, not ADC Schedule Workflow. Do not upload real student names, UCIDs or private employee records.</p>'+
    '<p>'+esc(instructions)+'</p>'+(notice?'<p class="paws-stage-status" role="status">'+esc(notice)+'</p>':'')+
    '<div class="paws-stage-flow"><span>Pending '+esc(isLab?'LAB':'ADFAD')+' Sessions: <strong>'+esc(new Set(exported.map(x=>x.sessionId)).size)+'</strong></span>'+
@@ -136,7 +137,7 @@
   for(const name of ['lab','adfa']){
    const id='paws-office-'+name+'-queue';
    let b=root.document.getElementById(id);
-   if(!b){b=root.document.createElement('button');b.id=id;b.className='masthead-link';b.type='button';b.textContent=name==='lab'?'LAB Work Queue':'ADFAD Work Queue';b.onclick=()=>open(name);host.prepend(b)}
+   if(!b){b=root.document.createElement('button');b.id=id;b.className='masthead-link';b.type='button';b.innerHTML=(name==='lab'?'LAB Work Queue':'ADFAD Work Queue')+pendingBadge();b.onclick=()=>open(name);host.prepend(b)}
    b.hidden=!user||!can(user.role,name);
   }
   if(dialog?.open&&(!user||!can(user.role,office)))dialog.close();
