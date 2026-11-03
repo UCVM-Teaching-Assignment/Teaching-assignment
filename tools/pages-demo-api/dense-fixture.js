@@ -110,9 +110,11 @@ function clinicDates() {
 function makeCccActivity(index, faculty, dates, locum) {
   const date = dates[index % dates.length];
   const isAm = (Math.floor(index / dates.length) + index) % 2 === 0;
-  const startTime = isAm ? '08:30' : '13:00', endTime = isAm ? '12:00' : '16:30';
-  const shift = isAm ? 'AM' : 'PM';
   const day = Math.floor((Date.parse(date + 'T00:00:00Z') - Date.parse('2026-05-04T00:00:00Z')) / 86400000);
+  const fullDayRotation = Math.floor(day / 28) % 3 === 0 && index % 7 === 2;
+  const startTime = fullDayRotation ? '08:30' : isAm ? '08:30' : '13:00';
+  const endTime = fullDayRotation ? '16:30' : isAm ? '12:00' : '16:30';
+  const shift = fullDayRotation ? 'Full day' : isAm ? 'AM' : 'PM';
   const block = 'Block ' + (1 + Math.floor(day / 28) % 13);
   const person = faculty[(index * 5 + Math.floor(day / 7)) % faculty.length];
   const id = uuidFor('dense-ccc:' + ACADEMIC_YEAR + ':' + index);
@@ -120,7 +122,7 @@ function makeCccActivity(index, faculty, dates, locum) {
     activityId: id, academicYear: ACADEMIC_YEAR,
     facultyKey: locum ? null : person.facultyId,
     facultyDisplayName: locum ? 'Locum' : person.displayName,
-    category: 'ccc', label: 'CCC - ' + shift + ' half day',
+    category: 'ccc', label: 'CCC - ' + shift + (fullDayRotation ? ' (rotation)' : ' half day'),
     startDate: date, endDate: date, courseCode: 'CCC',
     blockLabel: block + ' - ' + shift + ((Math.floor(day / 28) % 3) === 0 ? ' (4th Year Rotation)' : ''),
     staffingKind: locum ? 'unassigned' : 'assigned',
