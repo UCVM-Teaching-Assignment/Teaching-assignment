@@ -165,6 +165,44 @@
   function mountTimetable() {
     const rerender = () => { try { root.UCVM_TIMETABLE_TESTING_HOOKS && root.UCVM_TIMETABLE_TESTING_HOOKS.render(); } catch (_) {} };
 
+    // Optional density fixture: PR #107 intentionally keeps a fresh Calendar
+    // empty until ADC imports/creates sessions. The demo loader is opt-in and
+    // fills only gaps, preserving manually created/edited browser-local data.
+    const toolbar = doc.querySelector('.cal-toolbar-right');
+    if (toolbar && !$('testing-only-load-density-btn')) {
+      const button = el('<button class="fbar-reset hidden" id="testing-only-load-density-btn" type="button">Load Test Data' + badge() + '</button>');
+      toolbar.appendChild(button);
+      const allowed = user => {
+        const role = roleOf(user);
+        button.classList.toggle('hidden', !(ADMIN_ROLES.has(role) || role === 'adc'));
+      };
+      root.addEventListener('ucvm-timetable-user', event => allowed(event.detail && event.detail.user));
+      allowed(root.UCVM_TIMETABLE_TESTING_HOOKS?.currentUser?.());
+      button.addEventListener('click', () => {
+        const user = root.UCVM_TIMETABLE_TESTING_HOOKS?.currentUser?.();
+        if (!(ADMIN_ROLES.has(roleOf(user)) || roleOf(user) === 'adc')) return;
+        const demo = root.UCVM_PAWS_DEMO_API;
+        if (!demo?.testingOnly?.loadDenseCalendar) {
+          toast('Synthetic data fixture is not available in this build.', true); return;
+        }
+        if (!root.confirm('Load a high-density SYNTHETIC timetable (~1,937 Course Sessions and ~413 CCC staffing slots)? Existing browser-local edits are preserved. No real Beta records are used.')) return;
+        try {
+          const result = demo.testingOnly.loadDenseCalendar(root.firebase?.auth?.().currentUser?.uid || '');
+          if (!result.addedSessions && !result.addedCCC) {
+            toast('High-density timetable is already loaded.'); return;
+          }
+          // The Demo store intentionally supports memory-only fallback on quota
+          // errors. Never claim data was saved or reload into data loss.
+          const saved = JSON.parse(root.localStorage.getItem('ucvm-pages-demo-paws-v1') || 'null');
+          if (!saved || !Array.isArray(saved.sessions) || !Array.isArray(saved.activities)
+              || saved.sessions.length < result.totalSessions || saved.activities.length < result.totalCCC) {
+            throw new Error('Browser storage could not persist the fixture; try freeing site storage before reloading.');
+          }
+          root.location.reload();
+        } catch (error) { toast(error.message || String(error), true); }
+      });
+    }
+
     // Semester "All"
     const semesterRow = $('semester-btn-row');
     if (semesterRow && !semesterRow.querySelector('.testing-only-semester-all')) {
