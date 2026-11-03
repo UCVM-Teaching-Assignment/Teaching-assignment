@@ -3,6 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { buildTables } = require('../tools/pages-demo-api/store.js');
 const { applyDenseFixture, COURSE_TARGET, CCC_TARGET, CCC_LOCUM_TARGET, WEEKS, weekOf } = require('../tools/pages-demo-api/dense-fixture.js');
+const { sessionRows } = require('../tools/pages-demo-api/dataset.js');
+const { createCccScheduleRepository } = require('../tools/pages-demo-api/repos/calendar.js');
 
 function countByWeek(tables, termName, week) {
   return tables.sessions.filter(row => row.academicYear === '2026-27'
@@ -45,6 +47,7 @@ test('Beta-density fixture matches synthetic weekly profile and preserves curren
 
 test('fixture is idempotent and does not overwrite manually edited sessions or CCC activities', () => {
   const t = buildTables();
+  if (!t.sessions.length) t.sessions.push(...sessionRows(t.courses, t.faculty).slice(0, 2)); // PR #107 starts empty
   const original = t.sessions[0];
   const edit = { ...original, topic: 'Staff-edited test topic', room: 'Staff test room' };
   t.sessions[0] = edit;
@@ -60,6 +63,15 @@ test('fixture is idempotent and does not overwrite manually edited sessions or C
   assert.equal(t.sessions.find(row => row.id === edit.id).topic, edit.topic);
   assert.equal(t.sessions.find(row => row.id === edit.id).room, edit.room);
   assert.equal(t.activities.find(row => row.activityId === ccc.activityId).label, ccc.label);
+});
+
+test('CCC schedule API receives Beta-shaped half-day rows and full synthetic coverage', async () => {
+  const t = buildTables();
+  applyDenseFixture(t);
+  const result = await createCccScheduleRepository({ tables: t }).list({ academicYear: '2026-27' });
+  assert.equal(result.entries.length, CCC_TARGET);
+  assert.ok(result.entries.every(row => row.date && row.endDate && row.blockLabel && row.courseCode === 'CCC' && typeof row.facultyName === 'string' && typeof row.halfDay === 'boolean'));
+  assert.ok(result.entries.every(row => row.halfDay === true));
 });
 
 test('empty calendar baseline from PR #107 can load complete dense fixture', () => {
