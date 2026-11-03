@@ -45,7 +45,7 @@
    (item.status==='waiting_for_lab'?' · Waiting for LAB':'')+'</small></button>');
   const offices=[...new Set(workflowTasks.map(x=>x.stage).filter(x=>x==='lab'||x==='adfa'))];
   const bulkActions=offices.length?'<div class="paws-task-bulk-actions">'+offices.map(office=>
-   '<button type="button" data-office-bulk="'+esc(office)+'">Download / Import '+esc(office.toUpperCase())+' template'+pendingBadge()+'</button>').join('')+'</div>':'';
+   '<button type="button" data-office-bulk="'+esc(office)+'">'+(office==='lab'?'Open Lab Scheduling · Bulk CSV':'Download / Import ADFAD template')+pendingBadge()+'</button>').join('')+'</div>':'';
   const messages=errors.map(message=>`<p role="alert">${esc(message)}</p>`).join('')+(notice?`<p role="status">${esc(notice)}</p>`:'');
   const list=panel.querySelector('.workspace-task-list');
   list.innerHTML=messages+bulkActions+(errors.length?'<button type="button" data-retry>Retry</button>':'')+issueCards.join('')+workflowCards.join('')+otherCards.join('')+(!loading&&!errors.length&&!issueCards.length&&!workflowCards.length&&!otherCards.length?'<p class="workspace-empty">No matching tasks in your authorized scope.</p>':'')+(nextCursor&&mode!=='requests'?`<button type="button" class="workspace-task-more" data-task-more${loading?' disabled':''}>Load more issues</button>`:'');
