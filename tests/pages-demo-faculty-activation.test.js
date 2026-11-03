@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createStore } = require('../tools/pages-demo-api/store.js');
+const { seedDemoCalendar } = require('./helpers/seed-demo-calendar.js');
 const { createDemoRuntime } = require('../tools/pages-demo-api/runtime.js');
 const { createSessionRepository } = require('../tools/pages-demo-api/repos/core.js');
 const { createTeachingAssignmentRepository } = require('../tools/pages-demo-api/repos/ta.js');
@@ -13,9 +14,10 @@ const { createFacultyAdminRepository } = require('../tools/pages-demo-api/repos/
 
 const START = '2027-06-01';
 const today = '2026-11-01T12:00:00.000Z';
-function setup() {
+function setup({withTeachingFixture=false}={}) {
   let instant = today;
   const store = createStore({now:()=>new Date(instant)});
+  if(withTeachingFixture)seedDemoCalendar(store);
   const admin = store.tables.users.find(u => u.baseRole === 'developer' || u.baseRole === 'owner' || u.baseRole === 'adfa_general');
   const ordinary = store.tables.users.find(u => u.baseRole === 'faculty' || u.baseRole === 'hicc');
   assert.ok(admin, 'Synthetic administrator exists');
@@ -95,7 +97,7 @@ test('activation dates validate strictly and manual deactivation survives the sc
 });
 
 test('future Faculty may be scheduled only on or after their start; rescheduling fails before it',async()=>{
-  const s=setup();const future=await create(s);
+  const s=setup({withTeachingFixture:true});const future=await create(s);
   const repo=createSessionRepository(s.store);
   const course=s.store.tables.courses.find(c=>c.curriculumYear===1);
   assert.ok(course);
@@ -111,7 +113,7 @@ test('future Faculty may be scheduled only on or after their start; rescheduling
 });
 
 test('teaching assignment draft/finalization also reject pre-start faculty ID',async()=>{
-  const s=setup(); const future=await create(s);const repo=createTeachingAssignmentRepository(s.store);
+  const s=setup({withTeachingFixture:true}); const future=await create(s);const repo=createTeachingAssignmentRepository(s.store);
   const packageRows=await repo.listWorkQueue({academicYear:s.store.tables.academicYear,role:'developer'});
   const draft=packageRows.find(r=>r.status==='draft');
   assert.ok(draft);

@@ -24,7 +24,7 @@
     ['2027-03-29', 'Easter Monday'], ['2027-05-24', 'Victoria Day']
   ];
 
-  const state = { showCcc: true, showClosures: true, allSemesters: false, campus: '' };
+  const state = { showCcc: true, showClosures: false, allSemesters: false, campus: '' };
 
   // ---------------------------------------------------------------- helpers
   const $ = id => doc.getElementById(id);
@@ -223,7 +223,7 @@
     if (reset && !$('testing-only-filter-item')) {
       const item = el(`<div class="fbar-item" id="testing-only-filter-item"><span class="fbar-label">Show${badge()}</span>
         <div class="testing-only-row" style="margin:0"><label class="testing-only-check"><input type="checkbox" id="testing-only-show-ccc" checked> CCC</label>
-        <label class="testing-only-check"><input type="checkbox" id="testing-only-show-closures" checked> University Closures</label></div></div>`);
+        <label class="testing-only-check"><input type="checkbox" id="testing-only-show-closures"> University Closures</label></div></div>`);
       reset.parentNode.insertBefore(item, reset);
       $('testing-only-show-ccc').addEventListener('change', e => { state.showCcc = e.target.checked; rerender(); });
       $('testing-only-show-closures').addEventListener('change', e => { state.showClosures = e.target.checked; rerender(); });
@@ -255,7 +255,7 @@
     const applyUser = user => {
       const role = roleOf(user);
       $('testing-only-approvals-btn')?.classList.toggle('hidden', !(ADMIN_ROLES.has(role) || FACULTY_ROLES.has(role) || role === 'adc' || role === 'lab'));
-      $('testing-only-work-queue-btn')?.classList.toggle('hidden', !ADMIN_ROLES.has(role));
+      $('testing-only-work-queue-btn')?.classList.toggle('hidden', !(ADMIN_ROLES.has(role)||FACULTY_ROLES.has(role)||role==='adc'||role==='lab'));
       $('testing-only-requests-btn')?.classList.toggle('hidden', !FACULTY_ROLES.has(role));
       if (user) showNotifications(user);
     };
@@ -429,34 +429,12 @@
   }
 
   async function openWorkQueue() {
-    const body = openPanel('Work Queue', { wide: true });
-    try {
-      const [tasks, sessions] = await Promise.all([
-        api(`/api/v1/scheduling-tasks?academicYear=${ACADEMIC_YEAR}`),
-        api(`/api/v1/sessions?start=${YEAR_RANGE.start}&end=${YEAR_RANGE.end}`)
-      ]);
-      const typeById = new Map((sessions.sessions || []).map(s => [s.id, String(s.sessionType || '').toUpperCase()]));
-      const all = (tasks.tasks || []).map(t => ({ ...t, sessionType: typeById.get(t.sessionId) || '' }));
-      const groups = {
-        open: { label: 'Open Work', rows: all.filter(t => String(t.reviewStatus || '').toLowerCase() === 'unreviewed') },
-        adc: { label: 'ADC Work', rows: all.filter(t => t.sessionType !== 'LAB') },
-        lab: { label: 'LAB Work', rows: all.filter(t => t.sessionType === 'LAB') }
-      };
-      let active = 'open';
-      const draw = () => {
-        const g = groups[active];
-        body.innerHTML = `<div class="testing-only-tabs">${Object.entries(groups).map(([key, value]) => `<button type="button" class="testing-only-btn${key === active ? ' active' : ''}" data-group="${key}">${esc(value.label)} (${value.rows.length})</button>`).join('')}</div>
-          <p>Open Work = anything not reviewed yet. ADC Work = timetable issues outside LAB sessions. LAB Work = issues on LAB sessions.</p>
-          ${table([
-            { label: 'Date', value: r => r.date || '' }, { label: 'Course', value: r => r.courseCode || '' }, { label: 'Type', value: r => r.sessionType || '' },
-            { label: 'Faculty', value: r => r.displayName || '' }, { label: 'Issue', value: r => String(r.type || '').replace(/_/g, ' ') },
-            { label: 'Severity', html: r => pill(r.severity || '', /review/i.test(r.severity) ? 'warn' : 'bad') },
-            { label: 'Status', html: r => pill(r.reviewStatus || '', /unreviewed/i.test(r.reviewStatus) ? 'warn' : 'good') }
-          ], g.rows, 'Nothing in this queue.')}`;
-      };
-      body.addEventListener('click', event => { const b = event.target.closest('[data-group]'); if (b) { active = b.dataset.group; draw(); } });
-      draw();
-    } catch (error) { failure(body, error); }
+    // Use the same scoped, actionable queue as the primary masthead control.
+    // The former static ADC/LAB issue-only table omitted office work and showed
+    // unrelated stages to some users, so it is intentionally no longer used.
+    if(root.PAWS_TASKS?.open){root.PAWS_TASKS.open();return;}
+    const body=openPanel('Work Queue',{wide:true});
+    body.innerHTML='<p role="alert">Work Queue is not available. Reload the Testing site.</p>';
   }
 
   async function openRequests() {

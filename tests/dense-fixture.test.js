@@ -94,3 +94,33 @@ test('empty calendar baseline from PR #107 can load complete dense fixture', () 
   assert.equal(result.totalCCC, CCC_TARGET);
   assert.equal(t.sessions.filter(row => row.syntheticFixture).length, COURSE_TARGET);
 });
+test('browser-demo store persists dense fixture through reload and a second load is idempotent',()=>{
+  const { createStore, STORAGE_KEY } = require('../tools/pages-demo-api/store.js');
+  const { createTestingOnly } = require('../tools/pages-demo-api/testing-only.js');
+  const values=new Map(),storage={getItem:key=>values.get(key)||null,setItem:(key,val)=>values.set(key,val),removeItem:key=>values.delete(key)};
+  const original=createStore({storage});
+  assert.equal(original.tables.sessions.length,0,'PR #107 requires an empty Calendar until user loads data');
+  const outcome=createTestingOnly(original).loadDenseCalendar('uid-developer');
+  assert.equal(outcome.totalSessions,COURSE_TARGET);
+  assert.equal(outcome.totalCCC,CCC_TARGET);
+  const serialized=values.get(STORAGE_KEY);
+  assert.equal(typeof serialized,'string','test data must persist to localStorage');
+  assert.ok(serialized.length<4500000,'fixture should fit within common browser localStorage limits');
+  const reloaded=createStore({storage});
+  assert.equal(reloaded.tables.sessions.length,COURSE_TARGET);
+  assert.equal(reloaded.tables.activities.filter(a=>a.category==='ccc').length,CCC_TARGET);
+  const repeat=createTestingOnly(reloaded).loadDenseCalendar('uid-developer');
+  assert.equal(repeat.addedSessions,0);
+  assert.equal(repeat.addedCCC,0);
+  assert.equal(reloaded.tables.sessions.length,COURSE_TARGET);
+  assert.equal(reloaded.tables.activities.filter(a=>a.category==='ccc').length,CCC_TARGET);
+});
+
+test('dense fixture Week 1 matches the actual Calendar semester dates and stays within the academic year',()=>{
+  const t=buildTables();applyDenseFixture(t);
+  const spring=WEEKS.find(x=>x.term==='spring'),winter=WEEKS.find(x=>x.term==='winter');
+  assert.equal(spring.start,'2026-04-27');
+  assert.equal(winter.start,'2027-01-04');
+  assert.ok(t.sessions.every(x=>x.date>='2026-05-01'&&x.date<='2027-04-30'));
+  assert.equal(t.sessions.filter(x=>x.date>='2027-01-04'&&x.date<='2027-01-08').length,37);
+});

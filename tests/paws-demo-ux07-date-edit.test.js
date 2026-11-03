@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createStore } = require('../tools/pages-demo-api/store.js');
+const {seedDemoCalendar}=require('./helpers/seed-demo-calendar.js');
 const { createAfcRequestRepository, createAfcApprovalRepository, requests } = require('../tools/pages-demo-api/repos/afc.js');
 const { createAfcWriteRepository } = require('../tools/pages-demo-api/repos/admin-write.js');
 const { versionOf, requireCoverage } = require('../tools/pages-demo-api/repos/afc-date-change.js');
@@ -11,7 +12,7 @@ const { uuidFor } = require('../tools/pages-demo-api/ids.js');
 
 const range = { startDate: '2026-11-23', endDate: '2026-11-24', workDays: 2, reason: 'vacation', coverage: 'Teaching coverage confirmed' };
 function fixture() {
-  const store = createStore({ now: () => new Date('2026-10-29T18:00:00.000Z') });
+  const store = seedDemoCalendar(createStore({ now: () => new Date('2026-10-29T18:00:00.000Z') }));
   const req = createAfcRequestRepository(store);
   const approval = createAfcApprovalRepository(store);
   const manual = createAfcWriteRepository(store);

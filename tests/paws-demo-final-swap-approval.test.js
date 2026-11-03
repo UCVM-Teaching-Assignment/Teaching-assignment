@@ -2,6 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {createStore}=require('../tools/pages-demo-api/store');
+const {seedDemoCalendar}=require('./helpers/seed-demo-calendar');
 const {createSwapRepository,list}=require('../tools/pages-demo-api/repos/swap');
 const {createDoeEngineRepository,createDoeWorksheetRepository,createDoeAssignmentRepository}=require('../tools/pages-demo-api/repos/doe');
 const {createWorksheetService}=require('../server/src/doe/doe-worksheet-service');
@@ -10,7 +11,7 @@ const {createDoeWorkflowPreviewService}=require('../server/src/doe/doe-workflow-
 const {createSwapApi}=require('../server/src/swap/swap-api');
 
 function setup(){
-  const store=createStore();
+  const store=seedDemoCalendar(createStore());
   const swap=createSwapRepository(store);
   const worksheets=createWorksheetService({repository:createDoeWorksheetRepository(store)});
   const calculations=createDoeCalculationService({repository:createDoeEngineRepository(store)});

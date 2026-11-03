@@ -84,16 +84,10 @@ async function main(){
    if(errors.length)problems.push(`${label}: script error ${errors[0].split('\n')[0]}`);
    if(apiCalls.length)problems.push(`${label}: request reached the real PAWS API ${apiCalls[0]}`);
    if(check.page==='index.html'&&check.uid==='uid-owner'&&ok){
-     // Exercise the multi-year workspace through the actual staged browser.
-     const probe=await cdp.send('Runtime.evaluate',{expression:"(function(){try{\n const launcher=document.getElementById('paws-multi-year-open');\n if(!launcher)return{ok:false,error:'Academic Year launcher missing'};\n launcher.click();\n const dialog=document.getElementById('paws-multi-year-demo');\n if(!dialog?.open)return{ok:false,error:'Academic Year dialog did not open'};\n const select=dialog.querySelector('[data-my-year]');\n if(select?.value!=='2026-27')return{ok:false,error:'Initial 2026-27 year changed'};\n const model=window.PAWS_MULTI_YEAR_DEMO_MODEL;\n const state=JSON.parse(localStorage.getItem(model.STORAGE_KEY)||'null');\n const courses=Object.values(state?.annual?.['2027-28']||{});\n const count=courses.reduce((sum,row)=>sum+row.working.length,0);\n const published=courses.reduce((sum,row)=>sum+(row.published.at(-1)?.sessions.length||0),0);\n if(state?.years?.['2027-28']?.status!=='planning'||courses.length!==3||count!==9||published!==5)\n  return{ok:false,error:'2027-28 sample data missing',courses:courses.length,count,published};\n if(state?.doe?.['2027-28']?.released!==false)return{ok:false,error:'Annual DOE must remain Pending'};\n if(!state.annual['2027-28']['VTMD 304']?.revision)return{ok:false,error:'Sample Course snapshot missing'};\n select.value='2027-28';\n select.dispatchEvent(new Event('change',{bubbles:true}));\n const selected=dialog.querySelector('[data-my-year]');\n if(selected?.value!=='2027-28')return{ok:false,error:'Year selector not updated'};\n return{ok:true,courses:courses.length,working:count,published};\n}catch(error){return{ok:false,error:String(error?.message||error)}}})()",returnByValue:true});
-     if(!probe.result?.value?.ok)problems.push(label+': multi-year modal probe failed: '+JSON.stringify(probe.result?.value||probe.exceptionDetails||'no result'));
-     else console.log('ok   Multi-year 2027-28 academic year contains 3 sample Courses, 9 Working and 5 Published Sessions');
-     const enhanced=await cdp.send('Runtime.evaluate',{expression:"(function(){try{\n const dialog=document.getElementById('paws-multi-year-demo');\n const yearHeader=document.getElementById('paws-global-academic-year');\n if(!yearHeader||yearHeader.value!=='2027-28')return{ok:false,reason:'Top Academic Year selector not synchronized'};\n const button=dialog.querySelector('[data-my-tab=\"rollover\"]');\n if(!button)return{ok:false,reason:'Rollover tab not available'};\n button.click();\n const form=dialog.querySelector('[data-my-form=\"rollover-preview\"]');\n if(!form)return{ok:false,reason:'Rollover form missing'};\n const select=form.querySelector('[name=\"code\"]'),code=select?.value;\n if(!code)return{ok:false,reason:'No Published source Course for rollover'};\n form.dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}));\n const create=dialog.querySelector('[data-my-action=\"rollover-confirm\"]');\n if(!create)return{ok:false,reason:'Selective rollover preview missing'};\n const original=window.confirm;window.confirm=()=>true;try{create.click()}finally{window.confirm=original}\n const state=JSON.parse(localStorage.getItem(window.PAWS_MULTI_YEAR_DEMO_MODEL.STORAGE_KEY)||'null');\n const course=state?.annual?.['2027-28']?.[code];\n if(!course||course.working.length!==0||course.published.length!==0)return{ok:false,reason:'Rollover did not create empty Working Course',code};\n if(!dialog.querySelector('[data-my-tab=\"review\"]'))return{ok:false,reason:'Publish Review tab missing'};\n dialog.querySelector('[data-my-tab=\"compare\"]').click();\n if(!dialog.textContent.includes('Cross-year Teaching / DOE Comparison'))return{ok:false,reason:'Comparison view missing'};\n return{ok:true,code};\n}catch(error){return{ok:false,reason:String(error?.message||error)}}})()",returnByValue:true});
-     if(!enhanced.result?.value?.ok)problems.push(label+': selective rollover browser flow failed: '+JSON.stringify(enhanced.result?.value||enhanced.exceptionDetails||'no result'));
-     else console.log('ok   Year selector, selective Published rollover, Publish Review and Cross-Year Comparison');
-     const mask=await cdp.send('Runtime.evaluate',{expression:"(function(){const notice=document.getElementById('paws-year-preview-notice');return{ok:!!notice&&!notice.hidden&&document.body.classList.contains('paws-my-year-preview-required'),text:notice?.textContent?.slice(0,80)}})()",returnByValue:true});
-     if(!mask.result?.value?.ok)problems.push(label+': legacy calendar not masked for future year: '+JSON.stringify(mask.result?.value||mask.exceptionDetails||'no result'));
-     else console.log('ok   Original 2026-27 Calendar masked during future-year selection');
+     // Empty academic years are created deliberately; no automatic sample Sessions.
+     const probe=await cdp.send('Runtime.evaluate',{expression:"(function verifyEmptyAcademicYear(){\n  try{\n    const launcher=document.getElementById('paws-multi-year-open');\n    if(!launcher)return{ok:false,error:'Academic Year launcher missing'};\n    launcher.click();\n    const dialog=document.getElementById('paws-multi-year-demo');\n    if(!dialog?.open)return{ok:false,error:'Academic Year dialog did not open'};\n    const model=window.PAWS_MULTI_YEAR_DEMO_MODEL;\n    const initial=JSON.parse(localStorage.getItem(model.STORAGE_KEY)||'null');\n    if(Object.keys(initial?.annual?.['2026-27']||{}).length)return{ok:false,error:'Initial Academic Year has example Sessions'};\n    if(initial?.annual?.['2027-28']&&Object.keys(initial.annual['2027-28']).length)return{ok:false,error:'2027-28 sample should not be preloaded'};\n    if(dialog.querySelector('[data-my-action=\"load-2027-28-sample\"]'))return{ok:false,error:'Sample loading shortcut should not be visible'};\n    const create=dialog.querySelector('[data-my-action=\"create-year\"]');\n    if(!create)return{ok:false,error:'Create Next Year unavailable'};\n    create.click();\n    const selected=dialog.querySelector('[data-my-year]');\n    const next=JSON.parse(localStorage.getItem(model.STORAGE_KEY)||'null');\n    if(selected?.value!=='2027-28'||next?.years?.['2027-28']?.status!=='planning')\n      return{ok:false,error:'2027-28 planning year was not created'};\n    if(Object.keys(next.annual['2027-28']||{}).length)return{ok:false,error:'New academic year contains sample Courses'};\n    if(!dialog.querySelector('[data-my-tab=\"review\"]'))return{ok:false,error:'Publish Review tab unavailable'};\n    dialog.querySelector('[data-my-tab=\"compare\"]').click();\n    if(!dialog.textContent.includes('Cross-year Teaching / DOE Comparison'))return{ok:false,error:'Year Comparison missing'};\n    const header=document.getElementById('paws-global-academic-year');\n    if(header?.value!=='2027-28')return{ok:false,error:'Global Academic Year not synchronized'};\n    const notice=document.getElementById('paws-year-preview-notice');\n    if(!notice||notice.hidden||!document.body.classList.contains('paws-my-year-preview-required'))\n      return{ok:false,error:'Future year did not mask original Calendar'};\n    return{ok:true};\n  }catch(error){return{ok:false,error:String(error?.message||error)}}\n})()",returnByValue:true});
+     if(!probe.result?.value?.ok)problems.push(label+': empty Academic Year browser probe failed: '+JSON.stringify(probe.result?.value||probe.exceptionDetails||'no result'));
+     else console.log('ok   Empty 2026-27 Calendar, Create Next Year, no auto-samples, Year Comparison and future-year mask');
    }
    if(check.page==='index.html'&&check.uid==='uid-developer'&&ok){
      const changelog=await cdp.send('Runtime.evaluate',{expression:"(async function verifyChangeLogDialog(){\n  const open=document.getElementById('site-changelog-open');\n  const dialog=document.getElementById('site-changelog-dialog');\n  const close=document.getElementById('site-changelog-close');\n  if(!open||!dialog||!close)return {ok:false,error:'Missing Change Log controls'};\n  open.click();\n  let body='';\n  for(let i=0;i<40;i++){\n    await new Promise(resolve=>setTimeout(resolve,100));\n    body=document.getElementById('site-changelog-entries')?.textContent||'';\n    if(body.includes(__EXPECTED_CHANGELOG_TITLE__))break;\n  }\n  const wasOpen=dialog.open;\n  const width=dialog.getBoundingClientRect().width;\n  close.click();\n  return {ok:wasOpen&&!dialog.open&&width>=600&&body.includes(__EXPECTED_CHANGELOG_TITLE__),\n    opened:wasOpen,closed:!dialog.open,width,loaded:body.includes(__EXPECTED_CHANGELOG_TITLE__)};\n})()".replaceAll('__EXPECTED_CHANGELOG_TITLE__',JSON.stringify(expectedChangeLogTitle)),awaitPromise:true,returnByValue:true});
@@ -102,11 +96,103 @@ async function main(){
      else console.log('ok   homepage Change Log opens as a large window, shows PR updates and closes');
    }
    if(check.page==='index.html'&&check.uid==='uid-developer'&&ok){
+     const startup=await cdp.send('Runtime.evaluate',{expression:"(async function verifyEmptyCalendarHandoff(){\n  try{\n    const rows=window.UCVM_PAWS_DEMO_API?.store?.tables?.sessions;\n    if(!Array.isArray(rows)||rows.length!==0)return {ok:false,error:'Startup Calendar is not empty',count:rows?.length};\n    const tasks=await window.PAWS_SCHEDULE_OFFICE_UI?.workQueue?.();\n    if(!Array.isArray(tasks)||!tasks.some(t=>t.kind==='import_adc_schedule'&&t.stage==='adc'))\n      return {ok:false,error:'ADC initial import task is missing',tasks};\n    if(!document.getElementById('workspace-tasks-toggle'))return {ok:false,error:'Shared Work Queue missing'};\n    return {ok:true};\n  }catch(error){return {ok:false,error:String(error?.message||error)}}\n})()",awaitPromise:true,returnByValue:true});
+     if(!startup.result?.value?.ok)problems.push(label+': empty Calendar/ADC handoff failed: '+JSON.stringify(startup.result?.value||startup.exceptionDetails||'no result').slice(0,500));
+     else console.log('ok   Empty Calendar startup and ADC Schedule Workflow import task');
+   }
+   if(check.page==='index.html'&&check.uid==='uid-developer'&&ok){
+     // Multi-Week Comparison: independently selected Fall/Winter weeks, stacked and closable.
+     const result=await cdp.send('Runtime.evaluate',{expression:"(async function verifyMultiWeekComparison(){\n"+
+       " try{\n"+
+       " const toggle=document.getElementById('cal-compare-btn');\n"+
+       " if(!toggle)return {ok:false,error:'Compare Weeks button missing'};\n"+
+       " toggle.click();\n"+
+       " document.querySelectorAll('[data-week-remove]').forEach(button=>button.click());\n"+
+       " function add(semester,week){\n"+
+       "   const term=document.getElementById('comparison-semester'),number=document.getElementById('comparison-week');\n"+
+       "   if(!term||!number)return false;\n"+
+       "   term.value=semester;term.dispatchEvent(new Event('change'));\n"+
+       "   number.value=String(week);number.dispatchEvent(new Event('change'));\n"+
+       "   document.getElementById('comparison-add-week')?.click();return true;\n"+
+       " }\n"+
+       " if(!add('fall',1)||!add('winter',5))return {ok:false,error:'Add Week controls missing'};\n"+
+       " let keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
+       " if(keys.join(',')!=='fall:1,winter:5')return {ok:false,error:'Fall/Winter periods not stacked in order',keys};\n"+
+       " const chooseSort=value=>{const control=document.getElementById('comparison-order');if(!control)return false;control.value=value;control.dispatchEvent(new Event('change'));return true;};\n"+
+       " if(!chooseSort('desc'))return {ok:false,error:'Sort weeks control missing'};\n"+
+       " keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
+       " if(keys.join(',')!=='winter:5,fall:1')return {ok:false,error:'Latest-first sorting failed',keys};\n"+
+       " const up=document.querySelector('[data-week-move=\\\"fall:1\\\"][data-week-direction=\\\"up\\\"]');\n"+
+       " if(!up||up.disabled)return {ok:false,error:'Admin Move Up arrow missing'};\n"+
+       " up.click();keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
+       " if(keys.join(',')!=='fall:1,winter:5')return {ok:false,error:'Manual Move Up failed',keys};\n"+
+       " if(document.getElementById('comparison-order')?.value!=='custom')return {ok:false,error:'Manual moves did not enter Custom order'};\n"+
+       " const down=document.querySelector('[data-week-move=\\\"fall:1\\\"][data-week-direction=\\\"down\\\"]');\n"+
+       " if(!down||down.disabled)return {ok:false,error:'Admin Move Down arrow missing'};\n"+
+       " down.click();keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
+       " if(keys.join(',')!=='winter:5,fall:1')return {ok:false,error:'Manual Move Down failed',keys};\n"+
+       " if(!chooseSort('asc'))return {ok:false,error:'Ascending sort control missing'};\n"+
+       " keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
+       " if(keys.join(',')!=='fall:1,winter:5')return {ok:false,error:'Earliest-first sorting failed',keys};\n"+
+       " for(let i=0;i<60;i++){\n"+
+       "  const cards=[...document.querySelectorAll('[data-comparison-period]')];\n"+
+       "  if(cards.every(card=>card.querySelector('.tg-body')||card.querySelector('.multi-week-error')))break;\n"+
+       "  await new Promise(resolve=>setTimeout(resolve,100));\n"+
+       " }\n"+
+       " const cards=[...document.querySelectorAll('[data-comparison-period]')];\n"+
+       " if(!cards.every(card=>card.querySelector('.tg-body')))return {ok:false,error:'Weekly grid missing after loading',statuses:cards.map(x=>x.textContent.slice(0,130))};\n"+
+       " const close=document.querySelector('[data-week-remove=\"fall:1\"]');\n"+
+       " if(!close||!close.getAttribute('aria-label').includes('Fall Week 1'))return {ok:false,error:'Close X missing'};\n"+
+       " close.click();keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
+       " if(keys.join(',')!=='winter:5')return {ok:false,error:'Closing one week removed the wrong card',keys};\n"+
+       " document.getElementById('cal-week-btn').click();\n"+
+       " if(document.getElementById('cal-compare-btn').classList.contains('active'))return {ok:false,error:'Week view not restored'};\n"+
+       " return {ok:true};\n"+
+       " }catch(error){return {ok:false,error:String(error?.message||error)}}\n"+
+       "})()",awaitPromise:true,returnByValue:true});
+     if(!result.result?.value?.ok)problems.push(label+': Multi-Week Comparison browser check failed: '+JSON.stringify(result.result?.value||result.exceptionDetails||'no result').slice(0,500));
+     else console.log('ok   Multi-Week Comparison stacks Fall W1 / Winter W5; removing one week preserves the other');
+   }
+   if(check.page==='index.html'&&check.uid==='uid-fac-001'&&ok){
+     const result=await cdp.send('Runtime.evaluate',{expression:"(function verifyFacultyComparisonPermissions(){try{"+
+       "const button=document.getElementById('cal-compare-btn');if(!button)return{ok:false,error:'Compare Weeks missing'};button.click();"+
+       "if(!document.getElementById('comparison-order'))return{ok:false,error:'Faculty sort selector missing'};"+
+       "if(document.querySelectorAll('[data-week-move]').length)return{ok:false,error:'Admin-only move arrows visible to Faculty'};"+
+       "return{ok:true};}catch(error){return{ok:false,error:String(error?.message||error)}}})()",returnByValue:true});
+     if(!result.result?.value?.ok)problems.push(label+': Faculty week comparison permissions failed: '+JSON.stringify(result.result?.value||result.exceptionDetails||'no result').slice(0,500));
+     else console.log('ok   Faculty can sort comparison weeks but cannot manually move cards');
+   }
+   if(check.page==='index.html'&&check.uid==='uid-developer'&&ok){
      // Real staged-browser test: approve a seeded ADFA SWAP with synthetic data.
-     const executed=await cdp.send('Runtime.evaluate',{expression:"(async function demoApprovalBrowserProbe(){\n  try{\n    const api=window.UCVM_PAWS_DATA,swap=window.PAWS_SWAP;\n    if(!api?.swapQueue||!swap?.openDetail)return{ok:false,error:'SWAP client not ready'};\n    const queue=await api.swapQueue();\n    const request=(queue.requests||[]).find(r=>r.nextStage==='adfa'&&r.status==='pending'&&r.changes?.replacementCandidateKey);\n    if(!request)return{ok:false,error:'No seeded final ADFA request'};\n    await swap.openDetail(request.requestId);\n    const approve=document.querySelector('.sql-swap-approval-dialog [data-decision=\"approve\"]');\n    if(!approve)return{ok:false,error:'Approve button not rendered'};\n    if(approve.disabled)return{ok:false,error:'Approve disabled',preview:document.querySelector('[data-approval-doe]')?.innerText||''};\n    const reason=document.querySelector('.sql-swap-approval-dialog [data-override]');\n    if(reason)reason.value='Synthetic conflict reviewed by Developer';\n    approve.click();\n    const confirm=document.querySelector('.sql-swap-approval-dialog [data-confirm-action]');\n    if(!confirm)return{ok:false,error:'Approval confirmation not shown'};\n    confirm.click();\n    for(let i=0;i<50;i++){\n      await new Promise(resolve=>setTimeout(resolve,150));\n      const detail=await api.swapDetail(request.requestId);\n      if(detail.request?.status==='applied')return{ok:true,status:'applied',requestId:request.requestId};\n    }\n    return{ok:false,error:'Approval did not reach applied state'};\n  }catch(error){return{ok:false,error:String(error?.message||error)};}\n})()",awaitPromise:true,returnByValue:true});
+     const executed=await cdp.send('Runtime.evaluate',{expression:"(async function demoApprovalBrowserProbe(){\n  try{\n    const api=window.UCVM_PAWS_DATA,swap=window.PAWS_SWAP;\n    if(!api?.swapQueue||!swap?.openDetail)return{ok:false,error:'SWAP client not ready'};\n    const queue=await api.swapQueue();\n    const request=(queue.requests||[]).find(r=>r.nextStage==='adfa'&&r.status==='pending'&&r.changes?.replacementCandidateKey);\n    if(!request&&window.UCVM_PAWS_DEMO_API?.store?.tables?.sessions?.length===0)return{ok:true,empty:true};\n    if(!request)return{ok:false,error:'No seeded final ADFA request'};\n    await swap.openDetail(request.requestId);\n    const approve=document.querySelector('.sql-swap-approval-dialog [data-decision=\"approve\"]');\n    if(!approve)return{ok:false,error:'Approve button not rendered'};\n    if(approve.disabled)return{ok:false,error:'Approve disabled',preview:document.querySelector('[data-approval-doe]')?.innerText||''};\n    const reason=document.querySelector('.sql-swap-approval-dialog [data-override]');\n    if(reason)reason.value='Synthetic conflict reviewed by Developer';\n    approve.click();\n    const confirm=document.querySelector('.sql-swap-approval-dialog [data-confirm-action]');\n    if(!confirm)return{ok:false,error:'Approval confirmation not shown'};\n    confirm.click();\n    for(let i=0;i<50;i++){\n      await new Promise(resolve=>setTimeout(resolve,150));\n      const detail=await api.swapDetail(request.requestId);\n      if(detail.request?.status==='applied')return{ok:true,status:'applied',requestId:request.requestId};\n    }\n    return{ok:false,error:'Approval did not reach applied state'};\n  }catch(error){return{ok:false,error:String(error?.message||error)};}\n})()",awaitPromise:true,returnByValue:true});
      const result=executed.result?.value;
      if(!result?.ok)problems.push(`${label}: ADFA demo approval failed: ${JSON.stringify(result||executed.exceptionDetails||'no result').slice(0,450)}`);
-     else console.log('ok   ADFA SWAP final approval applies to browser-local timetable');
+     else console.log(result.empty?'ok   SWAP fixture skipped: Calendar intentionally empty; route tests cover approval':'ok   ADFA SWAP final approval applies to browser-local timetable');
+   }
+   if(check.page==='index.html'&&check.uid==='uid-developer'&&ok){
+     // End-to-end Data Load button acceptance on the exact published PAWS Demo.
+     // Run after empty-start, comparison and SWAP checks. Clean demo storage
+     // afterwards so later role checks keep their intentional zero-session baseline.
+     const before=await cdp.send('Runtime.evaluate',{expression:"(function(){try{const api=window.UCVM_PAWS_DEMO_API,button=document.getElementById('testing-only-load-density-btn');if(!api?.testingOnly?.loadDenseCalendar||!button||button.classList.contains('hidden'))return{ok:false,error:'Data loader unavailable or hidden for Developer'};if(api.store.tables.sessions.length!==0)return{ok:false,error:'Expected empty Calendar before load',count:api.store.tables.sessions.length};window.confirm=()=>true;setTimeout(()=>button.click(),50);return{ok:true};}catch(e){return{ok:false,error:String(e.message||e)}}})()",returnByValue:true});
+     if(!before.result?.value?.ok)problems.push(label+': Data Load button availability failed: '+JSON.stringify(before.result?.value||before.exceptionDetails||'no result'));
+     else{
+       await wait(1100);
+       let observed=null;
+       for(let i=0;i<35;i++){
+         try{
+           const probe=await cdp.send('Runtime.evaluate',{expression:"(function(){try{const api=window.UCVM_PAWS_DEMO_API,stored=JSON.parse(localStorage.getItem('ucvm-pages-demo-paws-v1')||'null');if(!api||!stored)return{ready:false};const sessions=api.store.tables.sessions,activities=api.store.tables.activities.filter(x=>x.category==='ccc');return{ready:true,sessions:sessions.length,ccc:activities.length,persistedSessions:stored.sessions?.length,persistedCcc:stored.activities?.filter(x=>x.category==='ccc').length,lab:sessions.filter(s=>s.sessionType==='LAB').length,srl:sessions.filter(s=>s.sessionType==='SRL').length}}catch(e){return{ready:false,error:String(e.message||e)}}})()",returnByValue:true});
+           if(probe.result?.value?.ready&&probe.result.value.sessions===1937){observed=probe.result.value;break;}
+         }catch(_){}
+         await wait(250);
+       }
+       if(!observed||observed.sessions!==1937||observed.ccc!==413||observed.persistedSessions!==1937||observed.persistedCcc!==413||!observed.lab||!observed.srl)
+         problems.push(label+': Data Load did not persist Beta-density Teaching/CCC records: '+JSON.stringify(observed));
+       else console.log('ok   Load Test Data persisted 1937 Course Sessions (LAB/SRL) and 413 CCC slots after reload');
+       try{
+         const reset=await cdp.send('Runtime.evaluate',{expression:"(function(){try{const api=window.UCVM_PAWS_DEMO_API;const again=api.testingOnly.loadDenseCalendar('uid-developer');api.reset();return{ok:again.addedSessions===0&&again.addedCCC===0}}catch(e){return{ok:false,error:String(e.message||e)}}})()",returnByValue:true});
+         if(!reset.result?.value?.ok)problems.push(label+': Data Load idempotence/reset failed: '+JSON.stringify(reset.result?.value));
+       }catch(e){problems.push(label+': Data Load reset failed: '+String(e.message||e))}
+     }
    }
    console.log(`${ok&&!errors.length&&!apiCalls.length?'ok  ':'FAIL'} ${label}`);
    cdp.close();await fetch(`http://127.0.0.1:${port}/json/close/${target.id}`).catch(()=>{});

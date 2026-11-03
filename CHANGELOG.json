@@ -3,6 +3,36 @@
   "entries": [
     {
       "date": "2026-11-03",
+      "pr": 108,
+      "title": "Add Beta-density synthetic teaching and CCC load fixtures to PAWS Testing",
+      "changes": [
+        "Added an optional Load Test Data action for Developer, Owner, ADFAD and ADC testers in the browser-local PAWS Calendar.",
+        "Created deterministic, fictional Course Session data calibrated to 1,937 teaching sessions and historical Beta weekly density, covering LEC, LAB, SRL, exam and time-review cases.",
+        "Added synthetic CCC half-day staffing activities calibrated to 413 assignment slots including 11 Locum, across the May-April academic year.",
+        "Preserved browser-local existing/edited records, supporting idempotent additional loads and PR #107's empty Calendar startup.",
+        "No real Beta/SQL/Firestore source data, Faculty identities, or production systems were changed."
+      ]
+    },
+    {
+      "date": "2026-11-03",
+      "pr": 107,
+      "title": "Testing Calendar comparison, empty start and team Work Queues",
+      "changes": [
+        "Added a Testing-only Compare Weeks view where users can add any available Spring, Fall or Winter week, including nonconsecutive Fall and Winter weeks, and stack calendars vertically.",
+        "Each selected week has its own top-right X to remove only that week; the normal Week grid layout, session details and calendar colors are reused.",
+        "Added Sort weeks with Custom, Earliest to latest and Latest to earliest modes for nonconsecutive Spring/Fall/Winter week cards.",
+        "Authorized Demo administrators can move each selected comparison week up or down using accessible arrow buttons; moves switch to Custom order and do not change saved schedules or DOE.",
+        "Fetches authorized session data independently for each selected week and keeps results scoped to the current Demo identity.",
+        "Existing Year, Course, Activity type, Search and My Timetable filters apply; comparison does not export or bulk-edit a different calendar range.",
+        "Added unit and staged browser tests for Fall Week 1 versus Winter Week 5, repeat selection, unlimited card count, loading and individual removal. The feature is browser-local Testing only, with no Beta, SQL or DOE changes.",
+        "Removed automatically generated starter Course Sessions from the browser-local Calendar and disabled the default University Closure overlay; existing saved starter rows are removed by exact fixture ID while preserving user-created imports and drafts.",
+        "ADC starts with a Schedule Workflow import task; after an ADC draft or publication, role-scoped outstanding tasks route LAB to Lab Scheduling and ADFAD to its Faculty assignment Work Queue.",
+        "Unified Work Queue shortcuts for ADC, LAB, ADFAD and other authorized Demo roles with live task counts and status; no real university data or production permissions are changed.",
+        "Stopped automatic 2027–28 sample-year generation and removed its public sample-loading shortcut. Only untouched auto-generated example Courses are cleared from previously saved browser Demo years; manually edited year data stays intact."
+      ]
+    },
+    {
+      "date": "2026-11-03",
       "pr": 106,
       "title": "One-click eligible annual Role confirmations in the Testing Demo",
       "changes": [
@@ -166,18 +196,6 @@
       "changes": [
         "Imported the Beta Calendar, Faculty, Teaching Assignments, AFC, SWAP, CCC, DOE and reporting application modules and related APIs.",
         "This was a code migration, not a live feature release. PR #91 subsequently switched the shared Testing website to these Beta-style pages using synthetic data."
-      ]
-    },
-    {
-      "date": "2026-11-03",
-      "pr": 108,
-      "title": "Add Beta-density synthetic teaching and CCC load fixtures to PAWS Testing",
-      "changes": [
-        "Added an optional Load Test Data action for Developer, Owner, ADFAD and ADC testers in the browser-local PAWS Calendar.",
-        "Created deterministic, fictional Course Session data calibrated to 1,937 teaching sessions and historical Beta weekly density, covering LEC, LAB, SRL, exam and time-review cases.",
-        "Added synthetic CCC half-day staffing activities calibrated to 413 assignment slots including 11 Locum, across the May-April academic year.",
-        "Preserved browser-local existing/edited records, supporting idempotent additional loads and PR #107's empty Calendar startup.",
-        "No real Beta/SQL/Firestore source data, Faculty identities, or production systems were changed."
       ]
     }
   ]

@@ -9,9 +9,9 @@ const { resolveTeachingDoe } = require('../../server/src/domain/doe-calculator.j
 
 const FIXTURE = 'beta-density-synthetic-v1';
 const WEEKS = Object.freeze([
-  { term: 'spring', start: '2026-05-04', counts: Object.freeze(Array(12).fill(17)) },
+  { term: 'spring', start: '2026-04-27', counts: Object.freeze(Array(12).fill(17)) },
   { term: 'fall', start: '2026-08-24', counts: Object.freeze([77, 72, 74, 72, 69, 79, 73, 71, 75, 78, 74, 76, 72, 75, 77, 66]) },
-  { term: 'winter', start: '2027-01-11', counts: Object.freeze([37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 36, 36]) }
+  { term: 'winter', start: '2027-01-04', counts: Object.freeze([37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 36, 36]) }
 ]);
 const COURSE_TARGET = WEEKS.reduce((sum, term) => sum + term.counts.reduce((a, b) => a + b, 0), 0);
 const CCC_TARGET = 413;
@@ -80,7 +80,10 @@ function makeSession(term, week, index, courses, faculty, forceUnknown) {
   if (term.term === 'winter' && week === 12 && index % 29 === 4) type = 'OSCE';
   if (term.term !== 'spring' && week === 7 && index % 37 === 10) type = 'Quiz/Midterm';
   if (term.term !== 'spring' && week === term.counts.length - 1 && index % 29 === 11) type = 'Exam';
-  const date = addDays(term.start, week * 7 + ((index * 3 + week) % 5));
+  // Use the Calendar's actual week boundaries. Spring W1 overlaps late April,
+  // so its synthetic sessions start on May 1 within academic year 2026-27.
+  const weekdayOffset = term.term === 'spring' && week === 0 ? 4 : (index * 3 + week) % 5;
+  const date = addDays(term.start, week * 7 + weekdayOffset);
   const slots = SLOTS[type];
   const [rawStart, rawEnd] = slots[(index + Math.floor(index / courses.length) + week) % slots.length];
   // A small intentional Check Needed sample; never invent missing DOE time.

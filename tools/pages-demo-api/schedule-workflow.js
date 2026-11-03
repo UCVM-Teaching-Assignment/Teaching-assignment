@@ -308,6 +308,21 @@ function createScheduleWorkflow({store}={}){
   const u=actor(uid),r=role(u),isLAB=r==='lab'||arr(u.officeAccess).includes('lab');
   const visible=r==='developer'||r==='owner'?['adc','lab','adfa']:r==='adc'?['adc']:isLAB?['lab']:ADFAD.has(r)?['adfa']:[];
   const policy=rules(),items=[];
+  // Start an empty Demo with an actionable ADC import task. Unsaved fixture
+  // Sessions do not become published teaching or a LAB/ADFAD work item.
+  if(visible.includes('adc')){
+    const pending=Object.values(bag().drafts).filter(d=>!d.publishedSessionId);
+    for(const draft of pending){
+      const d=draft.values||{};
+      items.push({kind:'publish_adc_draft',draftId:draft.id,sessionId:'',stage:'adc',
+        courseCode:d.courseCode||'',date:d.date||'',sessionType:d.sessionType||'',
+        status:'ready',missing:['Review and publish saved ADC schedule draft']});
+    }
+    const published=arr(store.tables.sessions).some(x=>x.academicYear===year()&&x.scheduleStatus==='published');
+    if(!published&&!pending.length)items.push({kind:'import_adc_schedule',sessionId:'',stage:'adc',
+      courseCode:'',date:'',sessionType:'',status:'ready',
+      missing:['Import course schedule through Schedule Workflow']});
+  }
   const scoped=s=>arr(u.labScopes).some(scope=>scope.academicYear===s.academicYear&&String(scope.curriculumYear)===String(s.curriculumYear)&&scope.courseCode===s.courseCode);
   for(const s of arr(store.tables.sessions)){
    if(s.academicYear!==year()||s.scheduleStatus!=='published')continue;
