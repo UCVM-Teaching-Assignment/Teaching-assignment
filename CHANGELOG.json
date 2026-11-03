@@ -3,6 +3,17 @@
   "entries": [
     {
       "date": "2026-11-03",
+      "pr": 106,
+      "title": "One-click eligible annual Role confirmations in the Testing Demo",
+      "changes": [
+        "Added an ADFAD-only Confirm All Eligible Drafts action to Academic Year Workspace Roles, with counts for eligible, skipped, and previously confirmed records.",
+        "Approved valid partial-year rollover renewals with an explicit ADFAD action, while skipping inactive, ineligible, future-start, missing, and out-of-year records.",
+        "Kept existing per-role confirmation available for valid Roles, added stale-selection validation and one auditable batch action across all rows (including beyond the first 200).",
+        "Preserved current Teaching, Course, DOE and browser-local saved data; this feature is Testing Demo only, not a Beta/SQL bulk write."
+      ]
+    },
+    {
+      "date": "2026-11-03",
       "pr": 105,
       "title": "Fix Academic Year Demo publication blockers and ineligible Faculty corrections",
       "changes": [

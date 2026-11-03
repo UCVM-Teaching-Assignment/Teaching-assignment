@@ -7,7 +7,7 @@
   const roleCanWork=role=>['owner','developer','adfa_general','adfa_regular','administrator','admin','adc','lab','hicc','visc'].includes(role);
   const isAdfa=role=>['owner','developer','adfa_general','adfa_regular','administrator','admin'].includes(role);
   const opts=(items,value,label)=>items.map(item=>'<option value="'+E(value(item))+'">'+E(label(item))+'</option>').join('');
-  let engine=null,selectedYear='',selectedCode='',tab='calendar',dialog=null,message='',rolloverPreview=null,comparisonYear='',calendarMonth='all',lastHeaderUid='';
+  let engine=null,selectedYear='',selectedCode='',tab='calendar',dialog=null,message='',rolloverPreview=null,comparisonYear='',calendarMonth='all',lastHeaderUid='',roleBulkSnapshot=null;
   function identity(){
     const demo=root.UCVM_PAWS_DEMO_API;
     const current=root.firebase&&root.firebase.auth&&root.firebase.auth().currentUser;
@@ -208,9 +208,27 @@
     if(admin)body+=wrap('Working DOE preview (internal only)',table(['Faculty','Working credit'],working.map(x=>[E(facultyName(s,x.facultyId)),E(x.base)])));
     return wrap('DOE · '+selectedYear,body);
   }
-  function viewRoles(a,s){const showAll=isAdfa(a.role),roles=(s.roles[selectedYear]||[]).filter(r=>showAll||r.facultyId===a.facultyId);
-    const body='<p class="paws-my-muted">Full-year eligible appointments are renewed for May 1–April 30. Partial/invalid records are Draft for ADFAD confirmation.</p>'+
-      table(['Faculty','Role','Scope','Start','End','Status','Action'],roles.slice(0,200).map(r=>[E(facultyName(s,r.facultyId)),E(r.roleType),E(r.scope),E(r.start),E(r.end),E(r.status==='draft'?'Draft · '+(r.rolloverReason||'Review needed'):'Confirmed'),showAll&&r.status==='draft'&&s.years[selectedYear].status!=='archived'?'<button data-my-confirm-role="'+E(r.id)+'">Confirm</button>':'']));
+  function viewRoles(a,s){
+    const showAll=isAdfa(a.role),roles=(s.roles[selectedYear]||[]).filter(r=>showAll||r.facultyId===a.facultyId),
+      archived=s.years[selectedYear].status==='archived';
+    const preview=showAll?load().previewRoleConfirmations(a,selectedYear):null;
+    roleBulkSnapshot=preview?{uid:a.uid,year:selectedYear,eligibleIds:preview.eligibleIds.slice()}:null;
+    const eligible=preview?new Set(preview.eligibleIds):new Set(),
+      blocked=preview?new Map(preview.skipped.map(x=>[x.id,x.reason])):new Map();
+    const summary=preview?'<div class="paws-my-panel">'+
+      '<p><strong>Draft: '+E(preview.pending)+'</strong> · Eligible: '+E(preview.eligibleIds.length)+' · Needs individual review: '+E(preview.skipped.length)+' · Already confirmed: '+E(preview.alreadyConfirmed)+'</p>'+
+      (!archived?'<button type="button" data-my-action="confirm-all-roles" '+(preview.eligibleIds.length?'':'disabled')+
+        '>Confirm All Eligible Drafts ('+E(preview.eligibleIds.length)+')'+(root.UCVM_TESTING_ONLY?.pendingBadge?.()||'')+'</button>':'')+
+      (preview.partialYear?'<p class="paws-my-muted">Includes '+E(preview.partialYear)+' prior partial-year appointment(s). Clicking bulk confirm records ADFAD approval for their renewed dates.</p>':'')+
+      (preview.skipped.length?'<p class="paws-my-muted">Ineligible, missing or future-start appointments are skipped; review them individually. No personnel eligibility rules are bypassed.</p>':'')+
+      '<p class="paws-my-muted">Applies to all eligible Draft roles in '+E(selectedYear)+', including rows beyond the 200 visible below. Browser-local Demo only.</p></div>':'';
+    const body='<p class="paws-my-muted">Full-year eligible appointments are renewed for May 1–April 30. Partial appointments require ADFAD approval. Ineligible records cannot be confirmed.</p>'+
+      summary+table(['Faculty','Role','Scope','Start','End','Status','Action'],roles.slice(0,200).map(r=>{
+        const explanation=blocked.get(r.id),allowed=eligible.has(r.id);
+        return [E(facultyName(s,r.facultyId)),E(r.roleType),E(r.scope),E(r.start),E(r.end),
+          E(r.status==='draft'?'Draft · '+(explanation||r.rolloverReason||'Review needed'):'Confirmed'),
+          showAll&&r.status==='draft'&&!archived?(allowed?'<button data-my-confirm-role="'+E(r.id)+'">Confirm</button>':'<span class="paws-my-muted">Ineligible</span>'):''];
+      }));
     return wrap('Annual Roles & Appointments',body);
   }
   function viewArchive(a,s){if(!isAdfa(a.role)&&!['adc','lab'].includes(a.role))return wrap('Access','Office scope permission required.');const status=s.years[selectedYear].status,admin=isAdfa(a.role),isOwner=a.role==='owner';let html='<p><strong>Year status:</strong> '+E(status)+'</p>';
@@ -279,6 +297,13 @@
     if(action==='review-publish'){tab='review';message='Review the changes and validation results before publishing.';}
     if(action==='publish-confirm'){const p=m.previewPublication(a,selectedYear,selectedCode);if(!p.canPublish)throw Error('Publication is blocked. Resolve validation issues first.');if(root.confirm('Publish '+selectedCode+' for '+selectedYear+'? '+p.issues.filter(x=>x.severity==='warn').length+' warnings; DOE changes: '+p.doeImpact.length+'.')){m.publishCourse(a,selectedYear,selectedCode);tab='courses';}}
     if(action==='rollover-confirm'&&rolloverPreview){const p=rolloverPreview;if(root.confirm('Create '+p.code+' in '+selectedYear+' from last Published '+p.sourceYear+'? Existing Courses are never overwritten.')){m.rolloverCourse(a,{fromYear:p.sourceYear,toYear:p.destinationYear,code:p.code,options:p.options});selectedCode=p.code;rolloverPreview=null;tab='courses';}}
+    if(action==='confirm-all-roles'){
+      const snapshot=roleBulkSnapshot;
+      if(!snapshot||snapshot.uid!==a.uid||snapshot.year!==selectedYear)throw Error('Role selection changed. Reopen Roles before confirming.');
+      const result=m.confirmRolesBulk(a,selectedYear,snapshot.eligibleIds);
+      tab='roles';
+      message='Confirmed '+result.confirmed+' eligible Draft role(s) in this browser. '+result.skipped+' record(s) still require individual review.';
+    }
     if(action==='approve-doe')m.approvePolicy(a,selectedYear);
     if(action==='publish-doe'&&root.confirm('Publish initial annual DOE for Faculty?'))m.publishDoe(a,selectedYear);
     if(action==='retire'){
