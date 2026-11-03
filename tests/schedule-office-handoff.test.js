@@ -2,6 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {createScheduleWorkflow}=require('../tools/pages-demo-api/schedule-workflow.js');
 const {createLabService}=require('../tools/pages-demo-api/lab-scheduling.js');
+const {createLabResourceReservations}=require('../tools/pages-demo-api/lab-resource-reservations.js');
 function fixture(){
  const user=(uid,role,scopes=[])=>({firebaseUid:uid,baseRole:role,active:true,mustChangePassword:false,labScopes:scopes});
  const users=[user('adc','adc'),user('adfa','adfa_general'),user('developer','developer'),
@@ -17,6 +18,10 @@ function fixture(){
 function publish(f,{type='LAB',course='VETM 505',date='2026-11-03',start='08:30',end='10:30',suggestions=[]}={}){
  const draft=f.workflow.saveDraft('adc',{academicYear:'2026-27',courseCode:course,sessionType:type,date,startTime:start,endTime:end,suggestedFacultyIds:suggestions});
  return f.workflow.publish('adc',{draftId:draft.id,expectedRevision:draft.revision}).session;
+}
+function reserveNone(f,session){
+ const resources=createLabResourceReservations({store:f.store,labService:f.lab});
+ return resources.submit('lab',{sessionId:session.id,expectedVersion:0,horseCount:0,petProfessorCount:0,notes:'',requestId:'none-'+session.id}).request;
 }
 function labRow(rows, overrides={}){
  return {...rows[0],runKey:'run-1',startTime:'08:30',endTime:'10:30',room:'CSB Wards',
@@ -52,7 +57,7 @@ test('LAB export contains only authorized, prefilled LAB schedule runs, no other
  assert.throws(()=>f.workflow.officeExport('adfa','lab'),x=>x.code==='ROLE_DENIED');
 });
 test('LAB user can bulk preview then publish room, capacity and synthetic roster; ADFAD remains pending',()=>{
- const f=fixture(),s=publish(f);
+ const f=fixture(),s=publish(f);reserveNone(f,s);
  const rows=[labRow(f.workflow.officeExport('lab','lab').rows)];
  const previous=f.commits,preview=f.workflow.previewOfficeBulk('lab',{office:'lab',rows});
  assert.equal(preview.valid,true,JSON.stringify(preview.errors));
@@ -135,7 +140,8 @@ test('LAB role may not access ADC publishing or private ADFAD export',()=>{
 });
 
 test('LAB office can publish a second reviewed batch with a newer draft revision and new operation receipt',()=>{
- const f=fixture(),s=publish(f),source=f.workflow.officeExport('lab','lab').rows;
+ const f=fixture(),s=publish(f);reserveNone(f,s);
+ const source=f.workflow.officeExport('lab','lab').rows;
  const first=[labRow(source)];
  f.workflow.publishOfficeBulk('lab',{office:'lab',batchId:'first-lab-edit',rows:first});
  const update=[{...first[0],expectedRevision:1,room:'CSB Skills 2'}];
@@ -146,7 +152,7 @@ test('LAB office can publish a second reviewed batch with a newer draft revision
 });
 
 test('LAB bulk import allows simultaneous stations in separate subspaces of one CSB room',()=>{
- const f=fixture(),a=publish(f),b=publish(f);
+ const f=fixture(),a=publish(f),b=publish(f);reserveNone(f,a);reserveNone(f,b);
  const rows=f.workflow.officeExport('lab','lab').rows;
  assert.equal(rows.length,2);
  const filled=rows.map((r,i)=>labRow([r],{
@@ -162,7 +168,7 @@ test('LAB bulk import allows simultaneous stations in separate subspaces of one 
 });
 
 test('LAB export includes existing sibling LAB stations in same ADC-published scope',()=>{
- const f=fixture(),s=publish(f);
+ const f=fixture(),s=publish(f);reserveNone(f,s);
  f.tables.sessions.push({id:'legacy-lab-sibling',academicYear:'2026-27',curriculumYear:'3',courseCode:'VETM 505',date:'2026-11-03',
   sessionType:'LAB',topic:'Legacy skills',room:null,startTime:'08:30:00',endTime:'10:30:00',assignments:[]});
  const exported=f.workflow.officeExport('lab','lab').rows;
