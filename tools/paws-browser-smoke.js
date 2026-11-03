@@ -157,7 +157,7 @@ async function main(){
      // A prior Owner test may leave the global year in future-year preview.
      // Wait for the actual Faculty identity and restore the regular 2026-27
      // Calendar before asserting permission-scoped comparison controls.
-     const result=await cdp.send('Runtime.evaluate',{expression:"(async function verifyFacultyComparisonPermissions(){\n  try {\n    const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));\n    const hooks=window.UCVM_TIMETABLE_TESTING_HOOKS;\n    for(let i=0;i<40&&!hooks?.currentUser?.();i++)await sleep(100);\n    const user=hooks?.currentUser?.();\n    if(!user)return{ok:false,error:'Faculty role profile did not initialize'};\n    const picker=document.getElementById('paws-global-academic-year');\n    if(picker&&picker.value!=='2026-27'){\n      picker.value='2026-27';\n      picker.dispatchEvent(new Event('change',{bubbles:true}));\n      await sleep(250);\n    }\n    const button=document.getElementById('cal-compare-btn');\n    if(!button)return{ok:false,error:'Compare Weeks missing'};\n    button.click();\n    let control=null;\n    for(let i=0;i<25;i++){\n      control=document.getElementById('comparison-order');\n      if(control)break;\n      await sleep(100);\n    }\n    if(!control)return{ok:false,error:'Faculty sort selector missing after waiting for profile and year',role:user.role,active:button.classList.contains('active'),year:picker?.value};\n    if(document.querySelectorAll('[data-week-move]').length)return{ok:false,error:'Admin-only move arrows visible to Faculty'};\n    return{ok:true};\n  }catch(error){return{ok:false,error:String(error?.message||error)}}\n})()",awaitPromise:true,returnByValue:true});
+     const result=await cdp.send('Runtime.evaluate',{expression:"(async function verifyFacultyComparisonPermissions(){\n  try {\n    const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));\n    let hooks=null;\n    for(let i=0;i<150;i++){hooks=window.UCVM_TIMETABLE_TESTING_HOOKS;if(hooks?.currentUser?.())break;await sleep(100);}\n    const user=hooks?.currentUser?.();\n    if(!user)return{ok:false,error:'Faculty role profile did not initialize'};\n    const picker=document.getElementById('paws-global-academic-year');\n    if(picker&&picker.value!=='2026-27'){\n      picker.value='2026-27';\n      picker.dispatchEvent(new Event('change',{bubbles:true}));\n      await sleep(250);\n    }\n    const button=document.getElementById('cal-compare-btn');\n    if(!button)return{ok:false,error:'Compare Weeks missing'};\n    button.click();\n    let control=null;\n    for(let i=0;i<25;i++){\n      control=document.getElementById('comparison-order');\n      if(control)break;\n      await sleep(100);\n    }\n    if(!control)return{ok:false,error:'Faculty sort selector missing after waiting for profile and year',role:user.role,active:button.classList.contains('active'),year:picker?.value};\n    if(document.querySelectorAll('[data-week-move]').length)return{ok:false,error:'Admin-only move arrows visible to Faculty'};\n    return{ok:true};\n  }catch(error){return{ok:false,error:String(error?.message||error)}}\n})()",awaitPromise:true,returnByValue:true});
      if(!result.result?.value?.ok)problems.push(label+': Faculty week comparison permissions failed: '+JSON.stringify(result.result?.value||result.exceptionDetails||'no result').slice(0,500));
      else console.log('ok   Faculty can sort comparison weeks but cannot manually move cards');
    }
@@ -179,19 +179,56 @@ async function main(){
        let observed=null;
        for(let i=0;i<35;i++){
          try{
-           const probe=await cdp.send('Runtime.evaluate',{expression:"(function(){try{const api=window.UCVM_PAWS_DEMO_API,stored=JSON.parse(localStorage.getItem('ucvm-pages-demo-paws-v1')||'null');if(!api||!stored)return{ready:false};const sessions=api.store.tables.sessions,activities=api.store.tables.activities.filter(x=>x.category==='ccc');return{ready:true,sessions:sessions.length,ccc:activities.length,persistedSessions:stored.sessions?.length,persistedCcc:stored.activities?.filter(x=>x.category==='ccc').length,lab:sessions.filter(s=>s.sessionType==='LAB').length,srl:sessions.filter(s=>s.sessionType==='SRL').length}}catch(e){return{ready:false,error:String(e.message||e)}}})()",returnByValue:true});
+           const probe=await cdp.send('Runtime.evaluate',{expression:"(function(){try{const api=window.UCVM_PAWS_DEMO_API,stored=JSON.parse(localStorage.getItem('ucvm-pages-demo-paws-v1')||'null');if(!api||!stored)return{ready:false};const sessions=api.store.tables.sessions,activities=api.store.tables.activities.filter(x=>x.category==='ccc');return{ready:true,sessions:sessions.length,ccc:activities.length,packed:stored.extra?.testingDemoPackedFixture?.version===1,persistedSessions:stored.sessions?.length,persistedCcc:stored.activities?.filter(x=>x.category==='ccc').length,lab:sessions.filter(s=>s.sessionType==='LAB').length,srl:sessions.filter(s=>s.sessionType==='SRL').length}}catch(e){return{ready:false,error:String(e.message||e)}}})()",returnByValue:true});
            if(probe.result?.value?.ready&&probe.result.value.sessions===1937){observed=probe.result.value;break;}
          }catch(_){}
          await wait(250);
        }
-       if(!observed||observed.sessions!==1937||observed.ccc!==413||observed.persistedSessions!==1937||observed.persistedCcc!==413||!observed.lab||!observed.srl)
-         problems.push(label+': Data Load did not persist Beta-density Teaching/CCC records: '+JSON.stringify(observed));
-       else console.log('ok   Load Test Data persisted 1937 Course Sessions (LAB/SRL) and 413 CCC slots after reload');
+       if(!observed||observed.sessions!==1937||observed.ccc!==413||!observed.packed||observed.persistedSessions>=1937||observed.persistedCcc>=413||!observed.lab||!observed.srl)
+         problems.push(label+': Data Load did not regenerate persisted compact Teaching/CCC fixtures: '+JSON.stringify(observed));
+       else console.log('ok   Load Test Data persisted a compact fixture and regenerated 1937 Course Sessions plus 413 CCC slots after reload');
        try{
          const reset=await cdp.send('Runtime.evaluate',{expression:"(function(){try{const api=window.UCVM_PAWS_DEMO_API;const again=api.testingOnly.loadDenseCalendar('uid-developer');api.reset();return{ok:again.addedSessions===0&&again.addedCCC===0}}catch(e){return{ok:false,error:String(e.message||e)}}})()",returnByValue:true});
          if(!reset.result?.value?.ok)problems.push(label+': Data Load idempotence/reset failed: '+JSON.stringify(reset.result?.value));
        }catch(e){problems.push(label+': Data Load reset failed: '+String(e.message||e))}
      }
+   }
+   if(check.page==='index.html'&&check.uid==='uid-developer'&&ok){
+     // Regression for PR #109: the emptyCalendar smoke path never exercised
+     // the ordinary browser startup, where old localStorage quota errors left
+     // all 1,937 simulated teaching sessions invisible despite successful CI.
+     await cdp.send('Runtime.evaluate',{expression:"window.UCVM_PAWS_DEMO_API?.reset?.()",returnByValue:true});
+     await cdp.send('Page.navigate',{url:`${origin}/index.html`});
+     await waitForText(cdp,['PAWS Frontend Demo','Teaching Schedule']);
+     // Page.navigate can return before the new bundle has installed its Demo
+     // globals. Poll for readiness instead of probing the old document race.
+     let defaultReady=false;
+     for(let attempt=0;attempt<80;attempt++){
+       const status=await cdp.send('Runtime.evaluate',{expression:"Boolean(window.UCVM_PAWS_DEMO_API?.store && window.UCVM_PAWS_DATA && document.readyState==='complete')",returnByValue:true}).catch(()=>null);
+       if(status?.result?.value===true){defaultReady=true;break;}
+       await wait(125);
+     }
+     if(!defaultReady)problems.push(label+': default calendar bundle did not initialize');
+     else {
+     const probe=await cdp.send('Runtime.evaluate',{expression:"(async function verifyDefaultSyntheticTeaching(){\n"+
+       " try{const sleep=ms=>new Promise(r=>setTimeout(r,ms));\n"+
+       " const store=window.UCVM_PAWS_DEMO_API?.store;\n"+
+       " if(!store)return{ok:false,error:'Demo store unavailable'};\n"+
+       " const density=store.densityStatus();\n"+
+       " const saved=JSON.parse(localStorage.getItem('ucvm-pages-demo-paws-v1')||'null');\n"+
+       " if(density.totalSessions!==1937||!density.storageOk||!saved?.extra?.testingDemoPackedFixture)return{ok:false,error:'Synthetic fixture not compactly persisted on default startup',density,storedRows:saved?.sessions?.length};\n"+
+       " let weekly=[];for(let i=0;i<60;i++){try{weekly=await window.UCVM_PAWS_DATA.listSessions({start:'2026-11-02',end:'2026-11-07'});if(weekly.length>=60)break;}catch(_){}await sleep(100);}\n"+
+       " if(weekly.length!==74)return{ok:false,error:'November Course Sessions not readable through Calendar API',count:weekly.length,density};\n"+
+       " document.getElementById('cal-month-btn')?.click();\n"+
+       " for(let i=0;i<40;i++){if([...document.querySelectorAll('.cal-event')].some(e=>e.textContent.includes('[Synthetic]')))break;await sleep(100);}\n"+
+       " const showing=[...document.querySelectorAll('.cal-event')].filter(e=>e.textContent.includes('[Synthetic]')).length;\n"+
+       " return{ok:showing>=10,error:showing>=10?'':'Month grid does not show synthetic teaching sessions',showing,weekly:weekly.length,storedRows:saved.sessions.length};\n"+
+       " }catch(error){return{ok:false,error:String(error?.message||error)}}\n"+
+       "})()",awaitPromise:true,returnByValue:true});
+     if(!probe.result?.value?.ok)problems.push(label+': default synthetic calendar unavailable: '+JSON.stringify(probe.result?.value||probe.exceptionDetails||'no result').slice(0,700));
+     else console.log('ok   Default PAWS Testing loads packed synthetic data, 74 Fall W11 sessions via API and visible November Month teaching blocks');
+     }
+     await cdp.send('Runtime.evaluate',{expression:"window.UCVM_PAWS_DEMO_API?.reset?.()",returnByValue:true});
    }
    console.log(`${ok&&!errors.length&&!apiCalls.length?'ok  ':'FAIL'} ${label}`);
    cdp.close();await fetch(`http://127.0.0.1:${port}/json/close/${target.id}`).catch(()=>{});

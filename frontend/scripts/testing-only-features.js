@@ -140,6 +140,7 @@
 .testing-only-pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;background:#e2e8f0;color:#0f172a}
 .testing-only-pill.good{background:#dcfce7;color:#14532d}.testing-only-pill.warn{background:#fef3c7;color:#78350f}.testing-only-pill.bad{background:#fee2e2;color:#7f1d1d}
 .testing-only-status{font-size:12.5px;margin:8px 0;white-space:pre-wrap}.testing-only-status.is-error{color:#b91c1c}
+.testing-only-density-status{font-size:11px;color:var(--text-3,#64748b);white-space:nowrap}.testing-only-density-status.is-error{color:#b91c1c;font-weight:700}
 .testing-only-check{display:inline-flex;align-items:center;gap:5px;font-size:13px;white-space:nowrap}
 .testing-only-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;z-index:2147483001;background:#1e293b;color:#fff;padding:9px 14px;border-radius:8px;font-size:13px;transition:.2s}
 .testing-only-toast.show{opacity:1;transform:translateX(-50%)}.testing-only-toast.is-error{background:#991b1b}
@@ -171,7 +172,23 @@
     const toolbar = doc.querySelector('.cal-toolbar-right');
     if (toolbar && !$('testing-only-load-density-btn')) {
       const button = el('<button class="fbar-reset hidden" id="testing-only-load-density-btn" type="button">Load Test Data' + badge() + '</button>');
+      const status = el('<span class="testing-only-density-status" id="testing-only-density-status" role="status"></span>');
       toolbar.appendChild(button);
+      toolbar.appendChild(status);
+      function updateDensityStatus(){
+        const demo=root.UCVM_PAWS_DEMO_API;
+        try {
+          const details=demo?.store?.densityStatus?.();
+          if(!details){status.textContent='';return;}
+          status.textContent=details.totalSessions.toLocaleString()+' teaching sessions in Demo';
+          if(!details.storageOk){
+            status.textContent+=' · Browser storage warning';
+            status.title='Changes may not persist: '+details.storageError;
+            status.classList.add('is-error');
+          }else{status.title='Synthetic demo data; not live Beta or SQL';status.classList.remove('is-error');}
+        }catch(error){status.textContent='Demo data unavailable';status.title=String(error?.message||error);status.classList.add('is-error');}
+      }
+      updateDensityStatus();
       const allowed = user => {
         const role = roleOf(user);
         button.classList.toggle('hidden', !(ADMIN_ROLES.has(role) || role === 'adc'));
@@ -191,13 +208,12 @@
           if (!result.addedSessions && !result.addedCCC) {
             toast('High-density timetable is already loaded.'); return;
           }
-          // The Demo store intentionally supports memory-only fallback on quota
-          // errors. Never claim data was saved or reload into data loss.
-          const saved = JSON.parse(root.localStorage.getItem('ucvm-pages-demo-paws-v1') || 'null');
-          if (!saved || !Array.isArray(saved.sessions) || !Array.isArray(saved.activities)
-              || saved.sessions.length < result.totalSessions || saved.activities.length < result.totalCCC) {
-            throw new Error('Browser storage could not persist the fixture; try freeing site storage before reloading.');
-          }
+          // Test data is packed in localStorage. Counting raw stored rows is
+          // incorrect: the 1,937 deterministic rows are regenerated on reload.
+          const diagnostics=demo.store.densityStatus();
+          updateDensityStatus();
+          if(!diagnostics.storageOk)throw new Error('Browser storage is full; synthetic courses are available in memory, but not saved. Do not reload until storage is available.');
+          // Reload forces Calendar API and Compare Weeks to read the new data.
           root.location.reload();
         } catch (error) { toast(error.message || String(error), true); }
       });

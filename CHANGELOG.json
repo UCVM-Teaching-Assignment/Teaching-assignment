@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-11-03",
+      "pr": 110,
+      "title": "Restore missing synthetic Course Sessions in PAWS Testing Calendar",
+      "changes": [
+        "Store the 1,937 teaching and 413 CCC synthetic fixtures as compact repeatable test data, retaining all manually changed or deleted synthetic records and existing browser-local work.",
+        "Show synthetic teaching sessions in the current browser even if browser storage cannot save, with an explicit persistence warning rather than a misleading empty Calendar.",
+        "Display the loaded teaching-session count and update Load Test Data to verify compact persistent storage after a manual import.",
+        "Add quota, edited Session, CCC, reload and browser checks; the default Testing calendar must show Fall Week 11 teaching records in the Month view.",
+        "No institutional Beta/SQL/Firestore records or real Faculty identities changed."
+      ]
+    },
+    {
+      "date": "2026-11-03",
       "pr": 109,
       "title": "Protect Testing sessions and make synthetic calendar comparison complete",
       "changes": [
