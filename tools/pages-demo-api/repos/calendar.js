@@ -18,7 +18,7 @@ function createCccScheduleRepository(store) {
         .map(a => {
           const interval = (a.timeEvidence || []).find(e => e.date === a.startDate);
           const minutes = value => {
-            if (!/^\\d{2}:\\d{2}$/.test(String(value || ''))) return null;
+            if (!/^\d{2}:\d{2}$/.test(String(value || ''))) return null;
             const [h, m] = String(value).split(':').map(Number);
             return h * 60 + m;
           };
