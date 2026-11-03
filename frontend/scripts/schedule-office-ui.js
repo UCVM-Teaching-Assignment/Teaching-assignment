@@ -12,7 +12,12 @@
  const ADC=['adc','developer','owner'];
  const can=(role,office)=>office==='lab'?LAB.includes(role):office==='adfa'?ADFAD.includes(role):ADC.includes(role);
  const pendingBadge=()=>root?.UCVM_TESTING_ONLY?.pendingBadge?.()||'';
- let dialog=null,office='',exported=[],allRows=[],editor='',preview=null,parsed=null,batchId='',busy=false,notice='',focusId='',faculty=[];
+ let dialog=null,embedded=false,office='',exported=[],allRows=[],editor='',preview=null,parsed=null,batchId='',busy=false,notice='',focusId='',faculty=[];
+ const active=()=>Boolean(dialog&&(embedded?dialog.isConnected:dialog.open));
+ function ensureStyles(){
+  const doc=root?.document;if(!doc||doc.querySelector('link[data-stage-style]'))return;
+  const link=doc.createElement('link');link.rel='stylesheet';link.href='schedule-workflow.css';link.dataset.stageStyle='1';doc.head.append(link);
+ }
  function identity(){
   const demo=root?.UCVM_PAWS_DEMO_API,user=root?.firebase?.auth?.().currentUser;
   const row=demo?.store?.tables?.users?.find(x=>x.firebaseUid===user?.uid);
@@ -51,17 +56,19 @@
    (errors.length?'<div class="paws-stage-list">'+errors.slice(0,100).map(e=>
      '<p class="paws-office-error"><strong>Row '+esc(e.rowNumber)+' · '+esc(e.code)+'</strong>: '+esc(e.message)+
      (e.issues?.length?'<br>'+esc(e.issues.join('; ')):'')+'</p>').join('')+'</div>':''):'';
-  dialog.innerHTML='<header class="paws-stage-header"><h2>'+esc(isLab?'LAB Work Queue · Bulk Allocations':'ADFAD Work Queue · Bulk Faculty Assignments')+
-   pendingBadge()+'</h2><button type="button" data-office-close>Close</button></header>'+
+  const heading=embedded?'<header class="lab-bulk-header"><h3>Bulk CSV · LAB allocations'+pendingBadge()+'</h3><p class="lab-muted">Download assigned LAB work, upload a completed CSV, validate conflicts, then publish.</p></header>':
+   '<header class="paws-stage-header"><h2>'+esc(isLab?'Lab Scheduling · Bulk CSV':'ADFAD Work Queue · Bulk Faculty Assignments')+
+   pendingBadge()+'</h2><button type="button" data-office-close>Close</button></header>';
+  dialog.innerHTML=heading+
    '<div class="paws-stage-body"><p class="paws-stage-banner">Synthetic Testing Demo. This is an office task queue, not ADC Schedule Workflow. Do not upload real student names, UCIDs or private employee records.</p>'+
    '<p>'+esc(instructions)+'</p>'+(notice?'<p class="paws-stage-status" role="status">'+esc(notice)+'</p>':'')+
-   '<div class="paws-stage-flow"><span>Pending '+esc(isLab?'LAB':'ADFAD')+' Sessions: <strong>'+esc(new Set(exported.map(x=>x.sessionId)).size)+'</strong></span>'+
-   '<span>Rows in downloadable template: <strong>'+esc(exported.length)+'</strong></span></div>'+
+   '<div class="paws-stage-flow"><span>Pending '+esc(isLab?'LAB':'ADFAD')+' Sessions: <strong>'+esc(new Set(allRows.map(x=>x.sessionId)).size)+'</strong></span>'+
+   '<span>Rows in downloadable template: <strong>'+esc(allRows.length)+'</strong></span></div>'+
    '<section class="paws-stage-card"><h3>Download assigned work / Upload completed template</h3>'+
    '<p>The template is prefilled from the published ADC Sessions, including Session IDs, dates, times and revision tokens. Download all pending work before editing.</p>'+
    '<div class="paws-stage-actions"><button type="button" data-office-download>Download prefilled '+esc(isLab?'LAB':'ADFAD')+' CSV</button>'+
    '<button type="button" data-office-reset>Reload current work</button>'+
-   (isLab&&focusId?'<button type="button" data-office-manual>Open single LAB editor</button>':'')+'</div>'+
+   (!embedded&&isLab&&focusId?'<button type="button" data-office-manual>Open single LAB editor</button>':'')+'</div>'+
    '<label>Upload completed CSV/TSV<input data-office-file type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values"></label>'+
    '<label>Or edit/paste Excel cells here<textarea data-office-content rows="11" spellcheck="false" class="paws-office-textarea">'+esc(editor)+'</textarea></label>'+
    (isLab?'<p><strong>LAB:</strong> For a rotating Group 1/2/3, use three Run Keys/times. For All, repeat the same Run Key for each assigned group. Room/student conflicts and capacity must pass.</p>':
@@ -69,8 +76,8 @@
    '<div class="paws-stage-actions"><button type="button" data-office-preview>Validate & Preview conflicts</button>'+
    '<button type="button" data-office-publish '+(!preview?.valid?'disabled':'')+'>Publish '+esc(isLab?'LAB allocations':'Faculty assignments')+'</button></div>'+
    previewHtml+'</section></div>';
-  dialog.querySelector('[data-office-close]').onclick=()=>dialog.close();
-  dialog.querySelector('[data-office-download]').onclick=()=>download(csv.officeTemplate(office,exported),'paws_'+office+'_pending_'+new Date().toISOString().slice(0,10)+'.csv');
+  dialog.querySelector('[data-office-close]')?.addEventListener('click',()=>dialog.close());
+  dialog.querySelector('[data-office-download]').onclick=()=>download(csv.officeTemplate(office,allRows),'paws_'+office+'_pending_'+new Date().toISOString().slice(0,10)+'.csv');
   dialog.querySelector('[data-office-reset]').onclick=()=>load(false);
   dialog.querySelector('[data-office-manual]')?.addEventListener('click',()=>{dialog.close();root.PAWS_LAB_SCHEDULING?.open?.(focusId);});
   dialog.querySelector('[data-office-file]').onchange=async e=>{
@@ -93,6 +100,7 @@
    notice='Published '+result.publishedCount+' '+office.toUpperCase()+' Session(s). The Work Queue was updated.';
    await load(true);
    root.UCVM_TIMETABLE_TESTING_HOOKS?.refresh?.();root.PAWS_TASKS?.refresh?.();
+   if(office==='lab'&&root.CustomEvent)root.dispatchEvent?.(new root.CustomEvent('paws-lab-published'));
   });
  }
  async function withBusy(fn){
@@ -101,8 +109,10 @@
   finally{busy=false;render();}
  }
  async function load(keepNotice=false){
-  if(!dialog?.open)return;
+  if(!active())return;
+  const host=dialog,currentOffice=office;
   const data=await request('/office-export?office='+office);
+  if(!active()||dialog!==host||office!==currentOffice||!identity()||!can(identity().role,office))return;
   exported=data.rows||[];
   const rows=focusId?(office==='lab'?exported.filter(x=>{
    // Keep the whole Course/date group so unrelated stations are not omitted.
@@ -112,13 +122,40 @@
   allRows=rows;
   editor=csv.officeTemplate(office,rows);resetPreview();
   if(!keepNotice)notice='';
-  if(office==='adfa'){try{const view=await request();faculty=view.faculty||[]}catch(_){faculty=[]}}
-  render();
+  if(office==='adfa'){try{const view=await request();if(dialog!==host||!active())return;faculty=view.faculty||[]}catch(_){faculty=[]}}
+  if(dialog===host&&active())render();
+ }
+ function unmountLab(){
+  if(!embedded)return;
+  dialog=null;embedded=false;office='';focusId='';resetPreview();exported=[];allRows=[];editor='';notice='';
+ }
+ async function mountLab(host,{sessionId=''}={}){
+  if(!host||!host.isConnected)return;
+  const user=identity();
+  if(!user||!can(user.role,'lab')){host.textContent='LAB scheduling access is not available for this account.';return}
+  if(dialog?.open)dialog.close();
+  unmountLab();
+  ensureStyles();dialog=host;embedded=true;office='lab';focusId=val(sessionId);
+  exported=[];allRows=[];editor='';notice='';resetPreview();
+  host.innerHTML='<p role="status">Loading LAB bulk assignments…</p>';
+  try{await load()}catch(e){
+   if(dialog===host&&active()){
+    host.innerHTML='<p role="alert">'+esc(report(e))+'</p><button type="button" data-office-retry>Retry loading LAB work</button>';
+    host.querySelector('[data-office-retry]')?.addEventListener('click',()=>mountLab(host,{sessionId:focusId}));
+   }
+  }
  }
  async function open(officeName,{sessionId=''}={}){
   const user=identity(),target=val(officeName);
   if(!user||!can(user.role,target)){root?.alert?.('Use a scoped LAB or ADFAD Demo role.');return}
+  // LAB work is now a tab of Lab Scheduling, never a second top-level queue.
+  if(target==='lab'){
+   if(!root.PAWS_LAB_SCHEDULING?.open){root?.alert?.('Lab Scheduling is unavailable. Reload the Testing Demo.');return}
+   return root.PAWS_LAB_SCHEDULING.open(sessionId,{tab:'bulk'});
+  }
+  unmountLab();
   if(dialog?.open)dialog.close();
+  ensureStyles();
   office=target;focusId=sessionId;notice='';preview=null;parsed=null;editor='';faculty=[];
   dialog=root.document.createElement('dialog');dialog.className='paws-stage-dialog';dialog.setAttribute('aria-label',target.toUpperCase()+' Work Queue');
   const currentDialog=dialog;root.document.body.append(currentDialog);
@@ -134,18 +171,20 @@
   if(!root?.document||!root.UCVM_PAWS_DEMO_API)return;
   const host=root.document.querySelector('.timetable-top-actions');if(!host)return;
   const user=identity();
-  for(const name of ['lab','adfa']){
+  for(const name of ['adfa']){
    const id='paws-office-'+name+'-queue';
    let b=root.document.getElementById(id);
    if(!b){b=root.document.createElement('button');b.id=id;b.className='masthead-link';b.type='button';b.innerHTML=(name==='lab'?'LAB Work Queue':'ADFAD Work Queue')+pendingBadge();b.onclick=()=>open(name);host.prepend(b)}
    b.hidden=!user||!can(user.role,name);
   }
-  if(dialog?.open&&(!user||!can(user.role,office)))dialog.close();
+  if(active()&&(!user||!can(user.role,office))){
+   if(embedded)unmountLab();else dialog.close();
+  }
  }
  if(root?.document){
   const init=()=>{mount();root.firebase?.auth?.().onAuthStateChanged?.(mount)};
   if(root.document.readyState==='complete')init();else root.addEventListener('load',init,{once:true});
   root.addEventListener('paws-profile',mount);root.addEventListener('ucvm-timetable-user',mount);
  }
- return Object.freeze({open,workQueue,can,parseOfficeCsv:csv.parseOfficeCsv});
+ return Object.freeze({open,mountLab,unmountLab,workQueue,can,parseOfficeCsv:csv.parseOfficeCsv});
 });
