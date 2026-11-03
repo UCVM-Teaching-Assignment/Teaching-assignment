@@ -24,7 +24,7 @@
     ['2027-03-29', 'Easter Monday'], ['2027-05-24', 'Victoria Day']
   ];
 
-  const state = { showCcc: true, showClosures: true, allSemesters: false, campus: '' };
+  const state = { showCcc: true, showClosures: false, allSemesters: false, campus: '' };
 
   // ---------------------------------------------------------------- helpers
   const $ = id => doc.getElementById(id);
@@ -185,7 +185,7 @@
     if (reset && !$('testing-only-filter-item')) {
       const item = el(`<div class="fbar-item" id="testing-only-filter-item"><span class="fbar-label">Show${badge()}</span>
         <div class="testing-only-row" style="margin:0"><label class="testing-only-check"><input type="checkbox" id="testing-only-show-ccc" checked> CCC</label>
-        <label class="testing-only-check"><input type="checkbox" id="testing-only-show-closures" checked> University Closures</label></div></div>`);
+        <label class="testing-only-check"><input type="checkbox" id="testing-only-show-closures"> University Closures</label></div></div>`);
       reset.parentNode.insertBefore(item, reset);
       $('testing-only-show-ccc').addEventListener('change', e => { state.showCcc = e.target.checked; rerender(); });
       $('testing-only-show-closures').addEventListener('change', e => { state.showClosures = e.target.checked; rerender(); });
