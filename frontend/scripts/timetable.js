@@ -1153,6 +1153,9 @@
     $('filter-month').disabled=viewMode==='compare';
     $('week-mobile-select').disabled=viewMode==='compare';
     document.querySelectorAll('[data-week],[data-semester]').forEach(node=>{node.disabled=viewMode==='compare'});
+    for(const id of ['export-csv','export-calendar','outlook-invite-btn'])$(id).disabled=viewMode==='compare';
+    const exportNote=$('compact-export-bar').querySelector('.compact-export-note');
+    if(exportNote)exportNote.textContent=viewMode==='compare'?'Return to a regular Calendar view to export.':'Uses the current filters.';
   }
 
   function moveCalendar(delta){
@@ -1707,6 +1710,7 @@
   }
 
   async function startSessionSelection(){
+    if(viewMode==='compare'){toast('Return to the Week view to select and edit sessions.',true);return;}
     // Testing site only: Select Sessions saves through the single-session edit API.
     const testingSelection=Boolean(window.UCVM_TESTING_ONLY?.selectSessions&&window.UCVM_PAWS_DATA?.sessionEditEnabled?.());
     if(!testingSelection&&!requireSessionWrites())return;
