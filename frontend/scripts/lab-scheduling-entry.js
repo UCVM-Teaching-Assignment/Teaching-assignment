@@ -33,8 +33,8 @@
   if(!response.ok)throw Object.assign(Error(data.error?.message||'The Lab operation failed.'),{code:data.error?.code,status:response.status,details:data.error?.details});return data;
  }
  function styles(){if(!root.document.querySelector('[data-paws-lab-css]')){const link=root.document.createElement('link');link.rel='stylesheet';link.href='lab-scheduling.css';link.dataset.pawsLabCss='1';root.document.head.append(link)}}
- async function open(sessionId){
-  styles();try{const loader=root.UCVM_ASSETS;if(!loader?.loadScriptOnce)throw Error('Reload PAWS to initialize the shared dialog loader.');const editor=await loader.loadScriptOnce('lab-scheduling-editor.js','PAWS_LAB_EDITOR');await editor.open(sessionId)}catch(error){root.alert(error.message)}
+ async function open(sessionId,options={}){
+  styles();try{const loader=root.UCVM_ASSETS;if(!loader?.loadScriptOnce)throw Error('Reload PAWS to initialize the shared dialog loader.');const editor=await loader.loadScriptOnce('lab-scheduling-editor.js','PAWS_LAB_EDITOR');await editor.open(sessionId,options)}catch(error){root.alert(error.message)}
  }
  function install(){
   if(!root?.document||!root.UCVM_PAWS_DEMO_API||!root.document.getElementById('calendar-body'))return;
