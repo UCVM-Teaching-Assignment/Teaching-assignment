@@ -13,7 +13,8 @@
         "Added unit and staged browser tests for Fall Week 1 versus Winter Week 5, repeat selection, unlimited card count, loading and individual removal. The feature is browser-local Testing only, with no Beta, SQL or DOE changes.",
         "Removed automatically generated starter Course Sessions from the browser-local Calendar and disabled the default University Closure overlay; existing saved starter rows are removed by exact fixture ID while preserving user-created imports and drafts.",
         "ADC starts with a Schedule Workflow import task; after an ADC draft or publication, role-scoped outstanding tasks route LAB to Lab Scheduling and ADFAD to its Faculty assignment Work Queue.",
-        "Unified Work Queue shortcuts for ADC, LAB, ADFAD and other authorized Demo roles with live task counts and status; no real university data or production permissions are changed."
+        "Unified Work Queue shortcuts for ADC, LAB, ADFAD and other authorized Demo roles with live task counts and status; no real university data or production permissions are changed.",
+        "Stopped automatic 2027–28 sample-year generation and removed its public sample-loading shortcut. Only untouched auto-generated example Courses are cleared from previously saved browser Demo years; manually edited year data stays intact."
       ]
     },
     {
