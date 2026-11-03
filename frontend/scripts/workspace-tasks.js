@@ -1,6 +1,7 @@
 (function(root){
  'use strict';
  const showFaculty=value=>root.PAWS_FACULTY_NAME?.format(value)||String(value||'');
+ const pendingBadge=()=>root?.UCVM_TESTING_ONLY?.pendingBadge?.()||'';
  const TYPES={instructor_overlap:'Instructor overlap',afc_unavailable:'Unavailable',duplicate_assignment:'Duplicate assignment',duplicate_session_assignment:'Duplicate session assignment',invalid_schedule:'Invalid schedule',missing_schedule:'Missing schedule',calendar_activity_overlap:'Working activity overlap',calendar_time_unknown:'Working time not provided'};
  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  let panel,button,adapter,generation=0,owner=null,started=false,year='',years=[],params={},query='',mode='all';
@@ -39,12 +40,12 @@
   const otherCards=otherItems.map(item=>`<button type="button" class="workspace-task" data-id="${esc(item.id)}" data-kind="${esc(item.kind)}"><strong>${esc(item.title)}</strong><span>${esc(item.reason)}</span><small>${esc(item.date||'Date not provided')}</small>${item.topic?`<span class="workspace-task-topic">${esc(item.topic)}</span>`:''}</button>`);
   const workflowCards=(mode==='requests'?[]:workflowTasks.filter(matchesSearch)).map(item=>
    '<button type="button" class="workspace-task" data-workflow-session="'+esc(item.sessionId)+'" data-workflow-stage="'+esc(item.stage)+'">'+
-   '<strong>'+esc(item.stage.toUpperCase())+' · '+esc(item.courseCode)+'</strong>'+
+   '<strong>'+esc(item.stage.toUpperCase())+' · '+esc(item.courseCode)+pendingBadge()+'</strong>'+
    '<span>'+esc((item.missing||[]).join(', '))+'</span><small>'+esc(item.date||'Date not provided')+
    (item.status==='waiting_for_lab'?' · Waiting for LAB':'')+'</small></button>');
   const offices=[...new Set(workflowTasks.map(x=>x.stage).filter(x=>x==='lab'||x==='adfa'))];
   const bulkActions=offices.length?'<div class="paws-task-bulk-actions">'+offices.map(office=>
-   '<button type="button" data-office-bulk="'+esc(office)+'">Download / Import '+esc(office.toUpperCase())+' template</button>').join('')+'</div>':'';
+   '<button type="button" data-office-bulk="'+esc(office)+'">Download / Import '+esc(office.toUpperCase())+' template'+pendingBadge()+'</button>').join('')+'</div>':'';
   const messages=errors.map(message=>`<p role="alert">${esc(message)}</p>`).join('')+(notice?`<p role="status">${esc(notice)}</p>`:'');
   const list=panel.querySelector('.workspace-task-list');
   list.innerHTML=messages+bulkActions+(errors.length?'<button type="button" data-retry>Retry</button>':'')+issueCards.join('')+workflowCards.join('')+otherCards.join('')+(!loading&&!errors.length&&!issueCards.length&&!workflowCards.length&&!otherCards.length?'<p class="workspace-empty">No matching tasks in your authorized scope.</p>':'')+(nextCursor&&mode!=='requests'?`<button type="button" class="workspace-task-more" data-task-more${loading?' disabled':''}>Load more issues</button>`:'');
