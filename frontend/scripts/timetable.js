@@ -1491,8 +1491,11 @@
         const weeklySource=fullSource.filter(row=>row.date>=startText&&row.date<=endText);
         const rows=filteredSessions(weeklySource,{semesterOverride:period.semester,ignoreMonth:true,skipTypeRebuild:true});
         const grid=rows.filter(row=>calendarTimingDisposition(row).disposition==='grid' && [1,2,3,4,5].includes(parseYmd(row.date).getDay()));
-        const checkNeeded=rows.filter(row=>!grid.includes(row));
         const weekend=rows.filter(row=>[0,6].includes(parseYmd(row.date).getDay()));
+        // A valid weekend session is displayed in the weekend lane, not
+        // misreported as needing a timing correction.
+        const readyWeekend=weekend.filter(row=>calendarTimingDisposition(row).disposition==='grid');
+        const checkNeeded=rows.filter(row=>calendarTimingDisposition(row).disposition!=='grid');
         const filteredOut=weeklySource.length-rows.length;
         displayData.push(...rows);
         // Keep the Mon-Fri time grid intact; show weekend sessions separately,
@@ -1503,7 +1506,7 @@
           '</button>').join('')+'</section>':'';
         body=weekGridMarkup(start,rows.filter(row=>![0,6].includes(parseYmd(row.date).getDay())),{showCheckNeeded:true})+
           weekendMarkup+'<span class="multi-week-status">Total: '+weeklySource.length+
-          ' · Displayed: '+grid.length+' · Check Needed: '+checkNeeded.length+
+          ' · Displayed: '+(grid.length+readyWeekend.length)+' · Check Needed: '+checkNeeded.length+
           ' · Filtered Out: '+filteredOut+' · Weekend: '+weekend.length+'</span>';
       }
       html+='<section class="multi-week-card" data-comparison-period="'+escapeHtml(period.key)+'" aria-label="'+escapeHtml(label)+'">'+
