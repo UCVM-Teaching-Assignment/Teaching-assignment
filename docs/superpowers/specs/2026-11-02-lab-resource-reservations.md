@@ -10,7 +10,7 @@ ADC publishes Course Session date/time -> LAB sends resource request / Reserve N
 
 LAB may require horses, Pet Professors, both, or neither. Resources are NOT Teaching Assignments and never create DOE. A request belongs to one published LAB Session, not to a whole Course, student group or Faculty member.
 
-Existing LAB datasets may already have published groups. The default opening tab becomes **1. Resource Request**. In this first Testing iteration, LAB publication is not retroactively blocked without a resource request. A hard gate requires a separate product decision and existing-record migration.
+Existing LAB datasets may already have published groups. The default opening tab becomes **1. Resource Request**. **New LAB Sessions published by ADC must submit a resource request (or explicitly record no animals required) before LAB group publication, whether using Single Activity or Bulk CSV.** Existing legacy/imported LABs are not retroactively blocked. A hard rule for all historical LABs would require an approved migration.
 
 ## Reference patterns
 
@@ -59,7 +59,7 @@ Owner/Developer can simulate confirmation/rejection, assign synthetic Horse IDs 
 
 1. ADC publishes LAB; LAB opens Resource Request before Student Groups.
 2. LAB submits 2 horses and Notes; status Requested, then Owner confirms H01/H02.
-3. Same horse cannot be confirmed before its previous end + 24h; succeeds exactly at the boundary.
+3. Newly ADC-published LAB cannot publish Single Activity or Bulk CSV allocations until a resource request (or explicit none) has been recorded. Same horse cannot be confirmed before its previous end + 24h; succeeds exactly at the boundary.
 4. 18+14 Pet Professors within 48h displays warning >30, without stopping submission.
 5. Insufficient available Horse IDs and repeated Horse IDs are rejected at confirmation.
 6. ADC changing session date/time forces a new reservation request.
