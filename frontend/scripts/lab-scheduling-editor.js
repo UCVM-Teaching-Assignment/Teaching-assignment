@@ -2,18 +2,18 @@
  'use strict';
  const api=()=>root.PAWS_LAB_SCHEDULING,E=value=>api().escape(value),id=()=>root.crypto.randomUUID();
  const pendingBadge=()=>root?.UCVM_TESTING_ONLY?.pendingBadge?.()||'';
- let dialog=null,context=null,items=[],accounts=[],canSeed=false,selected='',owner='',generation=0,busy=false,dirty=false,notice='',tab='single';
+ let dialog=null,context=null,resource=null,items=[],accounts=[],canSeed=false,selected='',owner='',generation=0,busy=false,dirty=false,notice='',tab='resources';
  const name=value=>root.PAWS_FACULTY_NAME?.format(value)||value;
- function clear(){generation++;root.PAWS_SCHEDULE_OFFICE_UI?.unmountLab?.();context=null;items=[];accounts=[];selected='';owner='';if(dialog){dialog.close();dialog.replaceChildren()}}
+ function clear(){generation++;root.PAWS_SCHEDULE_OFFICE_UI?.unmountLab?.();context=null;resource=null;items=[];accounts=[];selected='';owner='';if(dialog){dialog.close();dialog.replaceChildren()}}
  function syncIdentity(){if(owner&&owner!==api().identity()?.key)clear()}
  function shell(){if(!dialog){dialog=root.document.createElement('dialog');dialog.className='paws-lab-dialog';dialog.setAttribute('aria-labelledby','paws-lab-title');root.document.body.append(dialog);dialog.addEventListener('cancel',event=>{event.preventDefault();clear()})}if(!dialog.open)dialog.showModal()}
  function options(rows,value,label,current){return rows.map(r=>'<option value="'+E(value(r))+'" '+(String(value(r))===String(current)?'selected':'')+'>'+E(label(r))+'</option>').join('')}
  const input=(label,key,value,type='text',extra='')=>'<label>'+E(label)+'<input data-field="'+E(key)+'" type="'+type+'" value="'+E(value)+'" '+extra+'></label>';
  function groupsPicker(groups,chosen,key){return '<div class="lab-checks">'+groups.map(g=>'<label><input type="checkbox" data-field="'+key+'" value="'+E(g.id)+'" '+(chosen.includes(g.id)?'checked':'')+'> '+E(g.code||'Unlabelled')+'</label>').join('')+'</div>'}
  function message(error){notice=error?.message||String(error);if(error?.details&&context)context.validation=error.details;const status=dialog?.querySelector('[data-notice]');if(status&&dialog.querySelector('[data-lab-form]')){status.textContent=notice;status.setAttribute('role','alert');renderButtons();return}render()}
- async function refresh(){const token=++generation;const result=selected?await api().request('/context?sessionId='+encodeURIComponent(selected)):null;if(token!==generation||owner!==api().identity()?.key||!dialog.open)return;context=result;dirty=false;render()}
+ async function refresh(){const token=++generation;const result=selected?await api().request('/context?sessionId='+encodeURIComponent(selected)):null;const reservation=result?.capabilities?.canRoster?await api().request('/resources?sessionId='+encodeURIComponent(selected)):null;if(token!==generation||owner!==api().identity()?.key||!dialog.open)return;context=result;resource=reservation;dirty=false;render()}
  async function open(sessionId,options={}){
-  clear();tab=options.tab==='bulk'?'bulk':'single';owner=api().identity()?.key||'';if(!owner)throw Error('Sign in before opening Lab scheduling.');shell();dialog.innerHTML='<h2 id="paws-lab-title">Lab Scheduling'+pendingBadge()+'</h2><p role="status">Loading activity scopes...</p>';const token=++generation;
+  clear();tab=options.tab==='bulk'?'bulk':options.tab==='single'?'single':'resources';owner=api().identity()?.key||'';if(!owner)throw Error('Sign in before opening Lab scheduling.');shell();dialog.innerHTML='<h2 id="paws-lab-title">Lab Scheduling'+pendingBadge()+'</h2><p role="status">Loading activity scopes...</p>';const token=++generation;
   try{const result=await api().request('');if(token!==generation||owner!==api().identity()?.key||!dialog.open)return;items=result.items||[];accounts=result.labAccounts||[];canSeed=result.canSeed===true;selected=items.some(x=>x.sessionId===sessionId)?sessionId:items[0]?.sessionId||'';notice='';await refresh()}catch(error){message(error)}
  }
  function capture(){
