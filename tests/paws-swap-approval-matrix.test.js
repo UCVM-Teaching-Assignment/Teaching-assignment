@@ -64,8 +64,9 @@ test('only one active notified linked account can provide replacement consent',(
 });
 test('known seeded ADFA-stage synthetic SWAP has recorded target consent',()=>{
   const {createStore}=require('../tools/pages-demo-api/store.js');
+  const {seedDemoCalendar}=require('./helpers/seed-demo-calendar.js');
   const {list}=require('../tools/pages-demo-api/repos/swap.js');
-  const requests=list(createStore());
+  const requests=list(seedDemoCalendar(createStore()));
   const seeded=requests.find(row=>row.status==='pending'&&row.nextStage==='adfa'&&row.notifyReplacement);
   assert.ok(seeded,'expected seeded ADFA decision fixture');
   assert.ok(seeded.history.some(h=>h.stage==='target'&&h.decision==='approve'));
