@@ -47,6 +47,8 @@ function createTestingOnly(store) {
   function loadDenseCalendar(actorFirebaseUid = '') {
     const result = applyDenseFixture(store.tables);
     if (result.addedSessions || result.addedCCC) {
+      // Manual loading uses the same compact persistence as startup seeding.
+      store.tables.extra.testingDemoFixtureVersion='beta-density-synthetic-v1';
       store.audit({
         domain: 'testing_fixture', changeType: 'synthetic_density_added',
         actorFirebaseUid, academicYear: '2026-27',
