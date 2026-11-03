@@ -108,7 +108,7 @@ test('the comparison reuses the exact Week grid renderer and each week loads ind
  const script=file('frontend/scripts/timetable.js');
  assert.match(script,/function weekGridMarkup\(start,data/);
  assert.match(script,/weekGridMarkup\(start,data,\{showCheckNeeded:!window.PAWS_TASKS\}\)/);
- assert.match(script,/weekGridMarkup\(start,rows,\{showCheckNeeded:true\}\)/);
+ assert.match(script,/weekGridMarkup\(start,rows\.filter\(/);
  assert.match(script,/fetchPawsSessions\(\{start,end:ymd\(addDays\(parseYmd\(end\),1\)\)\}\)/);
  assert.match(script,/comparisonIdentity\(\)!==identity/);
  assert.match(script,/comparisonEpoch!==epoch/);
