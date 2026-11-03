@@ -182,7 +182,7 @@
     function editAssignment(a,year,code,id,fid){staff(a);editable(year);const row=annual(year,code);if(!canPublish(a,year,row))invalid('Course scope permission required');const s=row.working.find(x=>x.id===id);if(!s)invalid('Session not found');if(fid&&!faculty(fid))invalid('Unknown Faculty');
       if(fid&&(!faculty(fid).active||!faculty(fid).appointmentValid))invalid('Inactive or ineligible Faculty cannot be assigned');
       if(fid&&faculty(fid)?.activationDate&&(!s.date||s.date<faculty(fid).activationDate))invalid('Faculty cannot be assigned before activation date');
-      const old=s.assignments[0]||{};s.assignments=[{facultyId:fid||null,teachingRole:old.teachingRole||'Instructor',doeCredit:Number(old.doeCredit)||0}];
+      const old=s.assignments[0]||{};s.assignments=fid?[{facultyId:fid,teachingRole:old.teachingRole||'Instructor',doeCredit:Number(old.doeCredit)||0}]:[];
       row.revision++;row.finalizedRevision=0;logged('assignment_updated',a,year,{code:row.code,sessionId:id});return clone(s);
     }
 
@@ -312,6 +312,8 @@
         if(!(s.assignments||[]).some(x=>x.facultyId))problem('warn','UNASSIGNED_INSTRUCTOR','Session has no instructor',s.id);
         if(!s.room)problem('warn','UNASSIGNED_ROOM','Room not selected',s.id);
         for(const x of s.assignments||[]){
+          // An explicit unassigned placeholder is not an inactive Faculty record.
+          if(!x.facultyId)continue;
           const f=faculty(x.facultyId);
           if(!f||!f.active||!f.appointmentValid)problem('block','INACTIVE_FACULTY',(!f?'Unknown Faculty assignment':f.name)+' is inactive or ineligible for '+(s.topic||'this Session')+' ('+(date||'unscheduled')+'). Replace or remove this assignment before publishing.',s.id,x.facultyId);
           if(date&&f?.activationDate&&date<f.activationDate)problem('block','FUTURE_FACULTY_START',f.name+' starts '+f.activationDate+', after the Session date '+date+'. Choose an eligible replacement.',s.id,x.facultyId);
