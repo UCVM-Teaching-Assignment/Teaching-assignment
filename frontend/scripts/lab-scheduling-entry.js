@@ -5,7 +5,7 @@
  const escape=value=>String(value==null?'':value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function renderPublished(p,format=value=>String(value||'')){
   if(!p)return '<p class="lab-muted">Lab group allocations are not published yet.</p>';
-  return '<p class="lab-muted">Published v'+escape(p.version)+' &middot; '+escape(p.scope.academicYear)+' &middot; '+escape(p.scope.date)+'</p>'+(p.stations||[]).map(st=>{
+  return '<p class="lab-muted">Published v'+escape(p.version)+(root?.UCVM_TESTING_ONLY?.pendingBadge?.()||'')+' &middot; '+escape(p.scope.academicYear)+' &middot; '+escape(p.scope.date)+'</p>'+(p.stations||[]).map(st=>{
    const times=[...new Set(st.runs.map(r=>r.start+' - '+r.end))];
    const instructors=(st.instructors||[]).map(f=>'<span>'+escape(format(f.name))+' <strong>'+escape(f.role)+'</strong>'+(f.participantCategory?' <small>'+escape(f.participantCategory)+'</small>':'')+'</span>').join('<br>');
    const rooms=[...new Set(st.runs.map(r=>r.room+(r.subspace?' / '+r.subspace:'')))];
