@@ -33,7 +33,7 @@ test('Beta-density fixture matches synthetic weekly profile and preserves curren
   assert.equal(countByWeek(t, 'fall', 5), 79);
   assert.equal(countByWeek(t, 'spring', 3), 17);
   const kinds = new Set(t.sessions.map(row => row.sessionType));
-  for (const kind of ['LEC', 'LAB', 'SRL', 'Exam']) assert.ok(kinds.has(kind), kind + ' coverage');
+  for (const kind of ['LEC', 'LAB', 'SRL', 'Exam', 'OSCE']) assert.ok(kinds.has(kind), kind + ' coverage');
   const ccc = t.activities.filter(row => row.category === 'ccc');
   assert.equal(ccc.filter(row => row.staffingKind === 'unassigned' || row.facultyDisplayName === 'Locum').length, CCC_LOCUM_TARGET);
   assert.ok(ccc.every(row => row.academicYear === '2026-27'));
@@ -71,7 +71,8 @@ test('CCC schedule API receives Beta-shaped half-day rows and full synthetic cov
   const result = await createCccScheduleRepository({ tables: t }).list({ academicYear: '2026-27' });
   assert.equal(result.entries.length, CCC_TARGET);
   assert.ok(result.entries.every(row => row.date && row.endDate && row.blockLabel && row.courseCode === 'CCC' && typeof row.facultyName === 'string' && typeof row.halfDay === 'boolean'));
-  assert.ok(result.entries.every(row => row.halfDay === true));
+  assert.ok(result.entries.some(row => row.halfDay === true));
+  assert.ok(result.entries.some(row => row.halfDay === false), 'Full-day CCC rotation example expected');
 });
 
 test('empty calendar baseline from PR #107 can load complete dense fixture', () => {
