@@ -104,6 +104,7 @@ test('bulk role actions are visible only to ADFAD and preserve existing per-role
  const sourceJs=fs.readFileSync(path.join(__dirname,'../frontend/scripts/multi-year-demo.js'),'utf8');
  assert.doesNotThrow(()=>new vm.Script(sourceJs));
  assert.match(sourceJs,/Confirm All Eligible Drafts/);
+ assert.match(sourceJs,/UCVM_TESTING_ONLY/);
  assert.match(sourceJs,/data-my-action="confirm-all-roles"/);
  assert.match(sourceJs,/previewRoleConfirmations/);
  assert.match(sourceJs,/confirmRolesBulk/);
