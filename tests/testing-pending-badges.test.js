@@ -80,7 +80,8 @@ test('workflow tasks, bulk import and dialogs have T; original Tasks remains unc
  const lab=source('frontend/scripts/lab-scheduling-editor.js');
  const published=source('frontend/scripts/lab-scheduling-entry.js');
  assert.match(tasks,/esc\(item\.courseCode\)\+pendingBadge\(\)/);
- assert.match(tasks,/' template'\+pendingBadge\(\)/);
+ assert.match(tasks,/Download \/ Import ADFAD template/);
+ assert.match(tasks,/Open Lab Scheduling · Bulk CSV/);
  assert.match(tasks,/button\.textContent=loading\?'Tasks/);
  assert.match(bulk,/action\.innerHTML='Bulk Import CSV \/ Excel Paste'\+pendingBadge\(\)/);
  assert.match(bulk,/const heading=.*pendingBadge\(\)/);
