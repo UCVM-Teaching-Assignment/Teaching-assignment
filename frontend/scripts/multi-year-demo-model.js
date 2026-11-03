@@ -404,12 +404,60 @@
       if(!history||!history.assignments.length)invalid('Published historical assignment not found');const chosen=history.assignments.find(x=>effectiveOn(faculty(x.facultyId),s.date));if(!chosen)invalid('Historical Faculty no longer eligible');
       s.assignments=clone([chosen]);row.revision++;row.finalizedRevision=0;logged('historical_assignment_copied',a,year,{code:row.code,sourceId,sessionId});return clone(chosen);
     }
-    function confirmRole(a,year,id){adfa(a);editable(year);const role=(state.roles[year]||[]).find(r=>r.id===id);if(!role)invalid('Role not found');if(role.status!=='draft')invalid('Role is not draft');role.status='confirmed';logged('annual_role_confirmed',a,year,{roleId:id});return clone(role)}
+    // Bulk approval is an explicit ADFAD action, not automatic year rollover.
+    // A partial-year renewal may be confirmed after ADFAD review, but inactive,
+    // invalid, future-start or out-of-year records must never be auto-approved.
+    function roleApprovalIssue(year,r){
+      const person=faculty(r.facultyId);
+      if(!person)return 'Unknown Faculty';
+      if(!person.active)return 'Inactive Faculty';
+      if(!person.appointmentValid)return 'Invalid Faculty appointment';
+      if(!r.roleType||!r.scope)return 'Missing role type or scope';
+      if(!r.start||!r.end||r.start>r.end||r.start<startOf(year)||r.end>endOf(year))return 'Role dates outside selected academic year';
+      if(person.activationDate&&r.start<person.activationDate)return 'Faculty starts after role start';
+      return '';
+    }
+    function previewRoleConfirmations(a,year){
+      adfa(a);inspect(year);
+      const all=state.roles[year]||[],pending=all.filter(r=>r.status==='draft'),eligible=[],skipped=[];
+      for(const r of pending){
+        const reason=roleApprovalIssue(year,r);
+        if(reason)skipped.push({id:r.id,facultyId:r.facultyId,reason});
+        else eligible.push({id:r.id,facultyId:r.facultyId,rolloverReason:r.rolloverReason||''});
+      }
+      return {year,pending:pending.length,alreadyConfirmed:all.filter(r=>r.status==='confirmed').length,
+        eligibleIds:eligible.map(r=>r.id),eligible:clone(eligible),skipped:clone(skipped),
+        partialYear:eligible.filter(r=>r.rolloverReason==='partial year').length};
+    }
+    function confirmRolesBulk(a,year,expectedEligibleIds){
+      adfa(a);editable(year);
+      if(!Array.isArray(expectedEligibleIds)||new Set(expectedEligibleIds).size!==expectedEligibleIds.length||
+        expectedEligibleIds.some(id=>typeof id!=='string'))invalid('Invalid bulk role confirmation selection');
+      const current=previewRoleConfirmations(a,year);
+      if(JSON.stringify(expectedEligibleIds)!==JSON.stringify(current.eligibleIds))
+        invalid('Draft role approvals changed. Refresh the Roles page before confirming.');
+      if(!current.eligibleIds.length)return {confirmed:0,skipped:current.skipped.length,pending:current.pending};
+      const ids=new Set(current.eligibleIds);
+      for(const r of state.roles[year]||[])if(ids.has(r.id))r.status='confirmed';
+      logged('annual_roles_confirmed_bulk',a,year,{count:ids.size,roleIds:[...ids],skipped:current.skipped.length,partialYearReviewed:current.partialYear});
+      return {confirmed:ids.size,skipped:current.skipped.length,pending:current.pending};
+    }
+    function confirmRole(a,year,id){
+      adfa(a);editable(year);
+      const role=(state.roles[year]||[]).find(r=>r.id===id);
+      if(!role)invalid('Role not found');
+      if(role.status!=='draft')invalid('Role is not draft');
+      const reason=roleApprovalIssue(year,role);
+      if(reason)invalid('Cannot confirm this Role: '+reason);
+      role.status='confirmed';
+      logged('annual_role_confirmed',a,year,{roleId:id});
+      return clone(role);
+    }
     function setPreferredYear(a,year){who(a);inspect(year);state.preferences[a.uid]=year;persist()}
     function getPreferredYear(a){who(a);const current=currentYear(now());if(isFaculty(a))return state.years[current]?current:Object.keys(state.years)[0];return state.years[state.preferences[a.uid]]?state.preferences[a.uid]:state.years[current]?current:Object.keys(state.years)[0]}
     function reset(){state=bootstrap(source);if(sampleYear2027)seed2027Sample({uid:'demo-synthetic-fixture',role:'owner'});persist();return getState()}
     if(sampleYear2027&&!state.years['2027-28'])seed2027Sample({uid:'demo-synthetic-fixture',role:'owner'});
-    return Object.freeze({getState,createYear,seed2027Sample,addCourse,previewRollover,rolloverCourse,setYearPhase,previewPublication,compareYears,updateCatalog,addSession,editAssignment,resolveFacultyIssue,finalizeCourse,publishCourse,approvePolicy,publishDoe,setOverride,getTeaching,getCalendar,getDoe,getWorkingDoe,getConflicts,addAfc,retireYear,restoreYear,copyHistorical,confirmRole,setPreferredYear,getPreferredYear,reset,currentYear});
+    return Object.freeze({getState,createYear,seed2027Sample,addCourse,previewRollover,rolloverCourse,setYearPhase,previewPublication,compareYears,updateCatalog,addSession,editAssignment,resolveFacultyIssue,finalizeCourse,publishCourse,approvePolicy,publishDoe,setOverride,getTeaching,getCalendar,getDoe,getWorkingDoe,getConflicts,addAfc,retireYear,restoreYear,copyHistorical,confirmRole,previewRoleConfirmations,confirmRolesBulk,setPreferredYear,getPreferredYear,reset,currentYear});
   }
   return Object.freeze({createEngine,STORAGE_KEY,currentYear,validateYear});
 });
