@@ -1,0 +1,37 @@
+/* Shared Teaching Lists popup: presentation only, existing CCC and leadership readers stay authoritative. */
+.teaching-lists-overlay{position:fixed;inset:0;z-index:8500;background:rgba(9,20,38,.65);display:flex;align-items:center;justify-content:center;padding:20px}
+.teaching-lists-overlay[hidden]{display:none}
+.teaching-lists-shell{background:var(--surface);color:var(--text);border:1px solid var(--border);border-top:4px solid var(--uc-red);border-radius:10px;box-shadow:0 18px 56px rgba(0,0,0,.24);width:min(1120px,100%);height:min(780px,calc(100dvh - 40px));max-height:calc(100dvh - 40px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.teaching-lists-header{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 24px;border-bottom:1px solid var(--border)}
+.teaching-lists-header h2{font-size:20px;margin:0}
+.teaching-lists-header p{color:var(--text-3);font-size:12px;margin:3px 0 0}
+#teaching-lists-close{padding:8px 14px;min-height:36px;flex:none;border:1px solid var(--border);border-radius:5px;background:var(--surface-2);color:var(--text);cursor:pointer;font:inherit}
+.teaching-lists-tabs{display:flex;gap:8px;padding:12px 24px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.teaching-lists-tabs [role=tab]{border:1px solid var(--border-2);background:var(--surface-2);color:var(--text);padding:8px 16px;border-radius:6px;min-height:36px;cursor:pointer;font:inherit;font-weight:600}
+.teaching-lists-tabs [role=tab][aria-selected=true]{background:var(--uc-red);border-color:var(--uc-red);color:#fff}
+.teaching-lists-overlay :focus-visible{outline:3px solid var(--workspace-focus,#315b9e);outline-offset:2px}
+.teaching-lists-content{min-height:0;flex:1;display:flex;flex-direction:column}
+/* These two historic panels now live inside ONE shared dialog, never two nested modals. */
+.teaching-lists-overlay .ccc-schedule-overlay,
+.teaching-lists-overlay .leadership-directory-overlay{position:static;inset:auto;z-index:auto;padding:0;background:transparent;align-items:stretch;justify-content:stretch;flex:1;min-height:0;width:100%;border:0}
+.teaching-lists-overlay .ccc-schedule-overlay[hidden],
+.teaching-lists-overlay .leadership-directory-overlay[hidden]{display:none}
+.teaching-lists-overlay .ccc-schedule-shell,
+.teaching-lists-overlay .leadership-directory-shell{box-shadow:none;border:0;border-radius:0;width:100%;height:100%;max-height:none;min-height:0;flex:1}
+.teaching-lists-overlay .leadership-directory-shell{border-top:0}
+.teaching-lists-overlay .ccc-schedule-header,
+.teaching-lists-overlay .leadership-directory-header{padding:12px 24px 7px;border-bottom:0}
+.teaching-lists-overlay .ccc-schedule-header h2,
+.teaching-lists-overlay .leadership-directory-header h2{font-size:15px}
+/* Old close buttons are not used; the shared dialog owns close, Escape and focus. */
+.teaching-lists-overlay #ccc-schedule-close,
+.teaching-lists-overlay #leadership-directory-close{display:none}
+@media(max-width:700px){
+ .teaching-lists-overlay{padding:0}
+ .teaching-lists-shell{height:100dvh;max-height:100dvh;width:100%;border-radius:0}
+ .teaching-lists-header{padding:12px 16px}
+ .teaching-lists-tabs{padding:10px 12px;gap:6px}
+ .teaching-lists-tabs [role=tab]{padding:7px 10px;flex:1}
+ .teaching-lists-overlay .ccc-schedule-header,
+ .teaching-lists-overlay .leadership-directory-header{padding:10px 16px 6px}
+}

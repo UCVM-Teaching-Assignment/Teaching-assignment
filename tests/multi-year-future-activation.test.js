@@ -16,3 +16,23 @@ test('Future Faculty are not assigned before their official activation date in a
  assert.throws(()=>demo.editAssignment(adfa,'2027-28','VTMD 123',early,'future'),/activation date/);
  assert.ok(demo.addSession(adfa,'2027-28','VTMD 123',{date:'2027-06-03',assignments:[{facultyId:'future',doeCredit:3}]}));
 });
+
+test('fresh inactive/ineligible Faculty cannot be assigned in synthetic editor',()=>{
+ const source={faculty:[{facultyId:'eligible',displayName:'Eligible Tester',active:true},
+  {facultyId:'retired',displayName:'Retired Tester',active:false},
+  {facultyId:'invalid',displayName:'Invalid appointment',active:true,appointmentValid:false}],
+  users:[{firebaseUid:'owner',baseRole:'owner'}],
+  courses:[{courseCode:'VTMD 123',courseName:'Synthetic Course'}],
+  sessions:[]};
+ const actor={uid:'owner',role:'owner'};
+ const demo=createEngine({source});
+ demo.createYear(actor,'2027-28');demo.addCourse(actor,'2027-28','VTMD 123');
+ assert.throws(()=>demo.addSession(actor,'2027-28','VTMD 123',{date:'2027-09-01',
+  assignments:[{facultyId:'retired',doeCredit:1}]}),/inactive|ineligible/i);
+ assert.throws(()=>demo.addSession(actor,'2027-28','VTMD 123',{date:'2027-09-01',
+  assignments:[{facultyId:'invalid',doeCredit:1}]}),/inactive|ineligible/i);
+ const id=demo.addSession(actor,'2027-28','VTMD 123',{date:'2027-09-01',
+  assignments:[{facultyId:'eligible',doeCredit:2}]});
+ assert.throws(()=>demo.editAssignment(actor,'2027-28','VTMD 123',id,'retired'),/inactive|ineligible/i);
+ assert.deepEqual(demo.getState().annual['2027-28']['VTMD 123'].working[0].assignments.map(x=>x.facultyId),['eligible']);
+});

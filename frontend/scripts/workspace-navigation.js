@@ -39,7 +39,7 @@
   function restoreBackground(){for(const [node,wasInert] of inertNodes)node.inert=wasInert;inertNodes=[];}
   function layout(){
    // Business dialogs keep their existing modal controller and focus ownership.
-   if(doc.querySelector('.modal-container.open,.afc-timetable-panel:not([hidden]),.leadership-directory-overlay:not([hidden]),.ccc-schedule-overlay:not([hidden]),dialog[open]'))expanded=false;
+   if(doc.querySelector('.modal-container.open,.afc-timetable-panel:not([hidden]),.teaching-lists-overlay:not([hidden]),dialog[open]'))expanded=false;
    const taskOpen=body.classList.contains('workspace-tasks-open'),state=layoutFor(win.innerWidth,expanded,taskOpen);
    lastTasks=taskOpen;restoreBackground();
    body.classList.toggle('paws-navigation-expanded',expanded&&signedIn);

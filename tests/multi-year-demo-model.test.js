@@ -204,3 +204,30 @@ test('Developer has Owner-level annual workspace authority to create and archive
  m.retireYear(developer,'2027-28',true);
  assert.equal(m.getState().years['2027-28'].status,'archived');
 });
+
+test('unassigned Session is warning-only and does not masquerade as inactive Faculty',()=>{
+ const m=engine();m.createYear(owner,'2027-28');m.addCourse(adfa,'2027-28','VTMD 306');
+ const id=m.addSession(adfa,'2027-28','VTMD 306',{id:'empty',date:'2027-09-01',
+  topic:'Open appointment',assignments:[{facultyId:'f1',doeCredit:3}]});
+ m.editAssignment(adfa,'2027-28','VTMD 306',id,'');
+ const rows=m.getState().annual['2027-28']['VTMD 306'].working[0].assignments;
+ assert.deepEqual(rows,[]);
+ m.finalizeCourse(adfa,'2027-28','VTMD 306');
+ const p=m.previewPublication(adfa,'2027-28','VTMD 306');
+ assert.equal(p.issues.some(x=>x.code==='INACTIVE_FACULTY'),false);
+ assert.ok(p.issues.some(x=>x.code==='UNASSIGNED_INSTRUCTOR'&&x.severity==='warn'));
+ assert.equal(p.canPublish,true);
+ assert.equal(m.publishCourse(adfa,'2027-28','VTMD 306').version,1);
+});
+test('legacy null Faculty placeholder is a warning, not an inactive Faculty blocker',()=>{
+ const data=structuredClone(source);
+ data.sessions=[{id:'legacy-null',academicYear:'2026-27',courseCode:'VTMD 306',date:'2026-09-01',
+  topic:'Legacy slot',sessionType:'Exam',assignments:[{facultyId:null,teachingRole:'Instructor',doeCredit:0}]}];
+ const mem=memory(),seed=createEngine({source:data,storage:mem,now:()=>new Date('2026-10-29T18:00:00Z')});
+ seed.addSession(adfa,'2026-27','VTMD 306',{date:'2026-10-15',topic:'New exam'});
+ seed.finalizeCourse(adfa,'2026-27','VTMD 306');
+ const p=seed.previewPublication(adfa,'2026-27','VTMD 306');
+ assert.equal(p.canPublish,true);
+ assert.equal(p.issues.some(issue=>issue.code==='INACTIVE_FACULTY'),false);
+ assert.ok(p.issues.some(issue=>issue.code==='UNASSIGNED_INSTRUCTOR'));
+});

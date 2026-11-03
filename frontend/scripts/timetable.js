@@ -1045,7 +1045,7 @@
     $('manage-users-btn').addEventListener('click', openUserManager);
     // BETA-R4D-12B2A1: visibility and click share one capability helper so they can
     // never disagree. Self-service roles reach the Dashboard's self-service view.
-    $('ccc-schedule-btn').addEventListener('click', () => { if(currentUser) window.PAWS_CCC_SCHEDULE?.open(); });
+    $('teaching-lists-btn').addEventListener('click', () => { if(currentUser) window.PAWS_TEACHING_LISTS?.open('ccc'); });
     $('faculty-dashboard-btn').addEventListener('click', () => {
       if (UCVM.canOpenFacultyDashboard(currentUser)) window.location.href = 'faculty-admin.html';
     });
@@ -1053,9 +1053,7 @@
       if (currentUser && ['faculty','hicc','visc','developer','owner','administrator','adfa_general','adfa_regular','admin'].includes(String(currentUser.role || '').trim().toLowerCase())) window.location.href = 'teaching-assignments.html';
     });
     $('my-timetable-btn').addEventListener('click', () => { myTimetableOnly = !myTimetableOnly; $('my-timetable-btn').textContent = myTimetableOnly ? 'Show All Timetable' : 'My Timetable'; render(); });
-    // HICC–CC / VISC directory for the academic year the Teaching Schedule is showing.
-    $('hicc-cc-list-btn').addEventListener('click', () => { if(currentUser) window.PAWS_LEADERSHIP_DIRECTORY?.open('hicc-cc', window.UCVM_PAGE_DATA.academicYear() || sqlAcademicYearForDate(ymd(new Date()))); });
-    $('visc-list-btn').addEventListener('click', () => { if(currentUser) window.PAWS_LEADERSHIP_DIRECTORY?.open('visc', window.UCVM_PAGE_DATA.academicYear() || sqlAcademicYearForDate(ymd(new Date()))); });
+    // CCC, VISC and HICC–CC are tabs of the single Teaching Lists popup.
     $('export-csv').addEventListener('click', () => openExportDialog('csv'));
     $('export-calendar').addEventListener('click', () => openExportDialog('ics'));
     $('outlook-invite-btn').addEventListener('click', openOutlookInviteDialog);
@@ -1074,7 +1072,7 @@
     const entry=(id,icon)=>({node:$(id),icon});
     scheduleWorkspace=window.PAWS_WORKSPACE_NAVIGATION.mount({document,window,header:document.querySelector('.ucalgary-masthead-inner'),
       groups:[
-        {label:'Teaching',entries:[{node:home,icon:'▦'},entry('teaching-assignments-btn','≡'),entry('ccc-schedule-btn','C'),entry('hicc-cc-list-btn','H'),entry('visc-list-btn','V')]},
+        {label:'Teaching',entries:[{node:home,icon:'▦'},entry('teaching-assignments-btn','≡'),entry('teaching-lists-btn','C')]},
         {label:'Faculty',entries:[entry('faculty-dashboard-btn','♙')]},
         {label:'Workflows',entries:[entry('swap-inbox-btn','⇄'),entry('afc-request-btn','↗'),entry('my-change-history-btn','◷')]},
         {label:'Administration',entries:[entry('manage-users-btn','⚙')]}
@@ -2226,8 +2224,7 @@
         if (!user) {
           text.textContent = 'Firebase Auth + SQL Access Ready';
           currentUser = null;
-          window.PAWS_CCC_SCHEDULE?.close();
-          window.PAWS_LEADERSHIP_DIRECTORY?.close();
+          window.PAWS_TEACHING_LISTS?.close();
           activityTypeFilter.resetForUser();
           resetWorkingCalendar();
           if($('working-activities-lane'))$('working-activities-lane').innerHTML='';
@@ -2555,9 +2552,7 @@
     $('outlook-invite-btn').classList.toggle('hidden', !UCVM.admin(currentUser));
     $('manage-users-btn').classList.toggle('hidden', !(UCVM.general(currentUser) || currentUser?.role === 'hicc'));
     $('faculty-dashboard-btn').classList.toggle('hidden', !UCVM.canOpenFacultyDashboard(currentUser));
-    $('ccc-schedule-btn').classList.toggle('hidden', !currentUser);
-    $('hicc-cc-list-btn').classList.toggle('hidden', !currentUser);
-    $('visc-list-btn').classList.toggle('hidden', !currentUser);
+    $('teaching-lists-btn').classList.toggle('hidden', !currentUser);
     $('swap-inbox-btn').classList.toggle('hidden',!currentUser);
     $('swap-inbox-btn').onclick=()=>window.PAWS_SWAP?.openQueue();
     window.PAWS_SWAP?.syncUser();

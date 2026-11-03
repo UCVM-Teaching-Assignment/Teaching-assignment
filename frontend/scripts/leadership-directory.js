@@ -7,6 +7,7 @@ if(root&&root.document){
  // /api/v1/dashboard/leadership-directory projection on every open and Refresh.
  const doc=root.document,overlay=doc.getElementById('leadership-directory-overlay');
  if(!overlay)return;
+ const embedded=Boolean(overlay.closest('#teaching-lists-overlay'));
  const heading=doc.getElementById('leadership-directory-heading'),subtitle=doc.getElementById('leadership-directory-subtitle'),
   closeButton=doc.getElementById('leadership-directory-close'),refresh=doc.getElementById('leadership-directory-refresh'),
   showAll=doc.getElementById('leadership-directory-show-all'),search=doc.getElementById('leadership-directory-search'),
@@ -46,12 +47,12 @@ if(root&&root.document){
   kind=nextKind;academicYear=lib.validYear(year)?year:lib.calgaryAcademicYear();data=null;showAll.checked=false;search.value='';sort.value='scope';body.scrollTop=0;
   previousFocus=doc.activeElement;overlay.hidden=false;overlay.setAttribute('aria-hidden','false');
   overlay.querySelector('.leadership-directory-shell').setAttribute('aria-labelledby','leadership-directory-heading');
-  closeButton.focus();load();
+  if(!embedded)closeButton.focus();load();
  }
  function close(){
   if(!open_())return;generation++;loading=false;loadError=false;data=null;body.textContent='';
   overlay.hidden=true;overlay.setAttribute('aria-hidden','true');
-  if(previousFocus?.isConnected)previousFocus.focus();previousFocus=null;
+  if(!embedded&&previousFocus?.isConnected)previousFocus.focus();previousFocus=null;
  }
  closeButton.addEventListener('click',close);
  refresh.addEventListener('click',load);
@@ -60,8 +61,9 @@ if(root&&root.document){
  const clearSearch=()=>{search.value='';updateView();search.focus();};
  search.addEventListener('input',updateView);sort.addEventListener('change',updateView);clear.addEventListener('click',clearSearch);
  body.addEventListener('click',event=>{if(event.target.closest?.('[data-leadership-retry]'))load();if(event.target.closest?.('[data-leadership-clear]'))clearSearch();});
- overlay.addEventListener('click',event=>{if(event.target===overlay)close();});
+ overlay.addEventListener('click',event=>{if(!embedded&&event.target===overlay)close();});
  overlay.addEventListener('keydown',event=>{
+  if(embedded)return;
   if(event.key==='Escape'){event.preventDefault();close();return;}
   if(event.key!=='Tab')return;
   const focusable=[...overlay.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled])')].filter(el=>el.offsetParent!==null||el===doc.activeElement);
