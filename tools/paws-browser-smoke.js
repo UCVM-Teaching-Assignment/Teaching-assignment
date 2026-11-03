@@ -118,6 +118,22 @@ async function main(){
        " if(!add('fall',1)||!add('winter',5))return {ok:false,error:'Add Week controls missing'};\n"+
        " let keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
        " if(keys.join(',')!=='fall:1,winter:5')return {ok:false,error:'Fall/Winter periods not stacked in order',keys};\n"+
+       " const chooseSort=value=>{const control=document.getElementById('comparison-order');if(!control)return false;control.value=value;control.dispatchEvent(new Event('change'));return true;};\n"+
+       " if(!chooseSort('desc'))return {ok:false,error:'Sort weeks control missing'};\n"+
+       " keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
+       " if(keys.join(',')!=='winter:5,fall:1')return {ok:false,error:'Latest-first sorting failed',keys};\n"+
+       " const up=document.querySelector('[data-week-move=\\\"fall:1\\\"][data-week-direction=\\\"up\\\"]');\n"+
+       " if(!up||up.disabled)return {ok:false,error:'Admin Move Up arrow missing'};\n"+
+       " up.click();keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
+       " if(keys.join(',')!=='fall:1,winter:5')return {ok:false,error:'Manual Move Up failed',keys};\n"+
+       " if(document.getElementById('comparison-order')?.value!=='custom')return {ok:false,error:'Manual moves did not enter Custom order'};\n"+
+       " const down=document.querySelector('[data-week-move=\\\"fall:1\\\"][data-week-direction=\\\"down\\\"]');\n"+
+       " if(!down||down.disabled)return {ok:false,error:'Admin Move Down arrow missing'};\n"+
+       " down.click();keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
+       " if(keys.join(',')!=='winter:5,fall:1')return {ok:false,error:'Manual Move Down failed',keys};\n"+
+       " if(!chooseSort('asc'))return {ok:false,error:'Ascending sort control missing'};\n"+
+       " keys=[...document.querySelectorAll('[data-comparison-period]')].map(x=>x.dataset.comparisonPeriod);\n"+
+       " if(keys.join(',')!=='fall:1,winter:5')return {ok:false,error:'Earliest-first sorting failed',keys};\n"+
        " for(let i=0;i<60;i++){\n"+
        "  const cards=[...document.querySelectorAll('[data-comparison-period]')];\n"+
        "  if(cards.every(card=>card.querySelector('.tg-body')||card.querySelector('.multi-week-error')))break;\n"+
@@ -136,6 +152,15 @@ async function main(){
        "})()",awaitPromise:true,returnByValue:true});
      if(!result.result?.value?.ok)problems.push(label+': Multi-Week Comparison browser check failed: '+JSON.stringify(result.result?.value||result.exceptionDetails||'no result').slice(0,500));
      else console.log('ok   Multi-Week Comparison stacks Fall W1 / Winter W5; removing one week preserves the other');
+   }
+   if(check.page==='index.html'&&check.uid==='uid-fac-001'&&ok){
+     const result=await cdp.send('Runtime.evaluate',{expression:"(function verifyFacultyComparisonPermissions(){try{"+
+       "const button=document.getElementById('cal-compare-btn');if(!button)return{ok:false,error:'Compare Weeks missing'};button.click();"+
+       "if(!document.getElementById('comparison-order'))return{ok:false,error:'Faculty sort selector missing'};"+
+       "if(document.querySelectorAll('[data-week-move]').length)return{ok:false,error:'Admin-only move arrows visible to Faculty'};"+
+       "return{ok:true};}catch(error){return{ok:false,error:String(error?.message||error)}}})()",returnByValue:true});
+     if(!result.result?.value?.ok)problems.push(label+': Faculty week comparison permissions failed: '+JSON.stringify(result.result?.value||result.exceptionDetails||'no result').slice(0,500));
+     else console.log('ok   Faculty can sort comparison weeks but cannot manually move cards');
    }
    if(check.page==='index.html'&&check.uid==='uid-developer'&&ok){
      // Real staged-browser test: approve a seeded ADFA SWAP with synthetic data.
