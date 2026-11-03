@@ -15,7 +15,18 @@ function createCccScheduleRepository(store) {
   return {
     async list({ academicYear }) {
       const entries = store.tables.activities.filter(a => a.category === 'ccc' && a.academicYear === academicYear)
-        .map(a => ({ date: a.startDate, endDate: a.endDate, blockLabel: a.blockLabel, courseCode: a.courseCode, facultyName: a.staffingKind === 'unassigned' ? 'Locum' : a.facultyDisplayName, halfDay: true }));
+        .map(a => {
+          const interval = (a.timeEvidence || []).find(e => e.date === a.startDate);
+          const minutes = value => {
+            if (!/^\d{2}:\d{2}$/.test(String(value || ''))) return null;
+            const [h, m] = String(value).split(':').map(Number);
+            return h * 60 + m;
+          };
+          const start = minutes(interval?.startTime), end = minutes(interval?.endTime);
+          return { date: a.startDate, endDate: a.endDate, blockLabel: a.blockLabel,
+            courseCode: a.courseCode, facultyName: a.staffingKind === 'unassigned' ? 'Locum' : a.facultyDisplayName,
+            halfDay: start != null && end != null && end > start && end - start <= 300 };
+        });
       return { entries };
     }
   };

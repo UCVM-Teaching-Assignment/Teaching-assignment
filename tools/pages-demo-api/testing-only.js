@@ -3,6 +3,7 @@
 // PAWS has no "create Faculty" API (records come from HR), so the testing
 // site's "+ Add Faculty" writes straight into the synthetic demo store.
 const { uuidFor } = require('./ids.js');
+const { applyDenseFixture } = require('./dense-fixture.js');
 
 function createTestingOnly(store) {
   function addFaculty(input = {}, actorFirebaseUid = '') {
@@ -40,7 +41,22 @@ function createTestingOnly(store) {
     store.commit();
     return { facultyId: row.facultyId, displayName: row.displayName, ucid };
   }
-  return Object.freeze({ addFaculty });
+  // Browser Demo ONLY: add a deterministic synthetic data-density fixture.
+  // Existing imported/edited sessions, CCC entries, approvals and other data
+  // are not removed or rewritten. This is not an institutional data import.
+  function loadDenseCalendar(actorFirebaseUid = '') {
+    const result = applyDenseFixture(store.tables);
+    if (result.addedSessions || result.addedCCC) {
+      store.audit({
+        domain: 'testing_fixture', changeType: 'synthetic_density_added',
+        actorFirebaseUid, academicYear: '2026-27',
+        after: { addedSessions: result.addedSessions, addedCCC: result.addedCCC }
+      });
+      store.commit();
+    }
+    return result;
+  }
+  return Object.freeze({ addFaculty, loadDenseCalendar });
 }
 
 module.exports = { createTestingOnly };

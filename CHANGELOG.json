@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-11-03",
+      "pr": 108,
+      "title": "Add Beta-density synthetic teaching and CCC load fixtures to PAWS Testing",
+      "changes": [
+        "Added an optional Load Test Data action for Developer, Owner, ADFAD and ADC testers in the browser-local PAWS Calendar.",
+        "Created deterministic, fictional Course Session data calibrated to 1,937 teaching sessions and historical Beta weekly density, covering LEC, LAB, SRL, exam and time-review cases.",
+        "Added synthetic CCC half-day staffing activities calibrated to 413 assignment slots including 11 Locum, across the May-April academic year.",
+        "Preserved browser-local existing/edited records, supporting idempotent additional loads and PR #107's empty Calendar startup.",
+        "No real Beta/SQL/Firestore source data, Faculty identities, or production systems were changed."
+      ]
+    },
+    {
+      "date": "2026-11-03",
       "pr": 107,
       "title": "Testing Calendar comparison, empty start and team Work Queues",
       "changes": [
