@@ -39,7 +39,7 @@
  function install(){
   if(!root?.document||!root.UCVM_PAWS_DEMO_API||!root.document.getElementById('calendar-body'))return;
   const doc=root.document,host=doc.querySelector('.timetable-top-actions');
-  if(host&&!doc.getElementById('paws-lab-scheduling-open')){const button=doc.createElement('button');button.id='paws-lab-scheduling-open';button.type='button';button.className='masthead-link';button.textContent='Lab Scheduling';button.onclick=()=>open();host.prepend(button)}
+  if(host&&!doc.getElementById('paws-lab-scheduling-open')){const button=doc.createElement('button');button.id='paws-lab-scheduling-open';button.type='button';button.className='masthead-link';button.innerHTML='Lab Scheduling'+(root?.UCVM_TESTING_ONLY?.pendingBadge?.()||'');button.onclick=()=>open();host.prepend(button)}
   const button=doc.getElementById('paws-lab-scheduling-open');if(button)button.hidden=!identity();
   hydrate();
  }
