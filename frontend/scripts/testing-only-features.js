@@ -171,7 +171,23 @@
     const toolbar = doc.querySelector('.cal-toolbar-right');
     if (toolbar && !$('testing-only-load-density-btn')) {
       const button = el('<button class="fbar-reset hidden" id="testing-only-load-density-btn" type="button">Load Test Data' + badge() + '</button>');
+      const status = el('<span class="testing-only-density-status" id="testing-only-density-status" role="status"></span>');
       toolbar.appendChild(button);
+      toolbar.appendChild(status);
+      function updateDensityStatus(){
+        const demo=root.UCVM_PAWS_DEMO_API;
+        try {
+          const details=demo?.store?.densityStatus?.();
+          if(!details){status.textContent='';return;}
+          status.textContent=details.totalSessions.toLocaleString()+' teaching sessions in Demo';
+          if(!details.storageOk){
+            status.textContent+=' · Browser storage warning';
+            status.title='Changes may not persist: '+details.storageError;
+            status.classList.add('is-error');
+          }else{status.title='Synthetic demo data; not live Beta or SQL';status.classList.remove('is-error');}
+        }catch(error){status.textContent='Demo data unavailable';status.title=String(error?.message||error);status.classList.add('is-error');}
+      }
+      updateDensityStatus();
       const allowed = user => {
         const role = roleOf(user);
         button.classList.toggle('hidden', !(ADMIN_ROLES.has(role) || role === 'adc'));
@@ -191,13 +207,12 @@
           if (!result.addedSessions && !result.addedCCC) {
             toast('High-density timetable is already loaded.'); return;
           }
-          // The Demo store intentionally supports memory-only fallback on quota
-          // errors. Never claim data was saved or reload into data loss.
-          const saved = JSON.parse(root.localStorage.getItem('ucvm-pages-demo-paws-v1') || 'null');
-          if (!saved || !Array.isArray(saved.sessions) || !Array.isArray(saved.activities)
-              || saved.sessions.length < result.totalSessions || saved.activities.length < result.totalCCC) {
-            throw new Error('Browser storage could not persist the fixture; try freeing site storage before reloading.');
-          }
+          // Test data is packed in localStorage. Counting raw stored rows is
+          // incorrect: the 1,937 deterministic rows are regenerated on reload.
+          const diagnostics=demo.store.densityStatus();
+          updateDensityStatus();
+          if(!diagnostics.storageOk)throw new Error('Browser storage is full; synthetic courses are available in memory, but not saved. Do not reload until storage is available.');
+          // Reload forces Calendar API and Compare Weeks to read the new data.
           root.location.reload();
         } catch (error) { toast(error.message || String(error), true); }
       });
