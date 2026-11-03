@@ -171,6 +171,8 @@
   if(!root?.document||!root.UCVM_PAWS_DEMO_API)return;
   const host=root.document.querySelector('.timetable-top-actions');if(!host)return;
   const user=identity();
+  // LAB has one entrypoint (Lab Scheduling); ADFAD retains its own queue.
+  root.document.getElementById('paws-office-lab-queue')?.remove();
   for(const name of ['adfa']){
    const id='paws-office-'+name+'-queue';
    let b=root.document.getElementById(id);
