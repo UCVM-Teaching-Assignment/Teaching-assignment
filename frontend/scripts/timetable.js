@@ -454,7 +454,7 @@
   // Testing-only comparison keeps week choices and authorized cached rows in memory.
   // Never serialize session records to localStorage or copy across signed-in identities.
   const multiWeekModel=window.PAWS_MULTI_WEEK_COMPARISON.create({weekCount:WEEK_COUNT});
-  let comparisonSemester='fall',comparisonWeek=1,comparisonScope='',comparisonEpoch=0,comparisonRequestId=0;
+  let comparisonSemester='fall',comparisonWeek=1,comparisonOrder='custom',comparisonScope='',comparisonEpoch=0,comparisonRequestId=0;
   const comparisonRows=new Map(),comparisonPending=new Map();
   function clearComparisonCache(){comparisonEpoch++;comparisonRows.clear();comparisonPending.clear();}
   function comparisonIdentity(){return JSON.stringify([
@@ -1452,7 +1452,7 @@
     renderedSessions=[];
     if(!currentUser){host.textContent='Sign in to view authorized timetable weeks.';return;}
     syncComparisonIdentity();
-    const periods=multiWeekModel.list(),displayData=[];
+    const periods=multiWeekModel.list(),displayData=[],canReorder=UCVM.admin(currentUser);
     const loaded=periods.flatMap(p=>comparisonRows.get(p.key)?.rows||[]);
     activityTypeFilter.setSessionTypes(loaded.filter(row=>!row.isWorkingActivity).map(row=>row.type));
     const semesterOptions=window.PAWS_MULTI_WEEK_COMPARISON.SEMESTERS.map(term=>
@@ -1463,12 +1463,16 @@
       '<p>Stack any number of academic weeks vertically.</p></div>'+
       '<label for="comparison-semester">Semester<select id="comparison-semester">'+semesterOptions+'</select></label>'+
       '<label for="comparison-week">Week<select id="comparison-week">'+weekOptions+'</select></label>'+
-      '<button type="button" class="multi-week-add" id="comparison-add-week">+ Add Week</button></div>'+
+      '<button type="button" class="multi-week-add" id="comparison-add-week">+ Add Week</button>'+
+      '<label for="comparison-order">Sort weeks<select id="comparison-order">'+
+      '<option value="custom">Custom order</option>'+
+      '<option value="asc">Earliest to latest</option>'+
+      '<option value="desc">Latest to earliest</option></select></label></div>'+
       '<p class="multi-week-note">Uses the same Year, Course, Activity type, Search and My Timetable filters as Calendar. '+
       'Each selected week has its own semester/date range. The main Semester/Week and Month filters are not applied here. '+
       'This view shows scheduled sessions and enabled closures; Other Work activities are available in the regular Calendar.</p>'+
       '<div class="multi-week-stack" id="multi-week-stack">';
-    for(const period of periods){
+    for(const [position,period] of periods.entries()){
       const start=weekStart(period.week,period.semester),end=addDays(start,4),
         startText=ymd(start),endText=ymd(end),loadedWeek=comparisonRows.get(period.key),
         label=period.semester.charAt(0).toUpperCase()+period.semester.slice(1)+' Week '+period.week;
@@ -1491,8 +1495,13 @@
       html+='<section class="multi-week-card" data-comparison-period="'+escapeHtml(period.key)+'" aria-label="'+escapeHtml(label)+'">'+
         '<header class="multi-week-card-header"><div class="multi-week-card-heading"><h3>'+escapeHtml(label)+'</h3>'+
         '<span>'+escapeHtml(formatDate(start))+' – '+escapeHtml(formatDate(end))+', '+end.getFullYear()+'</span></div>'+
+        '<div class="multi-week-card-actions">'+
+        (canReorder?'<button type="button" class="multi-week-move" data-week-move="'+escapeHtml(period.key)+
+          '" data-week-direction="up" aria-label="Move '+escapeHtml(label)+' up" title="Move week up"'+(position===0?' disabled':'')+'>↑</button>'+
+          '<button type="button" class="multi-week-move" data-week-move="'+escapeHtml(period.key)+
+          '" data-week-direction="down" aria-label="Move '+escapeHtml(label)+' down" title="Move week down"'+(position===periods.length-1?' disabled':'')+'>↓</button>':'')+
         '<button type="button" class="multi-week-remove" data-week-remove="'+escapeHtml(period.key)+'" '+
-        'aria-label="Close '+escapeHtml(label)+'" title="Remove this week">×</button></header>'+
+        'aria-label="Close '+escapeHtml(label)+'" title="Remove this week">×</button></div></header>'+
         '<div class="multi-week-card-body">'+body+'</div></section>';
     }
     html+='</div>';
@@ -1501,6 +1510,8 @@
     host.innerHTML=html;
     const semester=host.querySelector('#comparison-semester'),week=host.querySelector('#comparison-week');
     semester.value=comparisonSemester;week.value=String(comparisonWeek);
+    const sort=host.querySelector('#comparison-order');sort.value=comparisonOrder;
+    sort.onchange=()=>{comparisonOrder=sort.value;if(comparisonOrder!=='custom')multiWeekModel.sort(comparisonOrder);render();};
     semester.onchange=()=>{comparisonSemester=semester.value;};
     week.onchange=()=>{comparisonWeek=Number(week.value);};
     host.querySelector('#comparison-add-week').onclick=()=>{
@@ -1510,8 +1521,19 @@
         host.querySelector('[data-comparison-period="'+comparisonSemester+':'+comparisonWeek+'"]')?.scrollIntoView?.({behavior:'smooth',block:'nearest'});
         return;
       }
+      if(comparisonOrder!=='custom')multiWeekModel.sort(comparisonOrder);
       render();
     };
+    host.querySelectorAll('[data-week-move]').forEach(button=>button.onclick=()=>{
+      if(!UCVM.admin(currentUser))return;
+      const periodKey=button.dataset.weekMove,direction=button.dataset.weekDirection;
+      if(!multiWeekModel.move(periodKey,direction))return;
+      comparisonOrder='custom';
+      render();
+      const movedCard=[...host.querySelectorAll('[data-comparison-period]')].find(card=>card.dataset.comparisonPeriod===periodKey);
+      (movedCard?.querySelector('[data-week-direction="'+direction+'"]:not([disabled])')||
+       movedCard?.querySelector('[data-week-move]:not([disabled])'))?.focus();
+    });
     host.querySelectorAll('[data-week-remove]').forEach(button=>button.onclick=()=>{
       const key=button.dataset.weekRemove;
       multiWeekModel.remove(key);comparisonRows.delete(key);comparisonPending.delete(key);render();
@@ -2377,7 +2399,7 @@
           activityTypeFilter.resetForUser();
           resetWorkingCalendar();
           if($('working-activities-lane'))$('working-activities-lane').innerHTML='';
-          viewMode = 'week'; multiWeekModel.clear(); clearComparisonCache();comparisonScope=''; setViewButtons();
+          viewMode = 'week'; multiWeekModel.clear(); comparisonOrder='custom'; clearComparisonCache();comparisonScope=''; setViewButtons();
           myTimetableOnly = false;
           if (sessionUnsubscribe) { try { sessionUnsubscribe(); } catch (_) {} sessionUnsubscribe = null; }
           sessionRangeKey='';
