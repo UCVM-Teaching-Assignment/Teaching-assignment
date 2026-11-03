@@ -27,3 +27,25 @@ test('LAB office CSV preserves independent room subspaces when exporting a multi
  const result=csv.parseOfficeCsv('lab',csv.officeTemplate('lab',[row]));
  assert.equal(result.rows[0].subspace,'Area A');
 });
+
+test('LAB bulk office workflow remains available under Lab Scheduling without a standalone toolbar queue',()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
+ const office=src('frontend/scripts/schedule-office-ui.js');
+ const lab=src('frontend/scripts/lab-scheduling-editor.js');
+ const entry=src('frontend/scripts/lab-scheduling-entry.js');
+ const tasks=src('frontend/scripts/workspace-tasks.js');
+ assert.match(office,/for\(const name of \['adfa'\]\)/);
+ assert.match(office,/getElementById\('paws-office-lab-queue'\)\?\.remove\(\)/);
+ assert.match(office,/function mountLab\(host/);
+ assert.match(office,/\/preview-office-bulk/);
+ assert.match(office,/\/publish-office-bulk/);
+ assert.match(office,/officeTemplate\(office,allRows\)/);
+ assert.match(lab,/data-lab-tab="single"/);
+ assert.match(lab,/data-lab-tab="bulk"/);
+ assert.match(lab,/PAWS_SCHEDULE_OFFICE_UI\.mountLab/);
+ assert.match(entry,/await editor\.open\(sessionId,options\)/);
+ assert.match(tasks,/Open Lab Scheduling · Bulk CSV/);
+ assert.equal(officeUI.can('lab','lab'),true);
+ assert.equal(officeUI.can('adfa_general','adfa'),true);
+});
