@@ -118,7 +118,7 @@
         input('Date','date','date','min="'+selectedYear.slice(0,4)+'-05-01" max="'+String(Number(selectedYear.slice(0,4))+1)+'-04-30"')+
         input('Topic','topic','text','placeholder="Topic / Session"')+
         '<label class="paws-my-field"><span>Type</span>'+select('sessionType',['LEC','SRL','LAB','Other'],x=>x,x=>x)+'</label>'+
-        '<label class="paws-my-field"><span>Faculty</span>'+select('facultyId',[{id:'',name:'Unassigned'},...eligibleFaculty(s,selectedYear.slice(0,4)+'-05-01')],f=>f.id,f=>f.name)+'</label>'+
+        '<label class="paws-my-field"><span>Faculty</span>'+select('facultyId',[{id:'',name:'Unassigned'},...s.faculty.filter(f=>f.active&&f.appointmentValid)],f=>f.id,f=>f.name)+'</label>'+
         input('DOE credit','doeCredit','number','value="0" step="0.5"')+
         '<button type="submit">Add Session</button></form>';
     }
