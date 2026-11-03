@@ -11,3 +11,16 @@ test('roster import has an explicit per-group bound and accepts an empty draft r
 test('existing source detail keeps SRL and source actions alongside the published Lab entry',()=>{
  const fs=require('node:fs'),vm=require('node:vm');const root={UCVM_PAWS_DEMO_API:{},document:{readyState:'loading'},addEventListener(){}};vm.runInNewContext(fs.readFileSync(require.resolve('../frontend/scripts/lab-session-detail'),'utf8'),{window:root});const api=root.UCVM_LAB_DETAIL,seed={id:'s1',date:'2026-11-03',course:'505',year:'3',academicYear:'2026-27',type:'LAB',start:'08:30',end:'10:30',topic:'Casting'};const h=api.render(api.buildModel(seed,[{...seed,id:'srl',type:'SRL',topic:'Reading'}]),{actions:()=>'<button>Existing SWAP</button>'});assert.ok(h.includes('data-paws-lab-published="s1"'));assert.ok(h.includes('Reading'));assert.ok(h.includes('Existing SWAP'));assert.equal(api.calendarBlocks([seed]).length,1);
 });
+
+test('LAB Resource Request is the first default tab, before existing groups and Bulk CSV',()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const editor=fs.readFileSync(path.join(__dirname,'../frontend/scripts/lab-scheduling-editor.js'),'utf8');
+ assert.match(editor,/tab='resources'/);
+ for(const label of ['1. Resource Request','2. Student Groups / Runs','Bulk CSV','Send Reservation Request','Preview availability'])
+  assert.ok(editor.includes(label),label);
+ assert.match(editor,/data-resource-notes/);
+ assert.match(editor,/data-resource-preview-result/);
+ assert.match(editor,/data-resource-confirm/);
+ assert.match(editor,/data-resource-policy/);
+ assert.match(editor,/no real email|does not send an email/i);
+});
