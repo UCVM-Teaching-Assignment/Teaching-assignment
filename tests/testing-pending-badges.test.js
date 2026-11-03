@@ -87,6 +87,6 @@ test('workflow tasks, bulk import and dialogs have T; original Tasks remains unc
  assert.match(bulk,/const heading=.*pendingBadge\(\)/);
  assert.match(office,/pendingBadge\(\)\+'<\/h2>/);
  assert.match(workflow,/Schedule Workflow · Testing'\+pendingBadge\(\)/);
- assert.equal((lab.match(/Lab Scheduling'\+pendingBadge\(\)/g)||[]).length,2);
+ assert.equal((lab.match(/Lab Scheduling'\+pendingBadge\(\)/g)||[]).length,3);
  assert.match(published,/Published v'\+escape\(p\.version\).*pendingBadge/);
 });
