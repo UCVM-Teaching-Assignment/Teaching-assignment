@@ -5,19 +5,35 @@ const base = require('./dataset.js');
 const more = require('./dataset-more.js');
 
 const STORAGE_KEY = 'ucvm-pages-demo-paws-v1';
-// Prior Demo versions preloaded generated calendar sessions. Remove ONLY those
-// deterministic starter IDs; never discard a real user-created browser-local
-// ADC draft/import, LAB publication, Faculty assignment or unrelated history.
-let knownStarterIds = null;
+// Old releases preloaded generated teaching sessions. Only exact, pristine starter
+// records may be cleaned. A staff edit can retain the original deterministic ID;
+// matching that ID alone is NOT evidence that a row is safe to delete.
+let pristineStarterById = null;
 function stripLegacyCalendarStarters(tables){
   if(!tables||!Array.isArray(tables.sessions)||tables.sessions.length===0)return false;
-  if(!knownStarterIds){
+  if(!pristineStarterById){
     const faculty=base.facultyRows(),courses=base.courseRows();
-    knownStarterIds=new Set(base.sessionRows(courses,faculty).map(row=>String(row.id)));
+    pristineStarterById=new Map(base.sessionRows(courses,faculty).map(row=>[String(row.id),JSON.stringify(row)]));
   }
   const before=tables.sessions.length;
-  tables.sessions=tables.sessions.filter(row=>!knownStarterIds.has(String(row?.id||'')));
+  tables.sessions=tables.sessions.filter(row=>{
+    const pristine=pristineStarterById.get(String(row?.id||''));
+    return pristine===undefined||JSON.stringify(row)!==pristine;
+  });
   return before!==tables.sessions.length;
+}
+
+// Only the PAWS Frontend Testing browser opts in to its visible synthetic
+// density profile. A cloned table is persisted before it becomes active:
+// quota failure must never replace an existing user's saved drafts/edits.
+function seedTestingFixtureOnce(current,storage){
+  if(current.extra?.testingDemoFixtureVersion==='beta-density-synthetic-v1'||current.extra?.testingDemoFixtureDisabled===true)return current;
+  const candidate=JSON.parse(JSON.stringify(current));
+  if(!candidate.extra||typeof candidate.extra!=='object')candidate.extra={};
+  require('./dense-fixture.js').applyDenseFixture(candidate);
+  candidate.extra.testingDemoFixtureVersion='beta-density-synthetic-v1';
+  if(storage)storage.setItem(STORAGE_KEY,JSON.stringify(candidate));
+  return candidate;
 }
 
 function buildTables(legacyUsers = []) {
@@ -43,7 +59,7 @@ function buildTables(legacyUsers = []) {
   };
 }
 
-function createStore({ storage = null, legacyUsers = [], now = () => new Date() } = {}) {
+function createStore({ storage = null, legacyUsers = [], now = () => new Date(), autoLoadFixture = false } = {}) {
   let tables = null;
   const load = () => {
     if (tables) return tables;
@@ -60,6 +76,10 @@ function createStore({ storage = null, legacyUsers = [], now = () => new Date() 
       }
     } catch (_) { tables = null; }
     if (!tables) tables = buildTables(legacyUsers);
+    if(autoLoadFixture){
+      try{tables=seedTestingFixtureOnce(tables,storage);}
+      catch(error){console.warn('[PAWS Testing] Synthetic fixture could not be persisted; existing data preserved.',error?.message||error);}
+    }
     return tables;
   };
   const save = () => { try { storage && storage.setItem(STORAGE_KEY, JSON.stringify(tables)); } catch (_) { /* quota: keep in memory only */ } };

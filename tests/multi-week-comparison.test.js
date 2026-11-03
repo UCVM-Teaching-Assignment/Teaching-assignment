@@ -108,13 +108,13 @@ test('the comparison reuses the exact Week grid renderer and each week loads ind
  const script=file('frontend/scripts/timetable.js');
  assert.match(script,/function weekGridMarkup\(start,data/);
  assert.match(script,/weekGridMarkup\(start,data,\{showCheckNeeded:!window.PAWS_TASKS\}\)/);
- assert.match(script,/weekGridMarkup\(start,rows,\{showCheckNeeded:true\}\)/);
+ assert.match(script,/weekGridMarkup\(start,rows\.filter\(/);
  assert.match(script,/fetchPawsSessions\(\{start,end:ymd\(addDays\(parseYmd\(end\),1\)\)\}\)/);
  assert.match(script,/comparisonIdentity\(\)!==identity/);
  assert.match(script,/comparisonEpoch!==epoch/);
  assert.match(script,/comparisonPending\.get\(key\)!==request/);
  assert.match(script,/syncComparisonIdentity\(\)/);
- assert.match(script,/if\(viewMode==='compare'\)\{render\(\);return Promise\.resolve\(true\)\}/);
+ assert.match(script,/if\(viewMode==='compare'\)\{clearComparisonCache\(\);render\(\);return Promise\.resolve\(true\)\}/);
 });
 test('comparison honors existing filters and does not run normal export or write workflows against old scope',()=>{
  const script=file('frontend/scripts/timetable.js');
@@ -125,4 +125,16 @@ test('comparison honors existing filters and does not run normal export or write
  assert.match(script,/Return to the Week view to select and edit sessions/);
  assert.match(script,/multiWeekModel\.clear\(\); comparisonOrder='custom'; clearComparisonCache\(\);comparisonScope=''/);
  assert.match(script,/This view shows scheduled sessions and enabled closures/);
+});
+
+test('comparison retrieves full seven-day weeks, exposes refresh and reconciles all rows',()=>{
+ const script=file('frontend/scripts/timetable.js');
+ assert.match(script,/weekStart\(period\.week,period\.semester\),6/);
+ assert.match(script,/id="comparison-refresh-all"/);
+ assert.match(script,/data-week-refresh/);
+ assert.match(script,/weeklySource\.length-rows\.length/);
+ assert.match(script,/Weekend sessions/);
+ assert.match(script,/Filtered Out:/);
+ assert.match(script,/Check Needed:/);
+ assert.match(script,/UCVM_TIMETABLE_TESTING_HOOKS=Object\.freeze\(\{render:.*invalidateAllSessions\(\)/);
 });

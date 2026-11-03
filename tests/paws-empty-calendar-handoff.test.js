@@ -99,3 +99,36 @@ test('Testing Work Queue exposes assigned ADC bootstrapping and a shared visible
  assert.match(testing,/role==='adc'\|\|role==='lab'/);
  assert.match(testing,/showClosures: false/);
 });
+
+test('legacy starter ID with manual changes remains intact after migration',()=>{
+ const storage=memory(),saved=buildTables();
+ const starter=dataset.sessionRows(saved.courses,saved.faculty)[0];
+ saved.sessions=[{...starter,topic:'Edited by ADC',room:'Staff custom room'}];
+ storage.setItem(STORAGE_KEY,JSON.stringify(saved));
+ const reloaded=createStore({storage}).tables;
+ assert.equal(reloaded.sessions.length,1);
+ assert.equal(reloaded.sessions[0].id,starter.id);
+ assert.equal(reloaded.sessions[0].topic,'Edited by ADC');
+ const again=createStore({storage}).tables;
+ assert.equal(again.sessions.length,1);
+});
+test('auto-loaded synthetic fixture is visible on first Testing browser use and preserves edits on reload',()=>{
+ const storage=memory();
+ const first=createStore({storage,autoLoadFixture:true});
+ assert.equal(first.tables.sessions.filter(row=>row.academicYear==='2026-27').length,1937);
+ assert.equal(first.tables.activities.filter(row=>row.category==='ccc'&&row.academicYear==='2026-27').length,413);
+ first.tables.sessions[0].topic='Manually corrected session';
+ const id=first.tables.sessions[0].id;first.commit();
+ const second=createStore({storage,autoLoadFixture:true});
+ assert.equal(second.tables.sessions.find(row=>row.id===id).topic,'Manually corrected session');
+ assert.equal(second.tables.sessions.length,first.tables.sessions.length);
+});
+test('failed fixture persistence must not replace existing saved sessions',()=>{
+ const initial=buildTables(),row=dataset.sessionRows(initial.courses,initial.faculty)[0];
+ initial.sessions.push({...row,topic:'Do not lose this edit'});
+ const memoryValue=JSON.stringify(initial);
+ const storage={getItem:()=>memoryValue,setItem:()=>{throw Error('quota exceeded')},removeItem:()=>{}};
+ const loaded=createStore({storage,autoLoadFixture:true}).tables;
+ assert.equal(loaded.sessions.length,1);
+ assert.equal(loaded.sessions[0].topic,'Do not lose this edit');
+});

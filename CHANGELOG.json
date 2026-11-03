@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-11-03",
+      "pr": 109,
+      "title": "Protect Testing sessions and make synthetic calendar comparison complete",
+      "changes": [
+        "Preserve user-edited legacy Calendar sessions even when an old generated starter ID remains; clean only exact unchanged starter rows.",
+        "Show optional synthetic PR #108 teaching and CCC load-test fixtures by default in the isolated browser Testing Demo, without overwriting pre-existing edits or institutional data.",
+        "Refresh Compare Weeks after ADC session publication and provide per-week and all-week refresh actions that avoid stale snapshots.",
+        "Include weekend sessions in weekly comparisons with explicit Total, Displayed, Check Needed, Filtered Out and Weekend counts.",
+        "Add regression tests for data preservation, automatic test fixtures, persistence failure and comparison refresh."
+      ]
+    },
+    {
+      "date": "2026-11-03",
       "pr": 108,
       "title": "Add Beta-density synthetic teaching and CCC load fixtures to PAWS Testing",
       "changes": [

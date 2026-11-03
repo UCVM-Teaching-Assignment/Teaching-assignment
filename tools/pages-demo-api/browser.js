@@ -12,7 +12,11 @@ const { Buffer } = require('buffer');
 
 (function install(root) {
   if (!root || root.UCVM_PAWS_DEMO_API) return;
-  const store = createStore({ storage: root.localStorage });
+  // The Testing Pages site now opens with the optional PR #108 synthetic density
+  // already visible. ?emptyCalendar=1 keeps a clean ADC bootstrapping lane for QA.
+  // This remains browser-local and never imports institutional Beta/SQL records.
+  const search = new URLSearchParams(root.location?.search || '');
+  const store = createStore({ storage: root.localStorage, autoLoadFixture: !search.has('emptyCalendar') });
   const route = createDemoRuntime(store);
   const nativeFetch = root.fetch.bind(root);
   const origin = () => { const value = root.PAWS_API_ORIGIN_CONFIG && root.PAWS_API_ORIGIN_CONFIG.apiOrigin; try { return value ? new URL(value).origin : null; } catch (_) { return null; } };

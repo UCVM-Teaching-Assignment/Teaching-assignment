@@ -44,3 +44,10 @@
  .multi-week-card-actions{gap:4px}
  .multi-week-move,.multi-week-remove{width:30px;height:30px;flex-basis:30px}
 }
+
+.multi-week-refresh{padding:7px 10px;border:1px solid var(--border-2);border-radius:6px;background:var(--surface);color:var(--text);font-size:11px;cursor:pointer}
+.multi-week-refresh:hover{border-color:var(--accent);color:var(--accent)}
+.multi-week-refresh:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.multi-week-weekend{display:flex;flex-direction:column;gap:5px;padding:10px 14px;border-top:1px solid var(--border)}
+.multi-week-weekend h4{font-size:12px;margin:0 0 4px;color:var(--text)}
+.multi-week-weekend .untimed-session{text-align:left;white-space:normal}
