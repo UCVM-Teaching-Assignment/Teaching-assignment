@@ -26,6 +26,7 @@ const SLOTS = Object.freeze({
   SRL: [['08:30:00', '10:00:00'], ['10:30:00', '12:00:00'], ['13:00:00', '14:30:00'], ['15:00:00', '16:30:00']],
   LAB: [['08:30:00', '10:20:00'], ['10:30:00', '12:20:00'], ['13:00:00', '14:50:00'], ['14:40:00', '16:30:00']],
   Exam: [['08:30:00', '10:30:00'], ['13:00:00', '15:00:00']],
+  OSCE: [['08:30:00', '10:30:00'], ['13:00:00', '15:00:00']],
   'Quiz/Midterm': [['08:30:00', '10:00:00'], ['13:00:00', '14:30:00']]
 });
 const TOPICS = Object.freeze([
@@ -71,6 +72,7 @@ function makeAssignment(sessionId, person, role, index, startTime, endTime, type
 function makeSession(term, week, index, courses, faculty) {
   const course = courses[(index + week * 3) % courses.length];
   let type = CYCLE[term.term][index % CYCLE[term.term].length];
+  if (term.term === 'winter' && week === 12 && index % 29 === 4) type = 'OSCE';
   if (term.term !== 'spring' && week === 7 && index % 37 === 10) type = 'Quiz/Midterm';
   if (term.term !== 'spring' && week === term.counts.length - 1 && index % 29 === 11) type = 'Exam';
   const date = addDays(term.start, week * 7 + ((index * 3 + week) % 5));
@@ -120,7 +122,7 @@ function makeCccActivity(index, faculty, dates, locum) {
     facultyDisplayName: locum ? 'Locum' : person.displayName,
     category: 'ccc', label: 'CCC - ' + shift + ' half day',
     startDate: date, endDate: date, courseCode: 'CCC',
-    blockLabel: block + ' - ' + shift,
+    blockLabel: block + ' - ' + shift + ((Math.floor(day / 28) % 3) === 0 ? ' (4th Year Rotation)' : ''),
     staffingKind: locum ? 'unassigned' : 'assigned',
     staffingLabel: locum ? 'Locum' : null,
     timeStatus: 'verified', timeEvidence: [{ date, startTime, endTime }],
