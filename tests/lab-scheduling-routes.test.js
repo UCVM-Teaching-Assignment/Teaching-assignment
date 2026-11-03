@@ -38,3 +38,45 @@ test('LAB Coordinator opens and saves an ordinary 2026-27 Lab without Owner manu
  assert.equal(updated.jsonBody.revision,1);
  assert.equal((await f.request('/context?sessionId=ordinary-lab','GET',undefined,'faculty')).jsonBody.draft,undefined);
 });
+
+test('resource reservation API separates LAB Reserve Notes from Owner confirmation',async()=>{
+ const f=setup();
+ f.tables.users[1].labScopes=[{academicYear:'2026-27',curriculumYear:'3',courseCode:'VETM 505'}];
+ f.tables.sessions.push({id:'reserve-1',academicYear:'2026-27',curriculumYear:'3',courseCode:'VETM 505',
+  sessionType:'LAB',topic:'Synthetic equine lab',date:'2026-11-03',startTime:'08:30:00',
+  endTime:'10:30:00',room:'Demo Lab',updatedAtUtc:'v1',assignments:[]});
+ const payload={sessionId:'reserve-1',expectedVersion:0,horseCount:2,petProfessorCount:0,
+  notes:'Please reserve two synthetic horses for this station',requestId:'send-reserve-note'};
+ const write=await f.request('/resource-request','POST',payload,'lab');
+ assert.equal(write.status,200);
+ assert.equal(write.jsonBody.request.status,'requested');
+ assert.equal(write.jsonBody.assessment.availableHorseCount,38);
+ const privateRead=await f.request('/resources?sessionId=reserve-1','GET',undefined,'lab');
+ assert.equal(privateRead.jsonBody.request.notes,payload.notes);
+ assert.equal((await f.request('/resources?sessionId=reserve-1','GET',undefined,'faculty')).status,403);
+ const denial=await f.request('/resource-review','POST',{
+  sessionId:'reserve-1',expectedVersion:1,decision:'confirm',horseIds:['H01','H02'],reviewNote:'',requestId:'lab-cannot-review'},'lab');
+ assert.equal(denial.status,403);
+ const approved=await f.request('/resource-review','POST',{
+  sessionId:'reserve-1',expectedVersion:1,decision:'confirm',horseIds:['H01','H02'],
+  reviewNote:'Synthetic animal check',requestId:'owner-confirm'},'owner');
+ assert.equal(approved.status,200);assert.equal(approved.jsonBody.request.status,'confirmed');
+ const pub=await f.request('/public?sessionId=reserve-1','GET',undefined,null);
+ assert.equal(pub.status,200);
+ assert.ok(!JSON.stringify(pub.jsonBody).includes(payload.notes),'private notes never appear in public Calendar projections');
+});
+test('resource policy and capacity preview are protected by LAB scope and Owner role',async()=>{
+ const f=setup();
+ f.tables.sessions.push({id:'resource-preview',academicYear:'2026-27',curriculumYear:'2',courseCode:'VTMD 304',
+  sessionType:'LAB',topic:'Synthetic pets',date:'2026-11-03',startTime:'09:00:00',
+  endTime:'10:00:00',room:'Demo Lab',updatedAtUtc:'v1',assignments:[]});
+ const proposal={sessionId:'resource-preview',horseCount:0,petProfessorCount:31};
+ assert.equal((await f.request('/resource-preview','POST',proposal,'faculty')).status,403);
+ const preview=await f.request('/resource-preview','POST',proposal,'owner');
+ assert.equal(preview.status,200);assert.ok(preview.jsonBody.warnings.some(x=>x.code==='PET_PROFESSOR_THRESHOLD'));
+ const rule={expectedRevision:1,horsePoolSize:38,horseRestHours:24,petProfessorThreshold:35,
+  petWindowHours:48,requestId:'adjust-limits'};
+ assert.equal((await f.request('/resource-rules','POST',rule,'lab')).status,403);
+ const set=await f.request('/resource-rules','POST',rule,'owner');
+ assert.equal(set.status,200);assert.equal(set.jsonBody.policy.petProfessorThreshold,35);
+});

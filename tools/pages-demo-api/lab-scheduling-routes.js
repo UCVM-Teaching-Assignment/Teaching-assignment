@@ -1,10 +1,12 @@
 'use strict';
 const {createLabService}=require('./lab-scheduling');
+const {createLabResourceReservations}=require('./lab-resource-reservations');
 const ROOT='/api/v1/lab-scheduling';
 const clone=value=>JSON.parse(JSON.stringify(value));
 function createLabRoutes({store,verify,findUser,calculateDoe,annualState}={}){
  const getAnnual=annualState||(()=>{try{return JSON.parse(globalThis.localStorage?.getItem('paws-multi-year-demo-v1')||'null')}catch(_){return null}});
  const service=createLabService({store,annualState:getAnnual});
+ const resources=createLabResourceReservations({store,labService:service});
  const reply=(status,jsonBody)=>({status,jsonBody,headers:{'Cache-Control':'no-store'}});
  async function identity(request){
   let decoded;try{decoded=await verify(String(request.headers.get('authorization')||'').replace(/^Bearer\s+/i,''))}catch(_){throw Object.assign(Error('Sign in to a synthetic Demo account.'),{code:'UNAUTHENTICATED'})}
@@ -48,17 +50,22 @@ function createLabRoutes({store,verify,findUser,calculateDoe,annualState}={}){
    const {uid,profile}=await identity(request);
    if((path===''||path==='/')&&method==='GET')return reply(200,{items:service.list(uid).map(item=>{if(item.canEdit)return item;const pub=service.publicView(item.sessionId);return {...item,topic:pub?pub.stations.map(s=>s.topic).join(' / '):'Archived Lab schedule'}}),canSeed:['owner','developer','adfa_general'].includes(String(profile.baseRole).toLowerCase()),labAccounts:['owner','developer','adfa_general'].includes(String(profile.baseRole).toLowerCase())?store.tables.users.filter(u=>u.active===true&&(u.baseRole==='lab'||u.officeAccess?.includes('lab'))).map(u=>({id:u.firebaseUid,name:u.displayName||'LAB account'})):[]});
    if(path==='/context'&&method==='GET')return reply(200,service.read(uid,url.searchParams.get('sessionId')));
+   if(path==='/resources'&&method==='GET')return reply(200,resources.read(uid,url.searchParams.get('sessionId')));
    if(path==='/roster'&&method==='GET')return reply(200,service.roster(uid,url.searchParams.get('sessionId'),url.searchParams.get('version')));
    if(method!=='POST')return reply(405,{error:{code:'METHOD_NOT_ALLOWED',message:'This Lab operation requires POST.'}});
    let body;try{const raw=await request.text();if(raw.length>1000000)throw Error('large');body=raw?JSON.parse(raw):{}}catch(_){return reply(400,{error:{code:'INVALID_JSON',message:'Provide a valid Lab operation payload smaller than 1 MB.'}})}
    if(!body||typeof body!=='object'||Array.isArray(body))return reply(400,{error:{code:'INVALID_JSON',message:'A Lab operation object is required.'}});
    if(path==='/sample')return reply(200,seed(uid,profile));
+   if(path==='/resource-preview')return reply(200,resources.preview(uid,body));
+   if(path==='/resource-request')return reply(200,resources.submit(uid,body));
+   if(path==='/resource-review')return reply(200,resources.review(uid,body));
+   if(path==='/resource-rules')return reply(200,resources.setPolicy(uid,body));
    const commands={'/draft':'save','/publish':'publish','/refresh-source':'refreshSource','/copy-structure':'copyStructure','/scope':'grantScope'};
    if(!commands[path])return reply(404,{error:{code:'NOT_FOUND',message:'Lab operation not found.'}});
    return reply(200,service[commands[path]](uid,body));
   }catch(error){
    const code=error.code||'LAB_ERROR';
-   const status=code==='UNAUTHENTICATED'?401:['ROLE_DENIED','ARCHIVED_YEAR'].includes(code)?403:code==='NOT_FOUND'?404:['STALE_REVISION','SOURCE_CHANGED','REQUEST_REUSE','TARGET_NOT_EMPTY'].includes(code)?409:code==='LAB_VALIDATION'?422:400;
+   const status=code==='UNAUTHENTICATED'?401:['ROLE_DENIED','ARCHIVED_YEAR'].includes(code)?403:code==='NOT_FOUND'?404:['STALE_REVISION','SOURCE_CHANGED','REQUEST_REUSE','TARGET_NOT_EMPTY','HORSE_REST_CONFLICT','POLICY_CONFLICT'].includes(code)?409:code==='LAB_VALIDATION'?422:400;
    return reply(status,{error:{code,message:error.code?error.message:'The Lab operation could not be completed.',...(error.details?{details:error.details}:{})}});
   }
  };

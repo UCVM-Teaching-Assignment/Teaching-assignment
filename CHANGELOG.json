@@ -39,6 +39,19 @@
     },
     {
       "date": "2026-11-02",
+      "pr": 103,
+      "title": "LAB animal resource requests and horse/Pet Professor booking warnings in Testing",
+      "changes": [
+        "Added a Resource Request step before Student Groups in Lab Scheduling for synthetic Horse and Pet Professor requests, with required Reserve Notes.",
+        "Tracks 38 synthetic horses individually; Owner/Developer confirmation rejects assignments that overlap or violate a minimum 24-hour rest window after previous use.",
+        "Shows an in-app warning when requested/confirmed Pet Professor demand exceeds 30 within a rolling 48 hours; the warning does not block requests.",
+        "Added per-Course authorized LAB request history, version/replay checks, synthetic confirmation/rejection and adjustable resource settings.",
+        "No real resource bookings, staff notifications, production animal records, canonical timetable or DOE changes; functionality is Testing-only.",
+        "New ADC-published LAB Sessions must submit Reserve Notes or explicitly choose no animals before Single Activity or Bulk CSV group publication; legacy sessions remain compatible."
+      ]
+    },
+    {
+      "date": "2026-11-02",
       "pr": 102,
       "title": "Lab group scheduling and publication in the Testing Demo",
       "changes": [
@@ -92,6 +105,17 @@
       ]
     },
     {
+      "date": "2026-10-30",
+      "pr": 97,
+      "title": "AFC date changes and clearer withdrawal history",
+      "changes": [
+        "Faculty can request new dates for an approved AFC. The original dates remain in effect until the revised request is approved.",
+        "ADFAD can edit approved AFC dates directly; authorized administrators can also correct dates on manual or imported AFC records.",
+        "Updated Withdraw and Withdrawn wording in AFC records and history.",
+        "Date changes check request versions and teaching coverage, and keep a before-and-after change history."
+      ]
+    },
+    {
       "date": "2026-11-01",
       "pr": 96,
       "title": "Multi-year Planning, Course rollover and Publish Review in PAWS Testing",
@@ -103,17 +127,6 @@
         "Added annual role renewal, cross-year Teaching and DOE comparison, Owner archival and restoration, and frozen historical conflicts.",
         "New-year Faculty assignments and role renewals respect future Faculty activation dates.",
         "Testing-only browser-local data: legacy 2026-27 Calendar is masked on other years; no live SQL or Firestore data is changed."
-      ]
-    },
-    {
-      "date": "2026-10-30",
-      "pr": 97,
-      "title": "AFC date changes and clearer withdrawal history",
-      "changes": [
-        "Faculty can request new dates for an approved AFC. The original dates remain in effect until the revised request is approved.",
-        "ADFAD can edit approved AFC dates directly; authorized administrators can also correct dates on manual or imported AFC records.",
-        "Updated Withdraw and Withdrawn wording in AFC records and history.",
-        "Date changes check request versions and teaching coverage, and keep a before-and-after change history."
       ]
     },
     {
