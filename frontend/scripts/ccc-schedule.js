@@ -3,8 +3,9 @@
 const lib=factory();
 if(typeof module==='object'&&module.exports)module.exports=lib;
 if(root&&root.document){
- const doc=root.document,overlay=doc.getElementById('ccc-schedule-overlay'),button=doc.getElementById('ccc-schedule-btn');
- if(!overlay||!button)return;
+ const doc=root.document,overlay=doc.getElementById('ccc-schedule-overlay');
+ if(!overlay)return;
+ const embedded=Boolean(overlay.closest('#teaching-lists-overlay'));
  const closeButton=doc.getElementById('ccc-schedule-close'),years=doc.getElementById('ccc-schedule-year'),search=doc.getElementById('ccc-schedule-search'),
   refresh=doc.getElementById('ccc-schedule-refresh'),status=doc.getElementById('ccc-schedule-status'),body=doc.getElementById('ccc-schedule-body');
  let generation=0,entries=[],previousFocus=null,timeout=null,loading=false,loadError=false;
@@ -33,12 +34,12 @@ if(root&&root.document){
   }catch(error){if(token!==generation||uid!==currentUid()||!valid())return;loading=false;loadError=true;entries=[];render();}
  }
  function open(){if(!currentUid())return;previousFocus=doc.activeElement;overlay.hidden=false;overlay.setAttribute('aria-hidden','false');
-  populate();search.value='';closeButton.focus();load();if(timeout)root.clearInterval(timeout);timeout=root.setInterval(()=>{if(valid()&&!loading)load();},60000);}
+  populate();search.value='';if(!embedded)closeButton.focus();load();if(timeout)root.clearInterval(timeout);timeout=root.setInterval(()=>{if(valid()&&!loading)load();},60000);}
  function close(){generation++;loading=false;loadError=false;entries=[];body.textContent='';overlay.hidden=true;overlay.setAttribute('aria-hidden','true');
-  if(timeout)root.clearInterval(timeout);timeout=null;if(previousFocus?.isConnected)previousFocus.focus();}
+  if(timeout)root.clearInterval(timeout);timeout=null;if(!embedded&&previousFocus?.isConnected)previousFocus.focus();previousFocus=null;}
  closeButton.addEventListener('click',close);
- overlay.addEventListener('click',event=>{if(event.target===overlay)close();});
- overlay.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();close();return;}
+ overlay.addEventListener('click',event=>{if(!embedded&&event.target===overlay)close();});
+ overlay.addEventListener('keydown',event=>{if(embedded)return;if(event.key==='Escape'){event.preventDefault();close();return;}
   if(event.key==='Tab'){const focusable=[...overlay.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled])')];
    if(!focusable.length)return;const first=focusable[0],last=focusable[focusable.length-1];if(event.shiftKey&&doc.activeElement===first){event.preventDefault();last.focus();}
    else if(!event.shiftKey&&doc.activeElement===last){event.preventDefault();first.focus();}}});
