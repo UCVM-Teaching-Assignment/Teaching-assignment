@@ -139,3 +139,31 @@ test('only Owner grants explicit LAB course scopes without modifying base roles'
 test('participant category remains distinct from the Primary or Secondary teaching role',()=>{
  const f=fixture();f.tables.sessions[0].assignments[0].participantCategory='Guest';const c=ready(f);publish(f,c);const teacher=f.service.publicView('s1').stations[0].instructors[0];assert.equal(teacher.role,'Primary');assert.equal(teacher.participantCategory,'Guest');
 });
+
+test('ADC-published LAB requires submitted resource notes or explicit none before publishing groups',()=>{
+ const {createLabResourceReservations}=require('../tools/pages-demo-api/lab-resource-reservations');
+ const f=fixture();f.tables.sessions[0].scheduleStatus='published';
+ f.tables.sessions[0].schedulePublishedBy='adc';
+ let saved=ready(f);
+ assert.equal(saved.validation.canPublish,false);
+ assert.ok(has(saved.validation,'RESOURCE_REQUEST_REQUIRED'));
+ assert.throws(()=>publish(f,saved),e=>e.code==='LAB_VALIDATION');
+ const resources=createLabResourceReservations({store:f.store,labService:f.service});
+ let note=resources.submit('lab',{sessionId:'s1',expectedVersion:0,horseCount:1,petProfessorCount:0,
+  notes:'Reserve a synthetic horse for this lab',requestId:'resource-1'});
+ assert.equal(note.request.status,'requested');
+ const after=f.service.read('lab','s1');
+ assert.equal(has(after.validation,'RESOURCE_REQUEST_REQUIRED'),false);
+ assert.equal(after.validation.canPublish,true);
+ publish(f,after);
+ assert.equal(f.service.publicView('s1').version,1);
+});
+test('new ADC LAB can explicitly record no animals required, preserving existing room/group checks',()=>{
+ const {createLabResourceReservations}=require('../tools/pages-demo-api/lab-resource-reservations');
+ const f=fixture();f.tables.sessions[0].schedulePublishedBy='adc';const saved=ready(f);
+ const resources=createLabResourceReservations({store:f.store,labService:f.service});
+ assert.equal(has(saved.validation,'RESOURCE_REQUEST_REQUIRED'),true);
+ assert.equal(resources.submit('lab',{sessionId:'s1',expectedVersion:0,horseCount:0,petProfessorCount:0,
+  notes:'',requestId:'no-animal-needed'}).request.status,'not_required');
+ assert.equal(f.service.read('lab','s1').validation.canPublish,true);
+});
