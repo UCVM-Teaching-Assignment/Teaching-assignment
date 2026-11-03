@@ -150,7 +150,7 @@ test('validation blocks legacy stored ineligible assignments but accepts a targe
  const before=m.previewPublication(adfa,'2027-28','VTMD 306');
  const issue=before.issues.find(x=>x.code==='INACTIVE_FACULTY'&&x.severity==='block');
  assert.equal(issue.sessionId,'legacy');assert.equal(issue.facultyId,'f2');
- assert.match(issue.message,/Morgan Hart/);
+ assert.match(issue.message,/Hart, Morgan/);
  assert.throws(()=>m.publishCourse(lead,'2027-28','VTMD 306'),/validation/i);
  assert.throws(()=>m.resolveFacultyIssue(faculty1,'2027-28','VTMD 306','legacy','f2','f3',before.sourceRevision),/permission/i);
  assert.throws(()=>m.resolveFacultyIssue(adfa,'2027-28','VTMD 306','legacy','f2','f2',before.sourceRevision),/ineligible/i);
