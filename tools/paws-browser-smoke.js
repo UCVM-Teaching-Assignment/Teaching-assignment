@@ -200,6 +200,16 @@ async function main(){
      await cdp.send('Runtime.evaluate',{expression:"window.UCVM_PAWS_DEMO_API?.reset?.()",returnByValue:true});
      await cdp.send('Page.navigate',{url:`${origin}/index.html`});
      await waitForText(cdp,['PAWS Frontend Demo','Teaching Schedule']);
+     // Page.navigate can return before the new bundle has installed its Demo
+     // globals. Poll for readiness instead of probing the old document race.
+     let defaultReady=false;
+     for(let attempt=0;attempt<80;attempt++){
+       const status=await cdp.send('Runtime.evaluate',{expression:"Boolean(window.UCVM_PAWS_DEMO_API?.store && window.UCVM_PAWS_DATA && document.readyState==='complete')",returnByValue:true}).catch(()=>null);
+       if(status?.result?.value===true){defaultReady=true;break;}
+       await wait(125);
+     }
+     if(!defaultReady)problems.push(label+': default calendar bundle did not initialize');
+     else {
      const probe=await cdp.send('Runtime.evaluate',{expression:"(async function verifyDefaultSyntheticTeaching(){\n"+
        " try{const sleep=ms=>new Promise(r=>setTimeout(r,ms));\n"+
        " const store=window.UCVM_PAWS_DEMO_API?.store;\n"+
@@ -217,6 +227,7 @@ async function main(){
        "})()",awaitPromise:true,returnByValue:true});
      if(!probe.result?.value?.ok)problems.push(label+': default synthetic calendar unavailable: '+JSON.stringify(probe.result?.value||probe.exceptionDetails||'no result').slice(0,700));
      else console.log('ok   Default PAWS Testing loads packed synthetic data, 74 Fall W11 sessions via API and visible November Month teaching blocks');
+     }
      await cdp.send('Runtime.evaluate',{expression:"window.UCVM_PAWS_DEMO_API?.reset?.()",returnByValue:true});
    }
    console.log(`${ok&&!errors.length&&!apiCalls.length?'ok  ':'FAIL'} ${label}`);
