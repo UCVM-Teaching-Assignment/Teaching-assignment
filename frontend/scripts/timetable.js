@@ -1392,11 +1392,9 @@
     html+='</div></div>'+(window.PAWS_TASKS?'':unpositionedSessionsHtml(data));$('calendar-body').innerHTML=html;bindSessionBlocks();
   }
 
-  function renderWeek() {
-    const start = weekStart(selectedWeek, selectedSemester); const end = addDays(start, 4);
-    $('cal-label').textContent = `${selectedSemester === 'winter' ? 'Winter' : (selectedSemester === 'spring' ? 'Spring' : 'Fall')} Week ${selectedWeek} - ${formatDate(start)} to ${formatDate(end)}, ${end.getFullYear()}`;
-    const data = filteredSessions(calendarSourceSessions()).filter(s => s.isWorkingActivity?s.date>=ymd(start)&&s.date<=ymd(end):s.week===selectedWeek);
-    renderedSessions=data;
+  // Share one canonical week grid between the normal Calendar and stacked comparison.
+  // This is presentation only; both views use the same placement and safety flags.
+  function weekGridMarkup(start,data,{showCheckNeeded=false}={}) {
     const DAY_START=CALENDAR_DAY_START, DAY_END=CALENDAR_DAY_END, SPAN=DAY_END-DAY_START; // 7:30am-5:00pm
     let html = '<div class="tg-wrap"><div class="tg-corner"></div>';
     for (let i = 0; i < 5; i++) {
@@ -1431,7 +1429,15 @@
       html += '</div>';
     }
     html += '</div>';
-    $('calendar-body').innerHTML = html+(window.PAWS_TASKS?'':unpositionedSessionsHtml(data));
+    return html+(showCheckNeeded?unpositionedSessionsHtml(data):'');
+  }
+
+  function renderWeek() {
+    const start = weekStart(selectedWeek, selectedSemester); const end = addDays(start, 4);
+    $('cal-label').textContent = `${selectedSemester === 'winter' ? 'Winter' : (selectedSemester === 'spring' ? 'Spring' : 'Fall')} Week ${selectedWeek} - ${formatDate(start)} to ${formatDate(end)}, ${end.getFullYear()}`;
+    const data = filteredSessions(calendarSourceSessions()).filter(s => s.isWorkingActivity?s.date>=ymd(start)&&s.date<=ymd(end):s.week===selectedWeek);
+    renderedSessions=data;
+    $('calendar-body').innerHTML=weekGridMarkup(start,data,{showCheckNeeded:!window.PAWS_TASKS});
     bindSessionBlocks();
   }
 
