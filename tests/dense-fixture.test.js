@@ -32,6 +32,14 @@ test('Beta-density fixture matches synthetic weekly profile and preserves curren
   assert.equal(countByWeek(t, 'fall', 4), 69);
   assert.equal(countByWeek(t, 'fall', 5), 79);
   assert.equal(countByWeek(t, 'spring', 3), 17);
+  // Beta's historical grid/check-needed partition anchors, using missing
+  // source times as the synthetic, explicitly reviewable example.
+  for (const [term, week, checkNeeded] of [['fall', 0, 25], ['fall', 4, 9], ['fall', 5, 19], ['spring', 3, 7]]) {
+    const actual = t.sessions.filter(row => row.academicYear === '2026-27'
+      && weekOf(row.date)?.term.term === term && weekOf(row.date)?.week === week
+      && (!row.startTime || !row.endTime)).length;
+    assert.equal(actual, checkNeeded, term + ' W' + (week + 1) + ' check needed');
+  }
   const kinds = new Set(t.sessions.map(row => row.sessionType));
   for (const kind of ['LEC', 'LAB', 'SRL', 'Exam', 'OSCE']) assert.ok(kinds.has(kind), kind + ' coverage');
   const ccc = t.activities.filter(row => row.category === 'ccc');
