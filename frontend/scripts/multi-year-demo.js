@@ -26,7 +26,7 @@
   function current(){return state().annual[selectedYear]||{};}
   const facultyName=(s,id)=>s.faculty.find(f=>f.id===id)?.name||id||'Unassigned';
   const eligibleFaculty=(s,date)=>s.faculty.filter(f=>f.active&&f.appointmentValid&&(!f.activationDate||date>=f.activationDate));
-  const doeNumber=value=>Number.isFinite(Number(value))?Number(value).toFixed(2):'—';
+  const doeNumber=value=>root.PAWS_MULTI_YEAR_DEMO_MODEL.formatDoeNumber(value);
   function canEditCourse(s,a,code){if(isAdfa(a.role))return true;const fid=a.facultyId||s.users.find(u=>u.uid===a.uid)?.facultyId;return (s.roles[selectedYear]||[]).some(r=>r.status==='confirmed'&&r.facultyId===fid&&['HICC','Course Coordinator'].includes(r.roleType)&&r.scope.toUpperCase().startsWith(code));}
   function label(s,code){const row=s.annual[selectedYear]?.[code];if(!row)return code;const pub=row.published.at(-1);return code+' · '+row.title+(pub?' · Published v'+pub.version:(row.working.length?' · Draft':' · Empty Draft'))+(pub&&row.revision!==pub.revision?' · Changes Pending':'');}
   function table(headers,rows){if(!rows.length)return '<p class="paws-my-empty">No records for this view.</p>';
@@ -95,7 +95,7 @@
   }
   function viewTeaching(a,s){
     const sessions=load().getTeaching(a,selectedYear);
-    return wrap('Published Teaching · '+selectedYear,'<p class="paws-my-muted">Shows only the last formally Published Course version, including archived years. Working Draft is never shown here.</p>'+table(['Course','Date','Topic','Instructor','DOE credit'],sessions.slice(0,200).map(x=>[E(x.courseCode),E(x.date),E(x.topic),E((x.assignments||[]).map(f=>facultyName(s,f.facultyId)).join('; ')),E(isAdfa(a.role)||['faculty','hicc','visc'].includes(a.role)?(x.assignments||[]).reduce((n,f)=>n+(Number(f.doeCredit)||0),0):'Not available')])));
+    return wrap('Published Teaching · '+selectedYear,'<p class="paws-my-muted">Shows only the last formally Published Course version, including archived years. Working Draft is never shown here.</p>'+table(['Course','Date','Topic','Instructor','DOE credit'],sessions.slice(0,200).map(x=>[E(x.courseCode),E(x.date),E(x.topic),E((x.assignments||[]).map(f=>facultyName(s,f.facultyId)).join('; ')),E(isAdfa(a.role)||['faculty','hicc','visc'].includes(a.role)?root.PAWS_MULTI_YEAR_DEMO_MODEL.sessionDoeCredit(x.assignments):'Not available')])));
   }
   function viewCourses(a,s){
     const annual=s.annual[selectedYear]||{},yearState=s.years[selectedYear].status;
@@ -204,7 +204,7 @@
       body+='<form data-my-form="override" class="paws-my-form"><label class="paws-my-field"><span>Faculty</span>'+select('facultyId',s.faculty,x=>x.id,x=>x.name)+'</label>'+input('Manual override','value','number','step="0.5" value="10"')+'<button type="submit">Save Override</button></form>';
     }
     if(!d.released)body+='<p class="paws-my-warning">Pending · Faculty can see published Teaching but cannot see DOE until the initial DOE release.</p>';
-    if(d.released){body+=table(['Faculty','Calculated','Override','Published effective','Review'],info.items.slice(0,80).map(x=>[E(facultyName(s,x.facultyId)),E(x.base),E(x.override===null?'—':x.override),E(x.effective),E(x.needsReview?'Needs ADFAD Review':'—')]));}
+    if(d.released){body+=table(['Faculty','Calculated','Override','Published effective','Review'],info.items.slice(0,80).map(x=>[E(facultyName(s,x.facultyId)),E(doeNumber(x.base)),E(doeNumber(x.override)),E(doeNumber(x.effective)),E(x.needsReview?'Needs ADFAD Review':'—')]));}
     if(admin)body+=wrap('Working DOE preview (internal only)',table(['Faculty','Working credit'],working.map(x=>[E(facultyName(s,x.facultyId)),E(x.base)])));
     return wrap('DOE · '+selectedYear,body);
   }
