@@ -189,6 +189,9 @@
         }catch(error){status.textContent='Demo data unavailable';status.title=String(error?.message||error);status.classList.add('is-error');}
       }
       updateDensityStatus();
+      // Keep the count in step with saved changes (no reload needed).
+      root.addEventListener('paws-demo-data-changed', updateDensityStatus);
+      root.addEventListener('ucvm:sessions-updated', updateDensityStatus);
       const allowed = user => {
         const role = roleOf(user);
         button.classList.toggle('hidden', !(ADMIN_ROLES.has(role) || role === 'adc'));

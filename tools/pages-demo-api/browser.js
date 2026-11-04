@@ -47,7 +47,10 @@ const { Buffer } = require('buffer');
     if (/\/approved-artifact\/?$/.test(path)) await ensureTemplate();
     try {
       // Mirrors the University HTTP host: method and body pass through unchanged.
-      return toResponse(await route(new Request('https://pages-demo.invalid' + new URL(request.url).pathname + new URL(request.url).search, { method: request.method, headers: request.headers, body: ['GET', 'HEAD'].includes(request.method) ? undefined : await request.arrayBuffer() })));
+      const result = await route(new Request('https://pages-demo.invalid' + new URL(request.url).pathname + new URL(request.url).search, { method: request.method, headers: request.headers, body: ['GET', 'HEAD'].includes(request.method) ? undefined : await request.arrayBuffer() }));
+      // Lets page widgets (for example the Demo session count) refresh after a saved change.
+      if (!['GET', 'HEAD'].includes(request.method) && Number(result && result.status) < 400 && typeof root.dispatchEvent === 'function' && typeof root.CustomEvent === 'function') root.dispatchEvent(new root.CustomEvent('paws-demo-data-changed', { detail: { method: request.method, path } }));
+      return toResponse(result);
     } catch (error) {
       console.error('[PAWS Frontend Demo] request failed', path, error);
       return toResponse({ status: 503, jsonBody: { error: { code: 'SERVICE_UNAVAILABLE', message: 'The Frontend Demo service could not complete this request.' } } });

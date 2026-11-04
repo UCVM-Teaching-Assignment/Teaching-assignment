@@ -2,6 +2,15 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-04",
+      "pr": 113,
+      "title": "Check that saved changes match success messages (UX-06)",
+      "changes": [
+        "Checked saving and reloading across Faculty Admin, Calendar sessions and instructors, Work Queue reviews, AFC requests and records, SWAP approvals and Teaching Assignments: every success message matched data that stayed after reload.",
+        "The Calendar's \"teaching sessions in Demo\" count now updates right after a session is created or changed, instead of only after a page reload."
+      ]
+    },
+    {
       "date": "2026-11-03",
       "pr": 111,
       "title": "Show DOE values without misleading defaults (UX-04)",
