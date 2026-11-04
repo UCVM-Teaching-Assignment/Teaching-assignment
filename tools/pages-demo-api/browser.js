@@ -17,6 +17,7 @@ const { Buffer } = require('buffer');
   // This remains browser-local and never imports institutional Beta/SQL records.
   const search = new URLSearchParams(root.location?.search || '');
   const store = createStore({ storage: root.localStorage, autoLoadFixture: !search.has('emptyCalendar') });
+  store.accountOverlay = uid => { try { return root.UCVM_PAGES_DEMO && typeof root.UCVM_PAGES_DEMO.account === 'function' ? root.UCVM_PAGES_DEMO.account(uid) : null; } catch (_) { return null; } };
   const route = createDemoRuntime(store);
   const nativeFetch = root.fetch.bind(root);
   const origin = () => { const value = root.PAWS_API_ORIGIN_CONFIG && root.PAWS_API_ORIGIN_CONFIG.apiOrigin; try { return value ? new URL(value).origin : null; } catch (_) { return null; } };

@@ -51,11 +51,30 @@ function sessionView(store, session, { includeAssignmentTargets = false, include
   return out;
 }
 
+// User Management saves accounts in the Frontend Demo Firestore (users/{uid}).
+// Apply that saved account on top of the API row so a saved role, status, name
+// or faculty link is what PAWS reads back after a refresh.
+function applySavedAccount(store, result) {
+  const saved = typeof store.accountOverlay === 'function' ? store.accountOverlay(result.firebaseUid) : null;
+  if (!saved || typeof saved !== 'object') return result;
+  if (typeof saved.role === 'string' && saved.role.trim()) result.baseRole = saved.role.trim();
+  if (typeof saved.active === 'boolean') result.active = saved.active;
+  if (typeof saved.mustChangePassword === 'boolean') result.mustChangePassword = saved.mustChangePassword;
+  if (typeof saved.name === 'string' && saved.name.trim()) result.displayName = saved.name.trim();
+  if (typeof saved.email === 'string' && saved.email.trim()) result.email = saved.email.trim().toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(saved, 'facultyId')) {
+    const id = String(saved.facultyId || '');
+    const member = id ? store.tables.faculty.find(f => [f.facultyId, f.legacyId, f.ucid].map(v => String(v || '')).includes(id)) : null;
+    result.facultyId = member ? member.facultyId : (id ? result.facultyId : null);
+  }
+  return result;
+}
+
 function createUserRepository(store) {
   return { async findByUid(uid) {
     const row=store.tables.users.find(user=>user.firebaseUid===uid);
     if(!row)return null;
-    const result=clone(row);
+    const result=applySavedAccount(store, clone(row));
     if(['faculty','hicc','visc'].includes(String(result.baseRole||'').trim().toLowerCase())){
       const member=store.tables.faculty.find(f=>f.facultyId===result.facultyId);
       if(!activation.effectiveActive(member,store.now()))result.active=false;
