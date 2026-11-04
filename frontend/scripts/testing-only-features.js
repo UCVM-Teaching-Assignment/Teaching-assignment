@@ -259,20 +259,14 @@
 
     // Workflow buttons
     const nav = doc.querySelector('.faculty-workflow-nav');
-    if (nav && !$('testing-only-approvals-btn')) {
-      nav.insertAdjacentHTML('beforeend', `<button class="fbar-reset hidden" id="testing-only-approvals-btn" type="button">All Approvals${badge()}</button>
-        <button class="fbar-reset hidden" id="testing-only-work-queue-btn" type="button">Work Queue${badge()}</button>
-        <button class="fbar-reset hidden" id="testing-only-requests-btn" type="button">Requests${badge()}</button>`);
-      $('testing-only-approvals-btn').addEventListener('click', openApprovals);
+    if (nav && !$('testing-only-work-queue-btn')) {
+      nav.insertAdjacentHTML('beforeend', `<button class="fbar-reset hidden" id="testing-only-work-queue-btn" type="button">Work Queue${badge()}</button>`);
       $('testing-only-work-queue-btn').addEventListener('click', openWorkQueue);
-      $('testing-only-requests-btn').addEventListener('click', openRequests);
     }
 
     const applyUser = user => {
       const role = roleOf(user);
-      $('testing-only-approvals-btn')?.classList.toggle('hidden', !(ADMIN_ROLES.has(role) || FACULTY_ROLES.has(role) || role === 'adc' || role === 'lab'));
       $('testing-only-work-queue-btn')?.classList.toggle('hidden', !(ADMIN_ROLES.has(role)||FACULTY_ROLES.has(role)||role==='adc'||role==='lab'));
-      $('testing-only-requests-btn')?.classList.toggle('hidden', !FACULTY_ROLES.has(role));
       if (user) showNotifications(user);
     };
     root.addEventListener('ucvm-timetable-user', event => applyUser(event.detail && event.detail.user));

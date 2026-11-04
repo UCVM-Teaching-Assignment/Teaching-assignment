@@ -204,7 +204,7 @@
       body+='<form data-my-form="override" class="paws-my-form"><label class="paws-my-field"><span>Faculty</span>'+select('facultyId',s.faculty,x=>x.id,x=>x.name)+'</label>'+input('Manual override','value','number','step="0.5" value="10"')+'<button type="submit">Save Override</button></form>';
     }
     if(!d.released)body+='<p class="paws-my-warning">Pending · Faculty can see published Teaching but cannot see DOE until the initial DOE release.</p>';
-    if(d.released){body+=table(['Faculty','Calculated','Override','Published effective','Review'],info.items.slice(0,80).map(x=>[E(facultyName(s,x.facultyId)),E(x.base),E(x.override===null?'—':x.override),E(x.effective),E(x.needsReview?'Needs ADFAD Review':'—')]));}
+    if(d.released){body+=table(['Faculty','Calculated','Override','Published effective','Review'],info.items.slice(0,80).map(x=>[E(facultyName(s,x.facultyId)),E(doeNumber(x.base)),E(doeNumber(x.override)),E(doeNumber(x.effective)),E(x.needsReview?'Needs ADFAD Review':'—')]));}
     if(admin)body+=wrap('Working DOE preview (internal only)',table(['Faculty','Working credit'],working.map(x=>[E(facultyName(s,x.facultyId)),E(x.base)])));
     return wrap('DOE · '+selectedYear,body);
   }

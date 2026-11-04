@@ -21,7 +21,7 @@
   const canAdfa=a=>['owner','developer','adfa_general','adfa_regular','administrator','admin'].includes(normalized(a&&a.role).toLowerCase());
   const owner=a=>['owner','developer'].includes(normalized(a&&a.role).toLowerCase());
   function bootstrap(source){
-    const faculty=clone(source.faculty||[]).map(f=>({id:f.facultyId,name:f.displayName||f.preferredLastName||f.facultyId,active:f.active!==false,activationDate:typeof f.activationDate==='string'?f.activationDate:null,appointmentValid:f.appointmentValid!==false,contractDoe:Number(f.contractTeachingDoe)||0}));
+    const faculty=clone(source.faculty||[]).map(f=>({id:f.facultyId,name:f.displayName||f.preferredLastName||f.facultyId,active:f.active!==false,activationDate:typeof f.activationDate==='string'?f.activationDate:null,appointmentValid:f.appointmentValid!==false,contractDoe:knownNumber(f.contractTeachingDoe)}));
     const users=clone(source.users||[]).map(u=>({uid:u.firebaseUid,role:u.baseRole,facultyId:u.facultyId||null,name:u.displayName||u.firebaseUid}));
     const catalog=clone(source.courses||[]).map(c=>({code:codeFor(c.courseCode),title:c.courseName||c.courseCode,curriculumYear:c.curriculumYear||null}));
     const grouping={};
@@ -29,7 +29,7 @@
       if(raw.academicYear!=='2026-27')continue;
       const code=codeFor(raw.courseCode);
       if(!grouping[code])grouping[code]=[];
-      grouping[code].push({id:raw.id,courseCode:code,date:raw.date,topic:raw.topic||'',sessionType:raw.sessionType||'',startTime:raw.startTime||'',endTime:raw.endTime||'',room:raw.room||'',assignments:clone(raw.assignments||[]).map(a=>({facultyId:a.facultyId,teachingRole:a.teachingRole||'',doeCredit:Number(a.doeCredit)||0}))});
+      grouping[code].push({id:raw.id,courseCode:code,date:raw.date,topic:raw.topic||'',sessionType:raw.sessionType||'',startTime:raw.startTime||'',endTime:raw.endTime||'',room:raw.room||'',assignments:clone(raw.assignments||[]).map(a=>({facultyId:a.facultyId,teachingRole:a.teachingRole||'',doeCredit:knownNumber(a.doeCredit)}))});
     }
     const annual={'2026-27':{}};
     for(const [code,sessions] of Object.entries(grouping)){
@@ -46,9 +46,9 @@
     const doeRecords={};
     for(const f of faculty){
       const target=(source.targets||[]).find(t=>t.facultyId===f.id&&t.academicYear==='2026-27');
-      const base=target&&Number.isFinite(Number(target.effectiveTargetDoe))?Number(target.effectiveTargetDoe):f.contractDoe;
-      const override=target&&target.overrideDoe!==null&&target.overrideDoe!==undefined?Number(target.overrideDoe):null;
-      doeRecords[f.id]={facultyId:f.id,base,effective:override===null?base:override,override,needsReview:false};
+      const base=knownNumber(target?.effectiveTargetDoe)??f.contractDoe;
+      const override=knownNumber(target?.overrideDoe);
+      doeRecords[f.id]={facultyId:f.id,base,effective:override===null?base:override,override,needsReview:base===null&&override===null};
     }
     return {version:1,faculty,users,catalog,afc:clone(source.afcRecords||[]),years:{'2026-27':{status:'active',revision:1}},annual,roles,doe:{'2026-27':{policy:{status:'approved',copiedFrom:null},released:true,records:doeRecords,overrides:{}}},archives:[],audit:clone(source.history||[]).map(h=>({event:h.changeType||h.eventType||'legacy_change',actor:h.actorFirebaseUid||h.actorName||'',year:h.academicYear||'2026-27',at:h.changedAtUtc||h.occurredAtUtc||'',legacy:true,detail:{original:h}})),preferences:{},serial:0};
   }
@@ -191,7 +191,7 @@
     function addSession(a,year,code,input){staff(a);editable(year);const row=annual(year,code);if(!canPublish(a,year,row))invalid('Course scope permission required');
       const date=normalized(input&&input.date);if(date<startOf(year)||date>=nextOf(year))invalid('Session date outside academic year');
       const id=normalized(input.id)||'demo-session-'+(++state.serial);if(row.working.some(s=>s.id===id))invalid('Session already exists');
-      const assignments=clone(input.assignments||[]).map(x=>({facultyId:x.facultyId||null,teachingRole:x.teachingRole||'',doeCredit:Number(x.doeCredit)||0}));
+      const assignments=clone(input.assignments||[]).map(x=>({facultyId:x.facultyId||null,teachingRole:x.teachingRole||'',doeCredit:knownNumber(x.doeCredit)}));
       for(const x of assignments){
         if(x.facultyId&&!faculty(x.facultyId))invalid('Unknown Faculty');
         if(x.facultyId&&(!faculty(x.facultyId).active||!faculty(x.facultyId).appointmentValid))invalid('Inactive or ineligible Faculty cannot be assigned');
@@ -203,7 +203,7 @@
     function editAssignment(a,year,code,id,fid){staff(a);editable(year);const row=annual(year,code);if(!canPublish(a,year,row))invalid('Course scope permission required');const s=row.working.find(x=>x.id===id);if(!s)invalid('Session not found');if(fid&&!faculty(fid))invalid('Unknown Faculty');
       if(fid&&(!faculty(fid).active||!faculty(fid).appointmentValid))invalid('Inactive or ineligible Faculty cannot be assigned');
       if(fid&&faculty(fid)?.activationDate&&(!s.date||s.date<faculty(fid).activationDate))invalid('Faculty cannot be assigned before activation date');
-      const old=s.assignments[0]||{};s.assignments=fid?[{facultyId:fid,teachingRole:old.teachingRole||'Instructor',doeCredit:Number(old.doeCredit)||0}]:[];
+      const old=s.assignments[0]||{};s.assignments=fid?[{facultyId:fid,teachingRole:old.teachingRole||'Instructor',doeCredit:knownNumber(old.doeCredit)}]:[];
       row.revision++;row.finalizedRevision=0;logged('assignment_updated',a,year,{code:row.code,sessionId:id});return clone(s);
     }
 
@@ -482,7 +482,7 @@
   }
   // UX-04: a missing DOE value is shown as a dash, never as 0.00; unknown
   // session credit is reported as not recorded rather than counted as 0.
-  const knownNumber=value=>value===null||value===undefined||value===''||!Number.isFinite(Number(value))?null:Number(value);
+  const knownNumber=value=>(typeof value!=='number'&&typeof value!=='string')||(typeof value==='string'&&!value.trim())||!Number.isFinite(Number(value))?null:Number(value);
   function formatDoeNumber(value){const n=knownNumber(value);return n===null?'—':n.toFixed(2);}
   function sessionDoeCredit(assignments){
     const values=(Array.isArray(assignments)?assignments:[]).map(a=>knownNumber(a&&a.doeCredit));

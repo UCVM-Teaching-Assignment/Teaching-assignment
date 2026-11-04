@@ -11,7 +11,9 @@
         "Real zero DOE values still show as 0.00%, and a missing contract target still shows Needs Review.",
         "Multi-year Demo shows a missing DOE as a dash instead of 0.00, and a session with no DOE credit as Not recorded instead of 0.",
         "A role that ends partway through a year still counts in full for that year, as agreed with Alex; these cases are handled case by case.",
-        "No institutional Beta/SQL/Firestore records or real Faculty identities changed."
+        "No institutional Beta/SQL/Firestore records or real Faculty identities changed.",
+        "Preserve missing session credits through Demo import and assignment editing; reject blank and nonnumeric DOE inputs instead of presenting them as recorded zero.",
+        "Remove duplicate Requests and All Approvals buttons from the Calendar toolbar; use the existing sidebar workflows."
       ]
     },
     {

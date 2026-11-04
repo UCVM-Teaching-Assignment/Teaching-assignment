@@ -8,6 +8,27 @@ const path = require('node:path');
 const view = require('../frontend/scripts/dashboard-view-model.js');
 const demo = require('../frontend/scripts/multi-year-demo-model.js');
 
+test('imported unknown credits and missing targets survive the engine-to-display path', () => {
+  const engine = demo.createEngine({ source: { faculty: [{facultyId:'f1'}], sessions: [{id:'s1',academicYear:'2026-27',courseCode:'C',date:'2026-09-01',assignments:[{facultyId:'f1',doeCredit:null}]}] } });
+  const row = engine.getTeaching({uid:'owner',role:'owner'}, '2026-27')[0];
+  assert.equal(demo.sessionDoeCredit(row.assignments), 'Not recorded');
+  const record = engine.getState().doe['2026-27'].records.f1;
+  assert.equal(record.effective, null);
+  assert.equal(record.needsReview, true);
+  const actor={uid:'owner',role:'owner'};
+  engine.addSession(actor,'2026-27','C',{id:'s2',date:'2026-09-02',assignments:[{facultyId:'f1'}]});
+  assert.equal(engine.getState().annual['2026-27'].C.working.find(x=>x.id==='s2').assignments[0].doeCredit,null);
+  assert.equal(engine.editAssignment(actor,'2026-27','C','s2','f1').assignments[0].doeCredit,null);
+});
+
+test('blank and nonnumeric data never becomes a recorded zero', () => {
+  for (const value of ['   ', false, true, [], [1], {}]) {
+    assert.equal(demo.formatDoeNumber(value), '—');
+    assert.equal(view.formatRoleDoe(value, 'effective'), 'Needs Review');
+    assert.equal(view.formatHours(value), '—');
+  }
+});
+
 test('role DOE columns say what is absent instead of "DOE unavailable"', () => {
   assert.equal(view.formatRoleDoe(null, 'mapped'), 'Not mapped');
   assert.equal(view.formatRoleDoe(null, 'override'), 'No override');
