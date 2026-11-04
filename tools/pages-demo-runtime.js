@@ -618,6 +618,7 @@
     root.UCVM_PAGES_DEMO=Object.freeze({
       reset:()=>runtime.reset(),
       export:()=>runtime.store.export(),
+      account:uid=>runtime.store.read(`users/${uid}`)||null,
       selectUser:uid=>runtime.auth._select(uid),
       doeRulebook,
       doeRows:academicYear=>demoDoeRows(runtime.store,academicYear),
