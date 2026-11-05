@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-05",
+      "pr": 116,
+      "title": "Check role access and limit Teaching Assignment edits to the package HICC (QA-01)",
+      "changes": [
+        "Checked Owner, Administrator, Developer, ADFA, ADC, LAB, HICC, VISC, Faculty and Other Office accounts against the role matrix: page access, data visibility, edits, submissions, reviews and approvals.",
+        "Fixed: any HICC account could save a draft, submit or final-submit another HICC's Teaching Assignment package. Now only the package's own HICC can, matching Beta.",
+        "Accounts that are inactive or must change their password stay blocked from PAWS data."
+      ]
+    },
+    {
       "date": "2026-11-06",
       "pr": 115,
       "title": "Testing AFC Special Leave date-scoped FTE and DOE prototype",

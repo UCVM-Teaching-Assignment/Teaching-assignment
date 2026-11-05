@@ -1,9 +1,9 @@
 'use strict';
 // Teaching Assignment packages for the Frontend Demo: HICC draft -> VISC review
 // -> HICC final submit -> ADFAD finalization -> published release snapshots.
-const { isAdministratorRole } = require('../../../server/src/auth/role-policy.js');
+const { isAdministratorRole, normalizeBaseRole } = require('../../../server/src/auth/role-policy.js');
 const { uuidFor } = require('../ids.js');
-const { clone, sqlError } = require('./core.js');
+const { clone, sqlError, createUserRepository } = require('./core.js');
 const { assertAssignable } = require('../faculty-activation.js');
 
 const userOf = (store, uid) => store.tables.users.find(u => u.firebaseUid === uid) || {};
@@ -38,6 +38,14 @@ const queueRow = p => ({ packageId: p.packageId, academicYear: p.academicYear, g
 const packageView = p => { const { hiccFacultyId, activities, ...rest } = p; return clone(rest); };
 
 function createTeachingAssignmentRepository(store) {
+  // Mirror SQL CanActOnTeachingAssignmentPackage: a write needs the actor's own
+  // package scope, not only the role (THROW 52112/52121/52132/52141/52172).
+  const users = createUserRepository(store);
+  const actorScope = async uid => { const u = await users.findByUid(uid) || {}; return { facultyId: u.facultyId || null, role: normalizeBaseRole(u.baseRole) || '' }; };
+  const requireScope = async (p, uid, kind, number, message) => {
+    const scope = await actorScope(uid);
+    if (scope.role !== kind || !inScope(store, p, scope)) throw sqlError(number, message);
+  };
   const find = (id, scope) => { const p = state(store).packages.find(x => x.packageId === id); return p && (!scope || inScope(store, p, scope)) ? p : null; };
   const touch = (p, uid, eventType) => { p.updatedAtUtc = store.nowIso(); p.activities.unshift({ eventType, occurredAtUtc: p.updatedAtUtc, actorName: userOf(store, uid).displayName || 'PAWS user', revisionNumber: p.workingRevision }); store.commit(); return packageView(p); };
   return {
@@ -55,6 +63,7 @@ function createTeachingAssignmentRepository(store) {
     async listPublicationHistory({ academicYear }) { return state(store).releases.filter(r => r.academicYear === academicYear).map(({ sessions, ...rest }) => clone(rest)); },
     async saveDraft({ packageId, expectedWorkingRevision, sessions, revisionNote, actorFirebaseUid }) {
       const p = find(packageId); if (!p) throw sqlError(52111, 'Package not found');
+      await requireScope(p, actorFirebaseUid, 'hicc', 52112, 'Actor does not hold the current HICC responsibility for this package.');
       if (p.workingRevision !== expectedWorkingRevision) throw conflict();
       if (!['draft', 'changes_requested'].includes(p.status)) throw sqlError(52102, 'The package is not editable in its current stage.');
       const base = p.revisions.at(-1).sessions;
@@ -69,6 +78,7 @@ function createTeachingAssignmentRepository(store) {
     },
     async submit({ packageId, expectedWorkingRevision, actorFirebaseUid }) {
       const p = find(packageId); if (!p) throw sqlError(52111, 'Not found');
+      await requireScope(p, actorFirebaseUid, 'hicc', 52121, 'Current HICC scope is required.');
       if (p.workingRevision !== expectedWorkingRevision) throw conflict();
       if (!['draft', 'changes_requested'].includes(p.status)) throw sqlError(52103, 'Only a draft can be submitted.');
       p.status = 'visc_review'; p.submittedRevision = p.workingRevision;
@@ -76,6 +86,7 @@ function createTeachingAssignmentRepository(store) {
     },
     async review({ packageId, revisionNumber, decision, comment, actorFirebaseUid }) {
       const p = find(packageId); if (!p) throw sqlError(52111, 'Not found');
+      await requireScope(p, actorFirebaseUid, 'visc', 52132, 'Current VISC group authority is required.');
       if (p.status !== 'visc_review') throw sqlError(52104, 'The package is not waiting for VISC review.');
       if (p.workingRevision !== revisionNumber) throw conflict();
       p.reviews.push({ revisionNumber, decision, comment: comment || '', createdAtUtc: store.nowIso(), actorName: userOf(store, actorFirebaseUid).displayName });
@@ -84,12 +95,14 @@ function createTeachingAssignmentRepository(store) {
     },
     async addContribution({ packageId, revisionNumber, sessionId, suggestedDisplayName, suggestedByOffice, note, actorFirebaseUid }) {
       const p = find(packageId); if (!p) throw sqlError(52111, 'Not found');
+      if (suggestedByOffice === 'hicc') await requireScope(p, actorFirebaseUid, 'hicc', 52172, 'Current HICC responsibility is required for this contribution.');
       if (p.workingRevision !== revisionNumber) throw conflict();
       p.contributions.push({ revisionNumber, sessionId, suggestedDisplayName, suggestedByOffice, note: note || '', createdAtUtc: store.nowIso() });
       return touch(p, actorFirebaseUid, 'contribution_added');
     },
     async finalSubmit({ packageId, expectedWorkingRevision, actorFirebaseUid }) {
       const p = find(packageId); if (!p) throw sqlError(52111, 'Not found');
+      await requireScope(p, actorFirebaseUid, 'hicc', 52141, 'Current HICC package scope is required.');
       if (p.workingRevision !== expectedWorkingRevision) throw conflict();
       if (p.status !== 'visc_approved') throw sqlError(52105, 'VISC approval is required before final submit.');
       p.status = 'submitted_to_adfad';
