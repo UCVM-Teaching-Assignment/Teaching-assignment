@@ -2,6 +2,15 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-05",
+      "pr": 114,
+      "title": "Make Reset demo data clear all Testing data",
+      "changes": [
+        "Reset demo data in the Role Tester now also clears PAWS data (sessions, instructors, AFC, SWAP, DOE, Teaching Assignments and other saved changes), not only accounts and sign-in data.",
+        "The reset works the same from every page."
+      ]
+    },
+    {
       "date": "2026-11-04",
       "pr": 112,
       "title": "Fix saving accounts and roles in User Management (UX-05)",

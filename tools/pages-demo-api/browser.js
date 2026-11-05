@@ -57,13 +57,6 @@ const { Buffer } = require('buffer');
 
   root.fetch = demoFetch;
   root.UCVM_PAWS_DEMO_API = Object.freeze({ store, reset: () => store.reset(), backend: 'browser-memory', authoritative: false, testingOnly: require('./testing-only.js').createTestingOnly(store) });
-  // "Reset demo data" in the Role Tester also resets the PAWS tables.
-  const hookReset = () => {
-    const demo = root.UCVM_PAGES_DEMO;
-    if (!demo || demo.__pawsResetHooked) return false;
-    const original = demo.reset;
-    try { Object.defineProperty(demo, 'reset', { value: () => { store.reset(); return original && original(); } }); } catch (_) { root.addEventListener('beforeunload', () => {}); }
-    return true;
-  };
-  if (!hookReset()) root.addEventListener('DOMContentLoaded', hookReset, { once: true });
+  // "Reset demo data" (UCVM_PAGES_DEMO.reset in pages-demo-runtime.js) calls
+  // UCVM_PAWS_DEMO_API.reset, so the PAWS tables are cleared with the rest.
 })(typeof window !== 'undefined' ? window : null);
