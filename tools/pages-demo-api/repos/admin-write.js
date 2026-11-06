@@ -148,7 +148,7 @@ function createAfcWriteRepository(store) {
       check({ facultyId, startDate, endDate, reasonCode, notes });
       if (availability === 'available' && reasonCode !== 'special') throw sqlError(51213,'Available is limited to Special Leave');
       const normalizedLeave = availability === 'available' ? validateLeave(facultyId,startDate,endDate,specialLeave) : null;
-      const row = { afcRecordId, facultyId, startDate, endDate, reasonCode, availability, approvedAtUtc:store.nowIso(), ...(normalizedLeave?{specialLeave:normalizedLeave}:{}), reason: AFC_REASONS[reasonCode], purpose: '', notes: notes || '', legacyPurpose: AFC_REASONS[reasonCode], active: true, sourceKind: 'manual', createdAtUtc: store.nowIso(), createdByName: actorName || '', recordKey: `AFC-M-${afcRecordId.slice(0, 8)}`, versionToken: afcRecordId.replace(/-/g, '').slice(0, 16).toUpperCase(), documentId };
+      const row = { afcRecordId, facultyId, startDate, endDate, reasonCode, availability, approvedAtUtc:store.nowIso(), approvalOrder: Math.max(0,...t().afcRecords.map(r=>Number(r.approvalOrder)||0))+1, ...(normalizedLeave?{specialLeave:normalizedLeave}:{}), reason: AFC_REASONS[reasonCode], purpose: '', notes: notes || '', legacyPurpose: AFC_REASONS[reasonCode], active: true, sourceKind: 'manual', createdAtUtc: store.nowIso(), createdByName: actorName || '', recordKey: `AFC-M-${afcRecordId.slice(0, 8)}`, versionToken: afcRecordId.replace(/-/g, '').slice(0, 16).toUpperCase(), documentId };
       if(normalizedLeave)row.specialLeave.suspendedIntervals=heldIntervals(row);
       t().afcRecords.unshift(row);
       store.audit({ domain: 'afc', changeType: 'afc_record_created', facultyId, actorFirebaseUid, actorName, after: clone(row) });
