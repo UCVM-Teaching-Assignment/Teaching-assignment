@@ -6,6 +6,7 @@ const { isAdministratorRole } = require('../../../server/src/auth/role-policy.js
 const { uuidFor } = require('../ids.js');
 const activation=require('../faculty-activation.js');
 const { dateRange, versionOf, bumpVersion } = require('./afc-date-change.js');
+const leavePolicy = require('../../../frontend/scripts/afc-special-leave-policy.js');
 
 const AFC_REASONS = { university_travel: 'University Travel', vacation: 'Vacation', rsl: 'RSL', medical: 'Medical', mat: 'MAT', special: 'Special', other: 'Other' };
 const hexVersion = n => '0x' + Number(n).toString(16).toUpperCase().padStart(16, '0');
@@ -91,6 +92,24 @@ function createFacultyAdminRepository(store) {
 
 function createAfcWriteRepository(store) {
   const t = () => store.tables;
+  const sourceForYear = (facultyId, year) => {
+    const member=t().faculty.find(row=>row.facultyId===facultyId);
+    const target=t().targets.find(row=>row.facultyId===facultyId&&row.academicYear===year&&row.active!==false);
+    return {fte:member?.fte??null,doe:{teaching:target?.contractTeachingDoe??null,service:target?.serviceDoe??null,research:target?.researchDoe??null}};
+  };
+  const validateLeave = (facultyId,startDate,endDate,specialLeave) => {
+    if(!specialLeave||typeof specialLeave!=='object')throw sqlError(51213,'Special Leave deduction required');
+    const years=leavePolicy.yearsForRange(startDate,endDate),confirmedYears={};
+    for(const year of years){
+      const allocation=specialLeave.allocationsByYear?.[year];
+      if(!allocation){confirmedYears[year]=false;continue;}
+      const validation=leavePolicy.validateAllocation(specialLeave.fteDeduction,allocation,sourceForYear(facultyId,year));
+      const hard=validation.errors.filter(error=>!error.includes('SOURCE_MISSING')&&!error.includes('DOE_SOURCE_MISSING'));
+      if(hard.length)throw sqlError(51213,hard.join(', '));
+      confirmedYears[year]=validation.valid;
+    }
+    return {...clone(specialLeave),confirmedYears};
+  };
   const check = ({ facultyId, startDate, endDate, reasonCode, notes }) => {
     if (!startDate || !endDate) throw sqlError(51205, 'Dates required');
     if (endDate < startDate) throw sqlError(51206, 'Range');
@@ -99,9 +118,12 @@ function createAfcWriteRepository(store) {
     if (!t().faculty.some(row => row.facultyId === facultyId && row.active)) throw sqlError(51210, 'Faculty');
   };
   return {
-    async createAfcRecord({ afcRecordId, facultyId, startDate, endDate, reasonCode, notes = null, actorFirebaseUid, actorName = null, documentId = null }) {
+    supportsSpecialLeave: true,
+    async createAfcRecord({ afcRecordId, facultyId, startDate, endDate, reasonCode, notes = null, actorFirebaseUid, actorName = null, documentId = null, availability = 'unavailable', specialLeave = null }) {
       check({ facultyId, startDate, endDate, reasonCode, notes });
-      const row = { afcRecordId, facultyId, startDate, endDate, reasonCode, reason: AFC_REASONS[reasonCode], purpose: '', notes: notes || '', legacyPurpose: AFC_REASONS[reasonCode], active: true, sourceKind: 'manual', createdAtUtc: store.nowIso(), createdByName: actorName || '', recordKey: `AFC-M-${afcRecordId.slice(0, 8)}`, versionToken: afcRecordId.replace(/-/g, '').slice(0, 16).toUpperCase(), documentId };
+      if (availability === 'available' && reasonCode !== 'special') throw sqlError(51213,'Available is limited to Special Leave');
+      const normalizedLeave = availability === 'available' ? validateLeave(facultyId,startDate,endDate,specialLeave) : null;
+      const row = { afcRecordId, facultyId, startDate, endDate, reasonCode, availability, approvedAtUtc:store.nowIso(), ...(normalizedLeave?{specialLeave:normalizedLeave}:{}), reason: AFC_REASONS[reasonCode], purpose: '', notes: notes || '', legacyPurpose: AFC_REASONS[reasonCode], active: true, sourceKind: 'manual', createdAtUtc: store.nowIso(), createdByName: actorName || '', recordKey: `AFC-M-${afcRecordId.slice(0, 8)}`, versionToken: afcRecordId.replace(/-/g, '').slice(0, 16).toUpperCase(), documentId };
       t().afcRecords.unshift(row);
       store.audit({ domain: 'afc', changeType: 'afc_record_created', facultyId, actorFirebaseUid, actorName, after: clone(row) });
       store.commit();
