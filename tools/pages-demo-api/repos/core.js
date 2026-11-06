@@ -250,7 +250,7 @@ function createDashboardRepository(store) {
         .filter(row => active !== true && active !== false ? true : row.active === active)
         .sort((a, b) => b.startDate.localeCompare(a.startDate))
         .slice(0, limit || 500)
-        .map(row => ({ ...afcView(store, row), ...(row.specialLeave ? { specialLeave: clone(row.specialLeave), approvedAtUtc: row.approvedAtUtc || row.createdAtUtc } : {}) }));
+        .map(row => ({ ...afcView(store, row), ...(row.specialLeave ? { specialLeave: clone(row.specialLeave), approvedAtUtc: row.approvedAtUtc || row.createdAtUtc, approvalOrder:row.approvalOrder||null } : {}) }));
     },
     async facultyById({ facultyId, academicYear: year, includeInactive = false } = {}) {
       const record = t().faculty.find(row => row.facultyId === facultyId);
