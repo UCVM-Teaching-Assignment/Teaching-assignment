@@ -219,12 +219,20 @@
     on($('afc-faculty'),'change',()=>{afcForms?.facultyChanged();void specialLeaveEditor?.refresh();});
     for(const id of ['afc-start-date','afc-end-date','afc-reason','afc-special-availability'])
       on($(id),'change',()=>void specialLeaveEditor?.refresh());
-    on($('profile-pane'),'change',event=>{
-      if(event.target?.id!=='lookup-leave-asof')return;
+    on($('profile-pane'),'change',async event=>{
+      if(event.target?.id!=='lookup-leave-asof'||selfMode)return;
       const date=String(event.target.value||'');
-      try{window.PAWS_AFC_SPECIAL_LEAVE.academicYearForDate(date);}catch(_){return;}
+      let year;try{year=window.PAWS_AFC_SPECIAL_LEAVE.academicYearForDate(date);}catch(_){return;}
       selectedLeaveDate=date;
-      if(selectedDetail)renderApiDetail(selectedDetail);
+      const facultyId=selectedId,epoch=authGeneration;
+      if(!facultyId)return;
+      try{
+        const detail=await UCVM_PAWS_DATA.dashboardFacultyById(facultyId,{academicYear:year});
+        if(epoch!==authGeneration||selectedId!==facultyId||selectedLeaveDate!==date)return;
+        selectedDetail=detail;
+        detailCache.set(facultyId,detail);
+        renderApiDetail(detail);
+      }catch(error){showToast(error?.message||'Cannot load DOE for this date.',true);}
     });
     on($('profile-pane'),'click',event=>{const button=event.target?.closest?.('[data-afc-document]');if(button)getAfcOriginal?.(button.dataset.afcDocument);});
     on($('afc-form-documents'),'click',event=>{const button=event.target?.closest?.('[data-afc-document]');if(button)getAfcOriginal?.(button.dataset.afcDocument);});
