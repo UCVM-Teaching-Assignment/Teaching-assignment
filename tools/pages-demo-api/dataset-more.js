@@ -135,6 +135,9 @@ function targetRows(faculty) {
     facultyId: member.facultyId,
     academicYear: ACADEMIC_YEAR,
     contractTeachingDoe: member.contractTeachingDoe,
+    // Explicitly synthetic per-category contract allocations for ONE fixture.
+    // Do not infer missing Service / Research DOE for any other Faculty.
+    ...(index === 0 ? { serviceDoe: 30, researchDoe: 30 } : {}),
     overrideDoe: index === 4 ? member.contractTeachingDoe - 5 : null,
     effectiveTargetDoe: index === 4 ? member.contractTeachingDoe - 5 : member.contractTeachingDoe,
     overrideReason: index === 4 ? 'RSL' : null,
