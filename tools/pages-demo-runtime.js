@@ -616,8 +616,11 @@
     root.UCVM_FRONTEND_DEMO_MODE=true;
     const doeRulebook=demoRulebookService('2026-27');
     root.UCVM_PAGES_DEMO=Object.freeze({
-      reset:()=>runtime.reset(),
+      // One reset clears both demo stores: accounts/sign-in data here and the
+      // PAWS tables (sessions, AFC, SWAP, DOE...) kept by pages-demo-api.js.
+      reset:()=>{try{root.UCVM_PAWS_DEMO_API?.reset?.()}catch(error){console.warn('[Pages demo] PAWS data reset failed',error)}return runtime.reset()},
       export:()=>runtime.store.export(),
+      account:uid=>runtime.store.read(`users/${uid}`)||null,
       selectUser:uid=>runtime.auth._select(uid),
       doeRulebook,
       doeRows:academicYear=>demoDoeRows(runtime.store,academicYear),

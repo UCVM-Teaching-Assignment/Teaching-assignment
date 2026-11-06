@@ -17,6 +17,7 @@ const { Buffer } = require('buffer');
   // This remains browser-local and never imports institutional Beta/SQL records.
   const search = new URLSearchParams(root.location?.search || '');
   const store = createStore({ storage: root.localStorage, autoLoadFixture: !search.has('emptyCalendar') });
+  store.accountOverlay = uid => { try { return root.UCVM_PAGES_DEMO && typeof root.UCVM_PAGES_DEMO.account === 'function' ? root.UCVM_PAGES_DEMO.account(uid) : null; } catch (_) { return null; } };
   const route = createDemoRuntime(store);
   const nativeFetch = root.fetch.bind(root);
   const origin = () => { const value = root.PAWS_API_ORIGIN_CONFIG && root.PAWS_API_ORIGIN_CONFIG.apiOrigin; try { return value ? new URL(value).origin : null; } catch (_) { return null; } };
@@ -59,13 +60,6 @@ const { Buffer } = require('buffer');
 
   root.fetch = demoFetch;
   root.UCVM_PAWS_DEMO_API = Object.freeze({ store, reset: () => store.reset(), backend: 'browser-memory', authoritative: false, testingOnly: require('./testing-only.js').createTestingOnly(store) });
-  // "Reset demo data" in the Role Tester also resets the PAWS tables.
-  const hookReset = () => {
-    const demo = root.UCVM_PAGES_DEMO;
-    if (!demo || demo.__pawsResetHooked) return false;
-    const original = demo.reset;
-    try { Object.defineProperty(demo, 'reset', { value: () => { store.reset(); return original && original(); } }); } catch (_) { root.addEventListener('beforeunload', () => {}); }
-    return true;
-  };
-  if (!hookReset()) root.addEventListener('DOMContentLoaded', hookReset, { once: true });
+  // "Reset demo data" (UCVM_PAGES_DEMO.reset in pages-demo-runtime.js) calls
+  // UCVM_PAWS_DEMO_API.reset, so the PAWS tables are cleared with the rest.
 })(typeof window !== 'undefined' ? window : null);

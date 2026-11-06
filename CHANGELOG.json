@@ -11,6 +11,27 @@
       ]
     },
     {
+      "date": "2026-11-05",
+      "pr": 114,
+      "title": "Make Reset demo data clear all Testing data",
+      "changes": [
+        "Reset demo data in the Role Tester now also clears PAWS data (sessions, instructors, AFC, SWAP, DOE, Teaching Assignments and other saved changes), not only accounts and sign-in data.",
+        "The reset works the same from every page."
+      ]
+    },
+    {
+      "date": "2026-11-04",
+      "pr": 112,
+      "title": "Fix saving accounts and roles in User Management (UX-05)",
+      "changes": [
+        "Editing a faculty account in User Management now selects its linked faculty record, so the account can be saved again.",
+        "If the account form cannot be saved, a message now says which field needs attention instead of doing nothing.",
+        "Saving an account keeps its existing faculty link and does not add extra fields to the account.",
+        "A saved role, active status, name and email are now what PAWS reads back after a refresh, so the new role shows in the header and access checks.",
+        "A disabled account can no longer sign in to PAWS pages."
+      ]
+    },
+    {
       "date": "2026-11-03",
       "pr": 111,
       "title": "Show DOE values without misleading defaults (UX-04)",
