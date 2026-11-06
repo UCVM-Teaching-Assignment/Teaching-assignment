@@ -19,6 +19,7 @@
   }
   function createSpecialLeaveEditor({api,$,policy}={}) {
     let generation=0,years=[],sources={};
+    const touched=new Set();
     const host=$('afc-special-years'),message=$('afc-special-source-status');
     function selections() {
       const values={};
@@ -88,7 +89,20 @@
         message.textContent=[missing?'Pending Deduction: missing FTE / DOE source; Admin must apply once configured.':'Contract DOE sources loaded.',mismatch?'FTE / DOE Mismatch: original source values will not be altered.':''].filter(Boolean).join(' ');
       }
     }
-    return {read,validate,refresh};
+    function mirror(event) {
+      const input=event.target?.closest?.('[data-afc-category]');
+      const card=input?.closest?.('[data-afc-special-year]');
+      if(!card)return;
+      const category=input.dataset.afcCategory,year=card.dataset.afcSpecialYear;
+      touched.add(year+':'+category);
+      for(let index=years.indexOf(year)+1;index<years.length;index++) {
+        const next=years[index],item=[...host.querySelectorAll('[data-afc-special-year]')].find(node=>node.dataset.afcSpecialYear===next);
+        const target=item?.querySelector('[data-afc-category="'+category+'"]');
+        if(!target||touched.has(next+':'+category))break;
+        target.value=input.value;
+      }
+    }
+    return {read,validate,refresh,mirror};
   }
   function createSingleActions({api,$,reasonLabels,normalizeDate,isBusy,setBusy,refreshRecords,refreshDashboard,attachment=null,getUser=null,specialLeaveEditor=null}) {
     let unconfirmed=false;
