@@ -139,20 +139,25 @@
     }
     return {submit,isUnconfirmed:()=>unconfirmed};
   }
-  function renderRows(rows,{facultyName,canCancel:allowed=false,canEdit:editAllowed=false,editingKey='',busy=()=>false,renderPdf=()=>'<span class="muted">N/A</span>'}={}) {
+  function renderRows(rows,{facultyName,canCancel:allowed=false,canEdit:editAllowed=false,editingKey='',editingSpecialKey='',busy=()=>false,renderPdf=()=>'<span class="muted">N/A</span>'}={}) {
     return rows.map(row => {
       const key = `${row.sourceKind}:${row.afcRecordId}`;
       const editable = row.active !== false && /^[0-9a-f]{16}$/i.test(row.versionToken || '');
       const canCancel = allowed && editable;
       const canEdit = editAllowed && editable;
+      const canEditLeave=canEdit&&row.sourceKind==='manual'&&row.reasonCode==='special'&&row.availability==='available'&&!!row.specialLeave;
+      const leave=row.specialLeave||{};
+      const held=Array.isArray(leave.suspendedIntervals)&&leave.suspendedIntervals.length>0;
+      const pending=Object.values(leave.confirmedYears||{}).some(value=>value!==true);
       const buttons = [
         canEdit ? `<button class="btn" type="button" data-afc-edit="${esc(key)}" ${busy(key) ? 'disabled' : ''}>Edit dates</button>` : '',
+        canEditLeave ? `<button class="btn" type="button" data-afc-leave-edit="${esc(key)}" ${busy(key) ? 'disabled' : ''}>Edit / Apply DOE</button>` : '',
         canCancel ? `<button class="btn" type="button" data-afc-cancel="${esc(key)}" ${busy(key) ? 'disabled' : ''}>${busy(key) ? 'Withdrawing…' : 'Withdraw'}</button>` : ''
       ].filter(Boolean).join(' ');
       const action = buttons || (row.active === false ? 'Withdrawn' : 'Unavailable');
       // UX-07: the ADFA office changes the dates directly; Change History keeps old and new dates.
       const editor = canEdit && editingKey === key ? `<tr class="afc-date-edit" data-afc-edit-row="${esc(key)}"><td colspan="9"><div class="afc-date-edit-form"><label>New start date<input type="date" data-afc-edit-start value="${esc(row.startDate || '')}"></label><label>New end date<input type="date" data-afc-edit-end value="${esc(row.endDate || '')}"></label><button class="btn btn-primary" type="button" data-afc-edit-save="${esc(key)}" ${busy(key) ? 'disabled' : ''}>${busy(key) ? 'Saving…' : 'Save dates'}</button><button class="btn" type="button" data-afc-edit-cancel="${esc(key)}">Cancel</button><span class="muted">Was ${esc(row.startDate || '—')} to ${esc(row.endDate || '—')}. The change is recorded in Change History.</span></div></td></tr>` : '';
-      return `<tr><td><button type="button" class="btn-link" data-afc-person="${esc(row.facultyId)}">${esc(facultyName(row, 'Name unavailable'))}</button></td><td>${esc(row.startDate || '—')}</td><td>${esc(row.endDate || '—')}</td><td>${esc(row.reason || row.legacyPurpose || row.reasonCode || '—')}</td><td>${esc(row.notes || row.legacyPurpose || '—')}</td><td>${esc(norm(row.sourceKind) === 'manual' ? 'Manual' : 'Imported')}</td><td>${row.active === false ? 'Withdrawn' : 'Active'}</td><td>${renderPdf(row)}</td><td>${action}</td></tr>${editor}`;
+      return `<tr><td><button type="button" class="btn-link" data-afc-person="${esc(row.facultyId)}">${esc(facultyName(row, 'Name unavailable'))}</button></td><td>${esc(row.startDate || '—')}</td><td>${esc(row.endDate || '—')}</td><td>${esc(row.reason || row.legacyPurpose || row.reasonCode || '—')}</td><td>${esc(row.notes || row.legacyPurpose || '—')}</td><td>${esc(norm(row.sourceKind) === 'manual' ? 'Manual' : 'Imported')}</td><td>${row.active === false ? 'Withdrawn' : (row.reasonCode==='special'?(row.availability==='available'?'Available':'Unavailable')+(pending?' · Pending Deduction':held?' · Partial Adjustment Required':''):'Active')}</td><td>${renderPdf(row)}</td><td>${action}</td></tr>${editor}`;
     }).join('') || '<tr><td colspan="9" class="empty">No AFC records match the current filters.</td></tr>';
   }
   function profileAfc(records,{selfMode=false,renderPdf=()=>'<span class="muted">N/A</span>'}={}) {
