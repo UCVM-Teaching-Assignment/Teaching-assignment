@@ -219,6 +219,7 @@
     on($('afc-faculty'),'change',()=>{afcForms?.facultyChanged();void specialLeaveEditor?.refresh();});
     for(const id of ['afc-start-date','afc-end-date','afc-reason','afc-special-availability'])
       on($(id),'change',()=>void specialLeaveEditor?.refresh());
+    on($('afc-special-years'),'input',event=>specialLeaveEditor?.mirror(event));
     on($('profile-pane'),'change',async event=>{
       if(event.target?.id!=='lookup-leave-asof'||selfMode)return;
       const date=String(event.target.value||'');
