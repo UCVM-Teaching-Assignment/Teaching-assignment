@@ -17,7 +17,7 @@
     if (!batch && $('afc-batch-submit')) $('afc-batch-submit').disabled = true;
     if ($('afc-batch-status')) $('afc-batch-status').textContent = batch ? '' : 'AFC batch creation is unavailable. Your administrator permissions must be verified by the server.';
   }
-  function createSpecialLeaveEditor({api,$,policy}={}) {
+  function createSpecialLeaveEditor({api,$,policy,getFacultyBaseFte=()=>null}={}) {
     let generation=0,years=[],sources={};
     const touched=new Set();
     const host=$('afc-special-years'),message=$('afc-special-source-status');
@@ -57,12 +57,22 @@
       }
       return '';
     }
+    function setBaseFte(facultyId,raw) {
+      const node=$('afc-special-base-fte');
+      if(!node)return;
+      if(!facultyId){node.textContent='Base FTE: Select a faculty member.';return;}
+      const valid=raw!==null&&raw!==undefined&&String(raw).trim()!==''&&Number.isFinite(Number(raw));
+      node.textContent=valid?'Base FTE: '+Number(raw).toFixed(2)+' (Faculty record · read-only)':'Base FTE: Not recorded in Faculty record.';
+    }
     async function refresh() {
       const id=++generation,reason=$('afc-reason')?.value,available=$('afc-special-availability')?.value==='available';
       $('afc-special-options')?.classList.toggle('hidden',reason!=='special');
       $('afc-special-deduction')?.classList.toggle('hidden',reason!=='special'||!available);
       if(reason!=='special'||!available){return;}
       const start=$('afc-start-date')?.value,end=$('afc-end-date')?.value,facultyId=$('afc-faculty')?.value;
+      // Contract FTE is a property of the Faculty record, not a per-year
+      // allocation. Show it as soon as Faculty is selected, even without dates.
+      setBaseFte(facultyId,facultyId?getFacultyBaseFte(facultyId):null);
       const previous=selections(),oldYears=years;
       try{years=policy.yearsForRange(start,end);}catch(_){years=[];}
       if(!facultyId||!years.length){host.innerHTML='<p class="aux-note">Choose Faculty and valid Leave dates.</p>';return;}
@@ -77,6 +87,8 @@
         }catch(_){return {year,fte:null,doe:{teaching:null,service:null,research:null}};}
       }));
       if(id!==generation)return;
+      const detailFte=loaded.find(item=>item.fte!==null&&item.fte!==undefined)?.fte;
+      if(detailFte!==undefined)setBaseFte(facultyId,detailFte);
       sources=Object.fromEntries(loaded.map(item=>[item.year,item]));
       host.innerHTML=requested.map((year,index)=>{
         const source=sources[year],prior=previous[year]||(!oldYears.includes(year)&&index?previous[requested[index-1]]:null)||{};
