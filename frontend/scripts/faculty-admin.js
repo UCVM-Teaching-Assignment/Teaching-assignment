@@ -43,7 +43,7 @@
   let activeFaculty = [];
   const afcForms=window.PAWS_AFC_FORMS?.createRecordAttachment({api:UCVM_PAWS_DATA,host:$('afc-form-documents'),getUser:()=>currentUser,getFacultyId:()=>String($('afc-faculty')?.value||'')});
   const getAfcOriginal=window.PAWS_AFC_FORMS?.createDocumentDownloader({api:UCVM_PAWS_DATA,getUser:()=>currentUser,notify:showToast});
-  const specialLeaveEditor=window.UCVM_AFC_RECORDS?.createSpecialLeaveEditor({api:UCVM_PAWS_DATA,$,policy:window.PAWS_AFC_SPECIAL_LEAVE});
+  const specialLeaveEditor=window.UCVM_AFC_RECORDS?.createSpecialLeaveEditor({api:UCVM_PAWS_DATA,$,policy:window.PAWS_AFC_SPECIAL_LEAVE,getFacultyBaseFte:baseFteForAfcFaculty});
   let facultyArchive=null;
   const cccReplace=window.PAWS_CCC_REPLACEMENT?.createController({api:UCVM_PAWS_DATA,host:$('ccc-replacement'),getUser:()=>currentUser});
   let selectedId = null;
@@ -367,7 +367,7 @@
       const haystack = norm([row.facultyName, row.facultyId, row.notes, row.legacyPurpose, row.reason, row.reasonCode].filter(present).join(' '));
       return (!query || haystack.includes(query)) && (!reason || row.reasonCode === reason || (!row.reasonCode && norm(row.reason) === norm(AFC_REASON_LABELS[reason]))) && (!active || String(row.active !== false) === active) && (!source || norm(row.sourceKind || 'manual') === source);
     });
-    body.innerHTML = window.UCVM_AFC_RECORDS.renderRows(rows, { facultyName, canCancel: !selfMode && dashboardAdmin(currentUser) && UCVM_PAWS_DATA.afcCancelWriteEnabled?.() === true, canEdit: afcActions.canEdit(), editingKey: afcActions.editingKey(), editingSpecialKey: afcActions.editingSpecialKey(), busy: afcActions.isBusy,renderPdf:window.PAWS_AFC_FORMS?.documentAction });
+    body.innerHTML = window.UCVM_AFC_RECORDS.renderRows(rows, { facultyName, canCancel: !selfMode && dashboardAdmin(currentUser) && UCVM_PAWS_DATA.afcCancelWriteEnabled?.() === true, canEdit: afcActions.canEdit(), editingKey: afcActions.editingKey(), editingSpecialKey: afcActions.editingSpecialKey(), busy: afcActions.isBusy,renderPdf:window.PAWS_AFC_FORMS?.documentAction,getFacultyBaseFte:baseFteForAfcFaculty });
     document.querySelectorAll('[data-afc-person]').forEach(node => on(node, 'click', () => openFacultyFromAggregate(node.dataset.afcPerson)));
   }
 
@@ -502,6 +502,11 @@
   }
   function loadDoeList(force = false) { return doeWorksheetView?.loadList(force); }
 
+  function baseFteForAfcFaculty(facultyId) {
+    const id=String(facultyId||'');
+    const row=activeFaculty.find(record=>String(record.facultyId)===id)||faculty.find(record=>String(record.facultyId)===id);
+    return present(row?.fte)?row.fte:null;
+  }
   function afcFacultyRows() { return activeFaculty.filter(row => row.active !== false).sort((a, b) => String(a.displayName || a.facultyId).localeCompare(String(b.displayName || b.facultyId))); }
   function afcFacultyLabel(row) { return window.UCVM_AFC_RECORDS.facultyLabel(row, afcFacultyRows(), facultyName); }
   function resolveAfcFaculty(value) { return window.UCVM_AFC_RECORDS.resolveFaculty(value, afcFacultyRows(), facultyName); }
