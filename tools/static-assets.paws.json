@@ -75,6 +75,7 @@
   "workspace-tasks.js",
   "workspace.css",
   "faculty-role-periods.js",
+  "afc-special-leave-policy.js",
   "faculty-admin-afc-records.js",
   "faculty-admin-afc-forms.js",
   "faculty-admin-ccc-replacement.js",
