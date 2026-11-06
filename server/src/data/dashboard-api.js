@@ -310,7 +310,11 @@ function normalizeAfcRecord(row = {}) {
     legacyPurpose: row.legacyPurpose === null || row.legacyPurpose === undefined ? null : text(row.legacyPurpose),
     active: row.active !== false && row.active !== 0,
     sourceKind: text(row.sourceKind) || 'manual',
-    recordKey: text(row.recordKey), versionToken: text(row.versionToken),documentId:row.documentId||null
+    recordKey: text(row.recordKey), versionToken: text(row.versionToken),documentId:row.documentId||null,
+    availability: row.reasonCode === 'special' && row.availability === 'available' ? 'available' : 'unavailable',
+    // The AFC records endpoint is administrator-only. Faculty detail repositories
+    // must omit this field to avoid sharing private contract DOE deductions.
+    ...(row.specialLeave ? { specialLeave:row.specialLeave, approvedAtUtc:row.approvedAtUtc||null } : {})
   };
 }
 
