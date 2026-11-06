@@ -587,6 +587,7 @@
           endDate:String(input.endDate??'').trim(),
           reasonCode:String(input.reasonCode??'').trim(),
           notes:input.notes===undefined||input.notes===null?'':String(input.notes),
+          ...(input.reasonCode==='special' ? {availability:input.availability==='available'?'available':'unavailable', ...(input.availability==='available'?{specialLeave:input.specialLeave}:{})}:{}),
           ...(input.documentId?{documentId:String(input.documentId).trim()}:{})
         }});
         return body.afcRecord&&typeof body.afcRecord==='object'?body.afcRecord:{};
