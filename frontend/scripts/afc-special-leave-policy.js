@@ -60,10 +60,12 @@
       const allocation=leave.allocationsByYear?.[year],deduction=num(leave.fteDeduction);
       const result=validateAllocation(deduction,allocation,source);
       const missing=result.errors.some(x=>x.includes('SOURCE_MISSING')||x==='DOE_ALLOCATION_REQUIRED');
-      const requestedHold=leave.confirmedYears?.[year]===false||leave.suspendedYears?.[year]===true;
+      const sourceChanged=leave.sourceFingerprintByYear?.[year]!==undefined&&leave.sourceFingerprintByYear?.[year]!==JSON.stringify(source);
+      const heldOnDate=Array.isArray(leave.suspendedIntervals)&&leave.suspendedIntervals.some(span=>span.startDate<=date&&span.endDate>=date);
+      const requestedHold=leave.confirmedYears?.[year]===false||leave.suspendedYears?.[year]===true||sourceChanged||heldOnDate;
       const exceedingAggregate=originalFte!==null&&deduction!==null&&effectiveFte!==null&&deduction>effectiveFte+0.000001||CATEGORIES.some(k=>num(allocation?.[k])!==null&&effectiveDoe[k]!==null&&allocation[k]>effectiveDoe[k]+0.000001);
       if(!result.valid||requestedHold||exceedingAggregate){
-        const status=missing?'Pending Deduction':requestedHold?'Ready to Apply':'Adjustment Required';
+        const status=missing?'Pending Deduction':!result.valid?'Adjustment Required':exceedingAggregate?'Adjustment Required':requestedHold?'Ready to Apply':'Adjustment Required';
         pending.push({id:leave.id||leave.afcRecordId||'',status,errors:result.errors});
         const flag=exceedingAggregate&&leave.startDate!==leave.endDate?'Partial Adjustment Required':status;
         if(!flags.includes(flag))flags.push(flag);
