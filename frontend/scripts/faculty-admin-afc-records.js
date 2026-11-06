@@ -189,10 +189,46 @@
   function createActions({api,facultyName,canCancel,canEdit=()=>false,getRecords,render,refresh,refreshRecords,notify,confirm}) {
     const afcCancelInFlight=new Set();
     let editingKey='';
+    let editingSpecialKey='';
     const findRow=key=>getRecords().find(record => `${record.sourceKind}:${record.afcRecordId}` === key);
     const validDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&new Date(value+'T12:00:00Z').toISOString().slice(0,10)===value;
     function startEdit(key){ if(!canEdit()||afcCancelInFlight.has(key))return; const row=findRow(key); if(!row||row.active===false)return; editingKey=key; render(); }
     function cancelEdit(){ editingKey=''; render(); }
+    function startSpecialEdit(key) {
+      if(!canEdit()||afcCancelInFlight.has(key))return;
+      const row=findRow(key);
+      if(!row||row.active===false||row.reasonCode!=='special'||row.availability!=='available'||!row.specialLeave)return;
+      editingSpecialKey=key;editingKey='';render();
+    }
+    function cancelSpecialEdit(){editingSpecialKey='';render();}
+    async function saveSpecialLeave(key,element) {
+      if(!canEdit()||afcCancelInFlight.has(key))return false;
+      const row=findRow(key);
+      if(!row||row.active===false||!row.specialLeave)return false;
+      const fteRaw=element?.querySelector('[data-afc-leave-fte]')?.value;
+      const allocationsByYear={};
+      for(const part of element?.querySelectorAll('[data-afc-leave-year]')||[]){
+        allocationsByYear[part.dataset.afcLeaveYear]=Object.fromEntries(['teaching','service','research'].map(category=>[category,part.querySelector('[data-afc-leave-category="'+category+'"]')?.value??'']));
+      }
+      const total=Number(fteRaw)*100;
+      if(fteRaw===''||fteRaw===undefined||!Number.isFinite(Number(fteRaw))||Number(fteRaw)<0||
+        Object.entries(allocationsByYear).some(([,values])=>Object.values(values).some(v=>v===''||!Number.isFinite(Number(v))||Number(v)<0)||Math.abs(Object.values(values).reduce((sum,v)=>sum+Number(v),0)-total)>0.000001)){
+        notify('DOE must total FTE deduction × 100 for each academic year.',true);return false;
+      }
+      afcCancelInFlight.add(key);render();
+      try{
+        await api.updateDashboardAfcSpecialLeave(row.afcRecordId,{expectedVersion:row.versionToken,specialLeave:{fteDeduction:Number(fteRaw),allocationsByYear}});
+        editingSpecialKey='';
+        await refresh();
+        notify('Special Leave deduction reviewed. Valid allocations applied; missing source data remains Pending.');
+        return true;
+      }catch(error){
+        notify(error?.message||'Special Leave deduction could not be updated.',true);
+        if(error?.status===409||error?.status===404)await refreshRecords();
+        return false;
+      }finally{afcCancelInFlight.delete(key);render();}
+    }
+
     async function saveDates(key,startDate,endDate) {
       if (!canEdit() || afcCancelInFlight.has(key)) return false;
       const row = findRow(key);
@@ -231,6 +267,11 @@
     // Click wiring for the inline office date editor; returns true when handled.
     function handleEditClick(event){
       const target=event?.target;
+
+      const leaveEdit=target?.closest?.('[data-afc-leave-edit]');if(leaveEdit){startSpecialEdit(leaveEdit.dataset.afcLeaveEdit);return true;}
+      if(target?.closest?.('[data-afc-leave-close]')){cancelSpecialEdit();return true;}
+      const leaveSave=target?.closest?.('[data-afc-leave-save]');
+      if(leaveSave){saveSpecialLeave(leaveSave.dataset.afcLeaveSave,leaveSave.closest('[data-afc-leave-edit-row]'));return true;}
       const edit=target?.closest?.('[data-afc-edit]');if(edit){startEdit(edit.dataset.afcEdit);return true;}
       if(target?.closest?.('[data-afc-edit-cancel]')){cancelEdit();return true;}
       const save=target?.closest?.('[data-afc-edit-save]');if(!save)return false;
@@ -238,7 +279,7 @@
       saveDates(save.dataset.afcEditSave,row?.querySelector?.('[data-afc-edit-start]')?.value||'',row?.querySelector?.('[data-afc-edit-end]')?.value||'');
       return true;
     }
-    return {cancel,startEdit,cancelEdit,saveDates,handleEditClick,canEdit,editingKey:()=>editingKey,isBusy:key=>afcCancelInFlight.has(key)};
+    return {cancel,startEdit,cancelEdit,saveDates,handleEditClick,canEdit,editingKey:()=>editingKey,editingSpecialKey:()=>editingSpecialKey,isBusy:key=>afcCancelInFlight.has(key)};
   }
   function facultyLabel(row, rows, facultyName) {
     const label = text(facultyName(row, 'Name unavailable'));
