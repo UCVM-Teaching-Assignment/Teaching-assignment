@@ -314,7 +314,7 @@ function normalizeAfcRecord(row = {}) {
     availability: row.reasonCode === 'special' && row.availability === 'available' ? 'available' : 'unavailable',
     // The AFC records endpoint is administrator-only. Faculty detail repositories
     // must omit this field to avoid sharing private contract DOE deductions.
-    ...(row.specialLeave ? { specialLeave:row.specialLeave, approvedAtUtc:row.approvedAtUtc||null } : {})
+    ...(row.specialLeave ? { specialLeave:row.specialLeave, approvedAtUtc:row.approvedAtUtc||null, approvalOrder:row.approvalOrder||null } : {})
   };
 }
 
