@@ -358,7 +358,7 @@
       const haystack = norm([row.facultyName, row.facultyId, row.notes, row.legacyPurpose, row.reason, row.reasonCode].filter(present).join(' '));
       return (!query || haystack.includes(query)) && (!reason || row.reasonCode === reason || (!row.reasonCode && norm(row.reason) === norm(AFC_REASON_LABELS[reason]))) && (!active || String(row.active !== false) === active) && (!source || norm(row.sourceKind || 'manual') === source);
     });
-    body.innerHTML = window.UCVM_AFC_RECORDS.renderRows(rows, { facultyName, canCancel: !selfMode && dashboardAdmin(currentUser) && UCVM_PAWS_DATA.afcCancelWriteEnabled?.() === true, canEdit: afcActions.canEdit(), editingKey: afcActions.editingKey(), busy: afcActions.isBusy,renderPdf:window.PAWS_AFC_FORMS?.documentAction });
+    body.innerHTML = window.UCVM_AFC_RECORDS.renderRows(rows, { facultyName, canCancel: !selfMode && dashboardAdmin(currentUser) && UCVM_PAWS_DATA.afcCancelWriteEnabled?.() === true, canEdit: afcActions.canEdit(), editingKey: afcActions.editingKey(), editingSpecialKey: afcActions.editingSpecialKey(), busy: afcActions.isBusy,renderPdf:window.PAWS_AFC_FORMS?.documentAction });
     document.querySelectorAll('[data-afc-person]').forEach(node => on(node, 'click', () => openFacultyFromAggregate(node.dataset.afcPerson)));
   }
 
