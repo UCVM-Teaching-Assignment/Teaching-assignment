@@ -170,6 +170,22 @@ function createAfcWriteRepository(store) {
       store.commit();
       return { status: 'CREATED', rows: created };
     },
+    async updateAfcSpecialLeave({ afcRecordId, expectedVersion, specialLeave, actorFirebaseUid }) {
+      const actor=t().users.find(u=>u.firebaseUid===actorFirebaseUid&&u.active===true);
+      if(!actor||!isAdministratorRole(actor.baseRole))throw sqlError(56402,'Administrator permission required');
+      const row=t().afcRecords.find(item=>item.afcRecordId===afcRecordId&&item.sourceKind==='manual');
+      if(!row)throw sqlError(56403,'AFC record not found');
+      if(!row.active||row.reasonCode!=='special'||row.availability!=='available')throw sqlError(56406,'Not an active Available Special Leave');
+      if(versionOf(row)!==String(expectedVersion||'').toUpperCase())throw sqlError(56404,'Version conflict');
+      const normalized=validateLeave(row.facultyId,row.startDate,row.endDate,specialLeave);
+      normalized.suspendedIntervals=heldIntervals({...row,specialLeave:normalized});
+      const before=clone(row.specialLeave||null);
+      row.specialLeave=normalized;
+      row.versionToken=bumpVersion(versionOf(row));
+      store.audit({domain:'afc',changeType:'afc_special_leave_deduction_confirmed',facultyId:row.facultyId,afcRecordId,actorFirebaseUid,before,after:clone(row.specialLeave)});
+      store.commit();
+      return afcView(store,row);
+    },
     async updateAfcDates({ afcRecordId, sourceKind, expectedVersion, startDate, endDate, actorFirebaseUid }) {
       const actor = t().users.find(u => u.firebaseUid === actorFirebaseUid && u.active === true);
       if (!actor || !isAdministratorRole(actor.baseRole)) throw sqlError(56402, 'Administrator permission required');
