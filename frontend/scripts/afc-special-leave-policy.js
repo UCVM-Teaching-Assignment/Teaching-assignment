@@ -55,7 +55,7 @@
     const effectiveDoe={...baseDoe},applied=[],pending=[],flags=[];
     let effectiveFte=originalFte;
     const ordered=leaves.filter(l=>during(date,l)&&specialAvailable(l)&&l.approved===true)
-      .sort((a,b)=>String(a.approvedAt||a.createdAtUtc||'').localeCompare(String(b.approvedAt||b.createdAtUtc||''))||String(a.id||a.afcRecordId||'').localeCompare(String(b.id||b.afcRecordId||'')));
+      .sort((a,b)=>String(a.approvedAt||a.createdAtUtc||'').localeCompare(String(b.approvedAt||b.createdAtUtc||''))||(Number(a.approvalOrder||0)-Number(b.approvalOrder||0))||String(a.id||a.afcRecordId||'').localeCompare(String(b.id||b.afcRecordId||'')));
     for(const leave of ordered){
       const allocation=leave.allocationsByYear?.[year],deduction=num(leave.fteDeduction);
       const result=validateAllocation(deduction,allocation,source);
