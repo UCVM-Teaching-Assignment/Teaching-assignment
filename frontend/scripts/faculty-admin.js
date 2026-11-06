@@ -43,6 +43,7 @@
   let activeFaculty = [];
   const afcForms=window.PAWS_AFC_FORMS?.createRecordAttachment({api:UCVM_PAWS_DATA,host:$('afc-form-documents'),getUser:()=>currentUser,getFacultyId:()=>String($('afc-faculty')?.value||'')});
   const getAfcOriginal=window.PAWS_AFC_FORMS?.createDocumentDownloader({api:UCVM_PAWS_DATA,getUser:()=>currentUser,notify:showToast});
+  const specialLeaveEditor=window.UCVM_AFC_RECORDS?.createSpecialLeaveEditor({api:UCVM_PAWS_DATA,$,policy:window.PAWS_AFC_SPECIAL_LEAVE});
   let facultyArchive=null;
   const cccReplace=window.PAWS_CCC_REPLACEMENT?.createController({api:UCVM_PAWS_DATA,host:$('ccc-replacement'),getUser:()=>currentUser});
   let selectedId = null;
@@ -58,6 +59,7 @@
   let afcLoaded = false;
   let lookupMetrics = null;
   let lookupMetricsGeneration = 0;
+  let selectedLeaveDate=VIEW.campusToday?.()||new Date().toISOString().slice(0,10);
   let afcSubmitInFlight = false;
   const afcActions = window.UCVM_AFC_RECORDS.createActions({
     api: UCVM_PAWS_DATA, facultyName,
@@ -214,7 +216,16 @@
     on($('afc-search'), 'input', debounce(renderAfcRecords));
     on($('afc-reason-filter'), 'change', renderAfcRecords); on($('afc-active-filter'), 'change', renderAfcRecords); on($('afc-source-filter'), 'change', renderAfcRecords);
     on($('afc-record-form'), 'submit', submitAfcRecord);
-    on($('afc-faculty'),'change',()=>afcForms?.facultyChanged());
+    on($('afc-faculty'),'change',()=>{afcForms?.facultyChanged();void specialLeaveEditor?.refresh();});
+    for(const id of ['afc-start-date','afc-end-date','afc-reason','afc-special-availability'])
+      on($(id),'change',()=>void specialLeaveEditor?.refresh());
+    on($('profile-pane'),'change',event=>{
+      if(event.target?.id!=='lookup-leave-asof')return;
+      const date=String(event.target.value||'');
+      try{window.PAWS_AFC_SPECIAL_LEAVE.academicYearForDate(date);}catch(_){return;}
+      selectedLeaveDate=date;
+      if(selectedDetail)renderApiDetail(selectedDetail);
+    });
     on($('profile-pane'),'click',event=>{const button=event.target?.closest?.('[data-afc-document]');if(button)getAfcOriginal?.(button.dataset.afcDocument);});
     on($('afc-form-documents'),'click',event=>{const button=event.target?.closest?.('[data-afc-document]');if(button)getAfcOriginal?.(button.dataset.afcDocument);});
     on($('afc-records-body'), 'click', event => {
@@ -289,10 +300,11 @@
   }
 
   const AFC_REASON_LABELS = Object.freeze({ university_travel: 'University Travel', vacation: 'Vacation', rsl: 'RSL', medical: 'Medical', mat: 'MAT', special: 'Special', other: 'Other' });
+  void specialLeaveEditor?.refresh();
   const afcSingleActions = window.UCVM_AFC_RECORDS.createSingleActions({
     api: UCVM_PAWS_DATA, $, reasonLabels: AFC_REASON_LABELS, normalizeDate: (value, field) => window.UCVM_AFC_BATCH.normalizePastedDate(value, field),
     isBusy: () => afcSubmitInFlight, setBusy: value => { afcSubmitInFlight = value; },
-    refreshRecords: () => loadAfcRecords(true), refreshDashboard: () => loadAdminDashboard(),attachment:afcForms,getUser:()=>currentUser
+    refreshRecords: () => loadAfcRecords(true), refreshDashboard: () => loadAdminDashboard(),attachment:afcForms,getUser:()=>currentUser,specialLeaveEditor
   });
 
   async function loadAfcRecords(force = false) {
@@ -443,14 +455,32 @@
     const joints = (Array.isArray(data.jointAppointments) ? data.jointAppointments : []).map((joint, index) => section(`Joint appointment ${index + 1}`, field('Home faculty', joint.homeFaculty) + field('Joint faculty', joint.jointFaculty) + field('FTE UCVM', joint.fteUcvm) + field('FTE other faculty', joint.fteOtherFaculty) + field('Expiry date', joint.expiryDate) + field('Notes', joint.notes, true))).join('');
     const rolesHtml = apiSection('Roles & Appointments', apiTable(['Role Type', 'Assignment', 'Course Name', 'Details', 'Status', 'Effective periods', 'Mapped DOE', 'Override DOE', 'Calculated DOE', 'Effective DOE', 'Source', 'Override Reason', 'Special Notes'], roles.map(role => { const effective = effectiveRoleDoe(role); return [role.roleType, role.courseOrSubjectOrRotation, role.courseName, role.details, window.PAWS_ROLE_PERIODS.status(role).label, window.PAWS_ROLE_PERIODS.summary(role), formatRoleDoe(effective.mapped, 'mapped'), formatRoleDoe(effective.override, 'override'), formatRoleDoe(effective.calculated, 'calculated'), formatRoleDoe(effective.effective, 'effective'), effective.source || role.doeSource, role.doeOverrideReason, role.specialNotes]; })));
     const afcHtml = renderFacultyAfc(data.afcRecords);
+    const leaveHtml = !selfMode && dashboardAdmin(currentUser) ? renderSpecialLeaveLookup(facultyRecord,data.contractDoe) : '';
     const scope = section('Identity / appointment metadata', field('Academic year', data.academicYear) + field('Teaching assignments', data.sessionCount) + field('Assignments needing time review', data.checkNeededCount), true);
     const canManage = !selfMode && dashboardAdmin(currentUser) && facultyAdminWriteEnabled;
     const linked = data.linkedRecords || {};
     const actions = facultyManagement.actions(facultyRecord);
     const relationshipNote = canManage && facultyRecord.active !== false ? facultyManagement.relationshipWarning(linked) : '';
-    pane.innerHTML = `<div class="profile-header"><div><div class="profile-name">${esc(facultyName(facultyRecord, facultyRecord.facultyId))}</div><div class="profile-sub">${esc(facultyRecord.email || '')}${facultyRecord.ucid ? ' · UCID ' + esc(facultyRecord.ucid) : ''}</div><div class="badges">${badges}</div>${specialtyHtml}</div>${actions}</div>${relationshipNote}<div class="profile-sections">${renderContractDoe(data.contractDoe, facultyRecord)}${renderDoeRuleBook(data.doeRuleBook)}${afcHtml}${rolesHtml}${renderTeachingCourses(assignments)}${section('Identity & contact', identity)}${section('Appointment', appointment)}${profile ? section('Specialty & education', professional, true) : ''}${joints}${scope}<section id="faculty-doe-worksheet" class="section wide"><div class="empty">Loading authoritative DOE Worksheet…</div></section></div>`;
+    pane.innerHTML = `<div class="profile-header"><div><div class="profile-name">${esc(facultyName(facultyRecord, facultyRecord.facultyId))}</div><div class="profile-sub">${esc(facultyRecord.email || '')}${facultyRecord.ucid ? ' · UCID ' + esc(facultyRecord.ucid) : ''}</div><div class="badges">${badges}</div>${specialtyHtml}</div>${actions}</div>${relationshipNote}<div class="profile-sections">${leaveHtml}${renderContractDoe(data.contractDoe, facultyRecord)}${renderDoeRuleBook(data.doeRuleBook)}${afcHtml}${rolesHtml}${renderTeachingCourses(assignments)}${section('Identity & contact', identity)}${section('Appointment', appointment)}${profile ? section('Specialty & education', professional, true) : ''}${joints}${scope}<section id="faculty-doe-worksheet" class="section wide"><div class="empty">Loading authoritative DOE Worksheet…</div></section></div>`;
     loadDetailDoeWorksheet(facultyRecord.facultyId, text(data.academicYear) || currentAcademicYear());
     const archiveHost=$('faculty-afc-originals');if(archiveHost){facultyArchive=window.PAWS_AFC_FORMS?.createArchiveController({api:UCVM_PAWS_DATA,host:archiveHost,getUser:()=>currentUser,getFacultyId:()=>selectedId===facultyRecord.facultyId?facultyRecord.facultyId:''});facultyArchive?.load();}
+  }
+
+  function renderSpecialLeaveLookup(facultyRecord,contractDoe) {
+    const policy=window.PAWS_AFC_SPECIAL_LEAVE;
+    if(!policy)return '';
+    const sourceAllocations=Array.isArray(contractDoe?.allocations)?contractDoe.allocations:[];
+    const byCategory=category=>{const row=sourceAllocations.find(v=>norm(v.categoryCode)===category);return row?.allocationDoe??null;};
+    const source={fte:facultyRecord.fte??null,doe:Object.fromEntries(policy.CATEGORIES.map(k=>[k,byCategory(k)]))};
+    const records=lookupMetrics?.afcByFaculty?.get(text(facultyRecord.facultyId).toLowerCase())||[];
+    const leaves=records.map(row=>({...row,...(row.specialLeave||{}),approved:true,approvedAt:row.approvedAtUtc,active:row.active!==false}));
+    let outcome;
+    try{outcome=policy.evaluate({date:selectedLeaveDate,source,leaves});}catch(_){return '';}
+    const amount=value=>value===null||value===undefined?'Missing':String(value);
+    const originalRows=policy.CATEGORIES.map(category=>'<tr><td>'+esc(category[0].toUpperCase()+category.slice(1))+'</td><td>'+esc(amount(outcome.originalDoe[category]))+'</td><td>'+esc(amount(outcome.deductionDoe[category]))+'</td><td>'+esc(amount(outcome.effectiveDoe[category]))+'</td></tr>').join('');
+    const flags=outcome.flags.length?'<p class="aux-note">Flags: '+outcome.flags.map(esc).join(' · ')+'</p>':'';
+    const missing=lookupMetrics&&!lookupMetrics.afcAvailable?'<p class="aux-note">AFC records unavailable; deductions are not verified.</p>':'';
+    return '<section class="section wide"><div class="section-title">Special Leave · Effective FTE / DOE (Admin)</div><label class="field"><span class="field-label">As of date</span><input id="lookup-leave-asof" class="input" type="date" value="'+esc(selectedLeaveDate)+'"></label><p class="aux-note">Academic year '+esc(outcome.academicYear)+' · Availability '+esc(outcome.availability)+' · Original FTE '+esc(amount(outcome.originalFte))+' · FTE deduction '+esc(amount(outcome.deductionFte))+' · Effective FTE '+esc(amount(outcome.effectiveFte))+'</p>'+flags+missing+'<div class="table-wrap"><table class="data-table"><thead><tr><th>DOE category</th><th>Original</th><th>Deduction</th><th>Effective</th></tr></thead><tbody>'+originalRows+'</tbody></table></div></section>';
   }
 
   function renderFacultyAfc(records) { return window.UCVM_AFC_RECORDS.profileAfc(records,{selfMode,renderPdf:window.PAWS_AFC_FORMS?.documentAction}); }
