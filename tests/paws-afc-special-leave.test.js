@@ -46,3 +46,16 @@ test('FTE at zero remains Available and warns',()=>{
  const v=policy.evaluate({date:'2026-11-03',source,leaves:[a]});
  assert.equal(v.effectiveFte,0);assert.equal(v.availability,'available');assert.equal(v.flags.includes('Zero Effective FTE'),true);
 });
+
+test('source changes hold a formerly applied deduction until Admin reapplies',()=>{
+ const a=leaf({sourceFingerprintByYear:{'2026-27':JSON.stringify(source)}});
+ const changed={fte:1,doe:{teaching:50,service:20,research:30}};
+ const v=policy.evaluate({date:'2026-11-10',source:changed,leaves:[a]});
+ assert.equal(v.effectiveFte,1);
+ assert.equal(v.flags.includes('Ready to Apply'),true);
+});
+test('a previously blocked overlap does not auto-resume when the other leave disappears',()=>{
+ const a=leaf({suspendedIntervals:[{startDate:'2026-11-15',endDate:'2026-11-20'}]});
+ assert.equal(policy.evaluate({date:'2026-11-16',source,leaves:[a]}).flags.includes('Ready to Apply'),true);
+ assert.equal(policy.evaluate({date:'2026-11-25',source,leaves:[a]}).effectiveFte,.75);
+});
