@@ -50,7 +50,7 @@ function createDashboardFunctions({ api,traineeApi }) {
         const response = await api.cancelAfcRecord(bearer(request), id, payload);
         return { status: response.status, jsonBody: response.body };
       }
-      const specialLeave = new RegExp('^/api/v1/dashboard/afc-records/([^/]+)/special-leave
+      const specialLeave = pathname.match(/^\/api\/v1\/dashboard\/afc-records\/([^/]+)\/special-leave$/);
       if (specialLeave) {
         if (request.method !== 'POST') return { status:405, headers:{Allow:'POST'}, jsonBody:{error:{code:'METHOD_NOT_ALLOWED',message:'POST required.'}} };
         let payload,id;
