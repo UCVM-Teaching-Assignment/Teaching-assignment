@@ -176,7 +176,7 @@ function createScheduleWorkflow({store}={}){
    const f=arr(store.tables.faculty).find(x=>x.facultyId===fid);
    if(!f||f.active!==true||f.appointmentValid===false||(f.activationDate&&s.date<f.activationDate)||(f.appointmentEndDate&&s.date>f.appointmentEndDate))
     error('FACULTY_UNAVAILABLE','The selected Faculty member is not eligible on this date.');
-   if(arr(store.tables.afcRecords).some(x=>x.facultyId===fid&&x.active!==false&&x.startDate<=s.date&&x.endDate>=s.date))
+   if(arr(store.tables.afcRecords).some(x=>x.facultyId===fid&&x.active!==false&&x.startDate<=s.date&&x.endDate>=s.date&&!(x.reasonCode==='special'&&x.availability==='available')))
     error('FACULTY_UNAVAILABLE','The Faculty member has an Away from Campus conflict.');
    for(const other of store.tables.sessions){
     if(other.id===s.id||other.academicYear!==s.academicYear||other.date!==s.date||!arr(other.assignments).some(x=>x.facultyId===fid))continue;
