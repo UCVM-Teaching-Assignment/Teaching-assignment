@@ -328,7 +328,8 @@ function mapAfcWriteError(caught) {
     51207: ['INVALID_REASON', 'Reason is not recognised.'],
     51208: ['NOTES_REQUIRED', 'Notes are required for Special and Other.'],
     51209: ['NOTES_TOO_LONG', 'Notes must be 1000 characters or fewer.'],
-    51210: ['FACULTY_NOT_FOUND', 'Active Faculty record was not found.']
+    51210: ['FACULTY_NOT_FOUND', 'Active Faculty record was not found.'],
+    51213: ['INVALID_DEDUCTION', 'Special Leave deduction exceeds an available FTE / DOE allocation.']
   }[number];
   if (known) return error(number === 51210 ? 404 : 400, known[0], known[1]);
   if (caught && caught.code === 'FACULTY_NOT_FOUND') return error(404, 'FACULTY_NOT_FOUND', 'Active Faculty record was not found.');
@@ -430,6 +431,37 @@ function createDashboardApi({ verifyToken, findUser, repository, writeRepository
       } catch (caught) {
         const known = { 53602: [403, 'ROLE_DENIED', 'Administrator permission is required.'], 53603: [404, 'AFC_RECORD_NOT_FOUND', 'This AFC record no longer exists.'], 53604: [409, 'AFC_RECORD_CHANGED', 'This AFC record changed. Refresh and review it before withdrawing.'] }[Number(caught?.number)];
         return known ? error(...known) : error(503, 'SQL_UNAVAILABLE', 'The SQL write service is unavailable.');
+      }
+    },
+    // Explicit administrator review and reapplication after missing/changed DOE
+    // source or a previously suspended overlapping period.
+    async updateAfcSpecialLeave(token, afcRecordId, payload = {}) {
+      const auth=await authorize(token);
+      if(auth.status)return auth;
+      if(!auth.scope.administrator)return error(403,'ROLE_DENIED','Admin permission is required.');
+      if(writeGates.afcEdit!==true)return writeDisabled();
+      if(writeRepository.supportsSpecialLeave!==true)return error(501,'SPECIAL_LEAVE_NOT_SUPPORTED','A deduction-capable backend is required.');
+      if(!UUID.test(text(afcRecordId)))return error(400,'INVALID_AFC_RECORD_ID','Select an AFC record.');
+      if(!payload||typeof payload!=='object'||Array.isArray(payload)||
+        Object.keys(payload).some(k=>!['expectedVersion','specialLeave'].includes(k)))
+        return error(400,'INVALID_JSON','Only deduction and expectedVersion can be updated.');
+      const version=text(payload.expectedVersion);
+      if(!/^[0-9a-f]{16}$/i.test(version))return error(400,'INVALID_AFC_VERSION','Reload before confirming this deduction.');
+      const details=payload.specialLeave;
+      if(!details||typeof details!=='object'||Array.isArray(details)||
+        Object.keys(details).some(k=>!['fteDeduction','allocationsByYear'].includes(k)))
+        return error(400,'INVALID_DEDUCTION','Enter the FTE and three category DOE allocations.');
+      try {
+        const row=await writeRepository.updateAfcSpecialLeave({afcRecordId:text(afcRecordId),expectedVersion:version,specialLeave:details,actorFirebaseUid:auth.decoded.uid});
+        return result(200,{afcRecord:normalizeAfcRecord(row)});
+      }catch(caught) {
+        const n=Number(caught?.number);
+        if(n===56402)return error(403,'ROLE_DENIED','Admin permission is required.');
+        if(n===56403)return error(404,'AFC_RECORD_NOT_FOUND','AFC record was not found.');
+        if(n===56404)return error(409,'AFC_RECORD_CHANGED','This AFC record changed. Reload and try again.');
+        if(n===56406)return error(409,'AFC_RECORD_INACTIVE','Only active Available Special Leave can be updated.');
+        if(n===51213)return error(422,'INVALID_DEDUCTION',caught?.message||'FTE / DOE deduction is invalid.');
+        return error(503,'SPECIAL_LEAVE_UPDATE_FAILED','Special Leave could not be confirmed.');
       }
     },
     // UX-07: the ADFA office changes the dates of an active AFC record directly.
