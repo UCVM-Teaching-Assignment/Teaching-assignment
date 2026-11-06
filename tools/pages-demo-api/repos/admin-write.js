@@ -99,16 +99,41 @@ function createAfcWriteRepository(store) {
   };
   const validateLeave = (facultyId,startDate,endDate,specialLeave) => {
     if(!specialLeave||typeof specialLeave!=='object')throw sqlError(51213,'Special Leave deduction required');
-    const years=leavePolicy.yearsForRange(startDate,endDate),confirmedYears={};
+    const years=leavePolicy.yearsForRange(startDate,endDate),confirmedYears={},sourceFingerprintByYear={};
     for(const year of years){
       const allocation=specialLeave.allocationsByYear?.[year];
       if(!allocation){confirmedYears[year]=false;continue;}
-      const validation=leavePolicy.validateAllocation(specialLeave.fteDeduction,allocation,sourceForYear(facultyId,year));
+      const source=sourceForYear(facultyId,year);
+      sourceFingerprintByYear[year]=JSON.stringify(source);
+      const validation=leavePolicy.validateAllocation(specialLeave.fteDeduction,allocation,source);
       const hard=validation.errors.filter(error=>!error.includes('SOURCE_MISSING')&&!error.includes('DOE_SOURCE_MISSING'));
       if(hard.length)throw sqlError(51213,hard.join(', '));
       confirmedYears[year]=validation.valid;
     }
-    return {...clone(specialLeave),confirmedYears};
+    return {...clone(specialLeave),confirmedYears,sourceFingerprintByYear};
+  };
+  const dayAfter = date => new Date(Date.parse(date+'T00:00:00Z')+86400000).toISOString().slice(0,10);
+  const dayBefore = date => new Date(Date.parse(date+'T00:00:00Z')-86400000).toISOString().slice(0,10);
+  // Mark only the actual overlap dates as held. Even if a competing Leave is
+  // cancelled later, these intervals require explicit Admin reapplication.
+  const heldIntervals = row => {
+    if(row.availability!=='available'||!row.specialLeave)return[];
+    const relevant=t().afcRecords.filter(r=>r.facultyId===row.facultyId&&r.active!==false&&r.reasonCode==='special'&&r.availability==='available'&&r.afcRecordId!==row.afcRecordId&&r.endDate>=row.startDate&&r.startDate<=row.endDate);
+    if(!relevant.length)return[];
+    const boundaries=new Set([row.startDate,dayAfter(row.endDate)]);
+    for(const item of relevant) {
+      boundaries.add(item.startDate<row.startDate?row.startDate:item.startDate);
+      const after=dayAfter(item.endDate);boundaries.add(after>dayAfter(row.endDate)?dayAfter(row.endDate):after);
+    }
+    for(const year of leavePolicy.yearsForRange(row.startDate,row.endDate).slice(1))boundaries.add(year.slice(0,4)+'-05-01');
+    const points=[...boundaries].sort(),held=[];
+    for(let i=0;i<points.length-1;i++) {
+      const startDate=points[i],endDate=dayBefore(points[i+1]);
+      if(startDate>endDate||startDate<row.startDate||startDate>row.endDate)continue;
+      const view=leavePolicy.evaluate({date:startDate,source:sourceForYear(row.facultyId,leavePolicy.academicYearForDate(startDate)),leaves:[...relevant,row].map(item=>({...item,...(item.specialLeave||{}),id:item.afcRecordId,approved:true,approvedAt:item.approvedAtUtc||item.createdAtUtc}))});
+      if(view.pending.some(item=>item.id===row.afcRecordId&&item.status==='Adjustment Required'))held.push({startDate,endDate});
+    }
+    return held;
   };
   const check = ({ facultyId, startDate, endDate, reasonCode, notes }) => {
     if (!startDate || !endDate) throw sqlError(51205, 'Dates required');
@@ -124,6 +149,7 @@ function createAfcWriteRepository(store) {
       if (availability === 'available' && reasonCode !== 'special') throw sqlError(51213,'Available is limited to Special Leave');
       const normalizedLeave = availability === 'available' ? validateLeave(facultyId,startDate,endDate,specialLeave) : null;
       const row = { afcRecordId, facultyId, startDate, endDate, reasonCode, availability, approvedAtUtc:store.nowIso(), ...(normalizedLeave?{specialLeave:normalizedLeave}:{}), reason: AFC_REASONS[reasonCode], purpose: '', notes: notes || '', legacyPurpose: AFC_REASONS[reasonCode], active: true, sourceKind: 'manual', createdAtUtc: store.nowIso(), createdByName: actorName || '', recordKey: `AFC-M-${afcRecordId.slice(0, 8)}`, versionToken: afcRecordId.replace(/-/g, '').slice(0, 16).toUpperCase(), documentId };
+      if(normalizedLeave)row.specialLeave.suspendedIntervals=heldIntervals(row);
       t().afcRecords.unshift(row);
       store.audit({ domain: 'afc', changeType: 'afc_record_created', facultyId, actorFirebaseUid, actorName, after: clone(row) });
       store.commit();
