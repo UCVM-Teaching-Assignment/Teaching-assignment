@@ -253,6 +253,11 @@
         const body=await request('/api/v1/dashboard/afc-records/'+encodeURIComponent(id)+'/cancel',{method:'POST',body:pickFields(payload,['sourceKind','expectedVersion'])});
         return body.afcRecord;
       },
+      async updateDashboardAfcSpecialLeave(afcRecordId,payload={}){
+        const id=String(afcRecordId??'').trim();if(!id)throw new Error('AFC record is required.');
+        const body=await request('/api/v1/dashboard/afc-records/'+encodeURIComponent(id)+'/special-leave',{method:'POST',body:pickFields(payload,['expectedVersion','specialLeave'])});
+        return body.afcRecord;
+      },
       async updateDashboardAfcRecordDates(afcRecordId,payload={}){
         const id=String(afcRecordId??'').trim();if(!id)throw new Error('AFC record is required.');
         const body=await request('/api/v1/dashboard/afc-records/'+encodeURIComponent(id)+'/dates',{method:'POST',body:pickFields(payload,['sourceKind','expectedVersion','startDate','endDate','requestId'])});
@@ -587,6 +592,7 @@
           endDate:String(input.endDate??'').trim(),
           reasonCode:String(input.reasonCode??'').trim(),
           notes:input.notes===undefined||input.notes===null?'':String(input.notes),
+          ...(input.reasonCode==='special' ? {availability:input.availability==='available'?'available':'unavailable', ...(input.availability==='available'?{specialLeave:input.specialLeave}:{})}:{}),
           ...(input.documentId?{documentId:String(input.documentId).trim()}:{})
         }});
         return body.afcRecord&&typeof body.afcRecord==='object'?body.afcRecord:{};

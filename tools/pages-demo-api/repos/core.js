@@ -179,7 +179,7 @@ function roleView(role) {
 }
 
 function afcView(store, row) {
-  return { afcRecordId: row.afcRecordId, facultyId: row.facultyId, facultyName: facultyName(store, row.facultyId), startDate: row.startDate, endDate: row.endDate, reasonCode: row.reasonCode || '', purpose: row.purpose || '', reason: row.reason || '', notes: row.notes || '', legacyPurpose: row.legacyPurpose || '', active: row.active, sourceKind: row.sourceKind, createdAtUtc: row.createdAtUtc, createdByName: row.createdByName || '', recordKey: row.recordKey || '', versionToken: row.versionToken || '', documentId: row.documentId || null };
+  return { afcRecordId: row.afcRecordId, facultyId: row.facultyId, facultyName: facultyName(store, row.facultyId), startDate: row.startDate, endDate: row.endDate, reasonCode: row.reasonCode || '', purpose: row.purpose || '', reason: row.reason || '', notes: row.notes || '', legacyPurpose: row.legacyPurpose || '', active: row.active, sourceKind: row.sourceKind, createdAtUtc: row.createdAtUtc, createdByName: row.createdByName || '', recordKey: row.recordKey || '', versionToken: row.versionToken || '', documentId: row.documentId || null, availability: row.reasonCode === 'special' && row.availability === 'available' ? 'available' : 'unavailable' };
 }
 
 function manualRoleRows(store, year) {
@@ -250,7 +250,7 @@ function createDashboardRepository(store) {
         .filter(row => active !== true && active !== false ? true : row.active === active)
         .sort((a, b) => b.startDate.localeCompare(a.startDate))
         .slice(0, limit || 500)
-        .map(row => afcView(store, row));
+        .map(row => ({ ...afcView(store, row), ...(row.specialLeave ? { specialLeave: clone(row.specialLeave), approvedAtUtc: row.approvedAtUtc || row.createdAtUtc, approvalOrder:row.approvalOrder||null } : {}) }));
     },
     async facultyById({ facultyId, academicYear: year, includeInactive = false } = {}) {
       const record = t().faculty.find(row => row.facultyId === facultyId);
@@ -266,7 +266,7 @@ function createDashboardRepository(store) {
         jointAppointments: [],
         roles: rolesFor(resolvedYear).filter(row => row.facultyId === facultyId).map(roleView),
         afcRecords: t().afcRecords.filter(row => row.facultyId === facultyId).map(row => ({ ...afcView(store, row), purpose: row.legacyPurpose || row.reason })),
-        contractDoe: { academicYear: resolvedYear, teachingDoe: target ? target.contractTeachingDoe : null, source: target ? target.source : '', policyVersionId: '', policyVersionLabel: '', sourceReference: target ? target.source : '', allocations: target ? [{ categoryCode: 'teaching', allocationDoe: target.contractTeachingDoe, sourceReference: target.source }] : [] },
+        contractDoe: { academicYear: resolvedYear, teachingDoe: target ? target.contractTeachingDoe : null, source: target ? target.source : '', policyVersionId: '', policyVersionLabel: '', sourceReference: target ? target.source : '', allocations: target ? [{ categoryCode: 'teaching', allocationDoe: target.contractTeachingDoe, sourceReference: target.source }, ...(target.serviceDoe === null || target.serviceDoe === undefined ? [] : [{ categoryCode: 'service', allocationDoe: target.serviceDoe, sourceReference: target.source }]), ...(target.researchDoe === null || target.researchDoe === undefined ? [] : [{ categoryCode: 'research', allocationDoe: target.researchDoe, sourceReference: target.source }])] : [] },
         doeRuleBook: { academicYear: resolvedYear, policyVersionId: '', policyVersionLabel: 'UCVM Workload Guidelines (synthetic demo copy)', sourceReference: 'UCVM Workload Guidelines', rules: DOE_RULES.map(rule => ({ doeRuleId: rule.ruleCode, ruleCode: rule.ruleCode, category: rule.category || '', ruleLabel: rule.ruleLabel || '', academicYearOrStage: rule.academicYearOrStage || '', rateOrTierPct: rule.rateOrTierPct || '', basis: rule.basis || '', requiredInput: rule.requiredInput || '', calculationOrNote: rule.calculationOrNote || '', sourceReference: rule.sourceReference || '' })) },
         teachingAssignments,
         sessionCount: teachingAssignments.length,

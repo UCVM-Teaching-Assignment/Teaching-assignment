@@ -2,6 +2,17 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-06",
+      "pr": 115,
+      "title": "Testing AFC Special Leave date-scoped FTE and DOE prototype",
+      "changes": [
+        "Admin can mark Special Leave Available and enter annual Teaching, Service and Research DOE deductions in the synthetic Testing demo.",
+        "New date-aware policy keeps original FTE / DOE unchanged and flags missing source or overlapping limits.",
+        "Available Special Leave no longer blocks Demo teaching selection; real time clashes and Unavailable AFC still block.",
+        "AFC Records gains a version-checked Admin review and Apply action; SQL remains deliberately unsupported."
+      ]
+    },
+    {
       "date": "2026-11-04",
       "pr": 113,
       "title": "Check that saved changes match success messages (UX-06)",

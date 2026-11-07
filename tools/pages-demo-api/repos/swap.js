@@ -116,7 +116,7 @@ function detailJson(store, r, uid) {
 function availabilityFor(store, session, facultyId) {
   if (!session.date || !session.startTime || !session.endTime) return { status: 'Needs Review', conflicts: [] };
   const t = store.tables;
-  const away = t.afcRecords.some(r => r.facultyId === facultyId && r.active && r.startDate <= session.date && r.endDate >= session.date);
+  const away = t.afcRecords.some(r => r.facultyId === facultyId && r.active && r.startDate <= session.date && r.endDate >= session.date && !(r.reasonCode === 'special' && r.availability === 'available'));
   const conflicts = t.sessions.filter(s => s.id !== session.id && s.date === session.date && s.startTime && s.assignments.some(a => a.facultyId === facultyId) && s.startTime < session.endTime && session.startTime < s.endTime).map(s => ({ courseCode: s.courseCode, date: s.date, startTime: s.startTime, endTime: s.endTime, topic: s.topic }));
   return { status: away || conflicts.length ? 'Unavailable' : 'Available', conflicts };
 }

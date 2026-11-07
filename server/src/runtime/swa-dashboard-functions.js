@@ -50,6 +50,19 @@ function createDashboardFunctions({ api,traineeApi }) {
         const response = await api.cancelAfcRecord(bearer(request), id, payload);
         return { status: response.status, jsonBody: response.body };
       }
+      const specialLeave = pathname.match(/^\/api\/v1\/dashboard\/afc-records\/([^/]+)\/special-leave$/);
+      if (specialLeave) {
+        if (request.method !== 'POST') return { status: 405, headers: { Allow: 'POST' }, jsonBody: { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required.' } } };
+        let payload, id;
+        try {
+          id = decodeURIComponent(specialLeave[1]);
+          payload = typeof request.json === 'function' ? await request.json() : request.body;
+        } catch (_) {
+          return { status: 400, jsonBody: { error: { code: 'INVALID_JSON', message: 'Invalid Special Leave update.' } } };
+        }
+        const response = await api.updateAfcSpecialLeave(bearer(request), id, payload);
+        return { status: response.status, jsonBody: response.body };
+      }
       const afcDates = /^\/api\/v1\/dashboard\/afc-records\/([^/]+)\/dates$/.exec(pathname);
       if (afcDates) {
         if (request.method !== 'POST') return { status: 405, headers: { Allow: 'POST' }, jsonBody: { error: { code: 'METHOD_NOT_ALLOWED', message: 'POST required.' } } };

@@ -96,7 +96,7 @@ function createFacultyAvailabilityRepository(store) {
       }
       for (const r of t.afcRecords) {
         if (r.facultyId !== facultyId || !r.active || r.endDate < from || r.startDate > to) continue;
-        items.push({ eventKey: `afc:${r.afcRecordId}`, kind: 'afc', label: privileged ? `AFC · ${r.reason}` : 'Away', startDate: r.startDate, endDate: r.endDate, startTime: null, endTime: null, availability: 'away', timeStatus: 'all_day', courseCode: null, sessionId: null, detail: privileged ? r.notes || null : null });
+        items.push({ eventKey: `afc:${r.afcRecordId}`, kind: 'afc', label: privileged ? `AFC · ${r.reason}` : 'Away', startDate: r.startDate, endDate: r.endDate, startTime: null, endTime: null, availability: r.reasonCode === 'special' && r.availability === 'available' ? 'informational' : 'away', timeStatus: 'all_day', courseCode: null, sessionId: null, detail: privileged ? r.notes || null : null });
       }
       for (const q of (store.tables.extra.afcRequests || [])) {
         if (q.facultyId !== facultyId || !['pending_report_to', 'pending_admin'].includes(q.status) || q.endDate < from || q.startDate > to) continue;
@@ -130,7 +130,7 @@ function detectTasks(store, academicYear) {
       const key = `${a.facultyId}|${s.date}`;
       if (!byFacultyDate.has(key)) byFacultyDate.set(key, []);
       byFacultyDate.get(key).push(s);
-      const afc = t.afcRecords.find(r => r.facultyId === a.facultyId && r.active && r.startDate <= s.date && r.endDate >= s.date);
+      const afc = t.afcRecords.find(r => r.facultyId === a.facultyId && r.active && r.startDate <= s.date && r.endDate >= s.date && !(r.reasonCode === 'special' && r.availability === 'available'));
       if (afc) add('afc_unavailable', 'Conflict', s, a.facultyId);
       const act = t.activities.find(x => x.facultyKey === a.facultyId && x.startDate <= s.date && x.endDate >= s.date && (x.timeEvidence || []).some(e => e.date === s.date && overlaps(e.startTime, e.endTime, hhmm(s.startTime), hhmm(s.endTime))));
       if (act) add('calendar_activity_overlap', 'Conflict', s, a.facultyId);

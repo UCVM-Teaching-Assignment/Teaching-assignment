@@ -24,6 +24,7 @@ const { randomUUID } = require('node:crypto');
 
 const { InvalidAcademicYearError, resolveAcademicYear } = require('./academic-year');
 const { writeDisabled } = require('./write-gates');
+const specialLeavePolicy = require('../../../frontend/scripts/afc-special-leave-policy.js');
 const { ADMINISTRATOR_ROLES, SELF_SERVICE_ROLES, isAdministratorRole, normalizeBaseRole } = require('../auth/role-policy');
 
 const ADMIN_ROLES = ADMINISTRATOR_ROLES;
@@ -212,7 +213,39 @@ function validateAfcInput(payload) {
   if ((reasonCode === 'special' || reasonCode === 'other') && !notes) {
     return error(400, 'NOTES_REQUIRED', 'Notes are required for Special and Other.');
   }
-  return { facultyId, startDate, endDate, reasonCode, notes: notes || null,...(payload.documentId?{documentId:payload.documentId}:{}) };
+  const availability = payload.availability === undefined ? 'unavailable' : text(payload.availability);
+  if (!['available','unavailable'].includes(availability) || (reasonCode !== 'special' && availability !== 'unavailable')) {
+    return error(400, 'INVALID_AVAILABILITY', 'Only Special Leave may be Available.');
+  }
+  if (reasonCode !== 'special' && payload.specialLeave !== undefined || availability === 'unavailable' && payload.specialLeave !== undefined) {
+    return error(400, 'INVALID_DEDUCTION', 'FTE / DOE deductions require Available Special Leave.');
+  }
+  let specialLeave = null;
+  if (availability === 'available') {
+    const data = payload.specialLeave;
+    if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).some(key=>!['fteDeduction','allocationsByYear'].includes(key))) {
+      return error(400, 'INVALID_DEDUCTION', 'Enter FTE and annual Teaching, Service and Research deductions.');
+    }
+    const fte = data.fteDeduction;
+    if (fte===null || fte===undefined || String(fte).trim()==='' || !Number.isFinite(Number(fte)) || Number(fte)<0 || Number(fte)>9.9999) {
+      return error(400, 'INVALID_DEDUCTION', 'FTE deduction must be a non-negative amount.');
+    }
+    const years = specialLeavePolicy.yearsForRange(startDate,endDate);
+    const values = data.allocationsByYear && typeof data.allocationsByYear==='object'&&!Array.isArray(data.allocationsByYear) ? data.allocationsByYear : {};
+    if (Object.keys(values).some(year=>!years.includes(year))) return error(400, 'INVALID_DEDUCTION_YEAR', 'DOE allocation must match the Leave academic year.');
+    for (const [year, allocation] of Object.entries(values)) {
+      if (!allocation || typeof allocation!=='object'||Array.isArray(allocation) || Object.keys(allocation).some(k=>!specialLeavePolicy.CATEGORIES.includes(k))) return error(400,'INVALID_DEDUCTION','Use Teaching, Service and Research DOE.');
+      let total=0;
+      for (const category of specialLeavePolicy.CATEGORIES) {
+        const v=allocation[category];
+        if (v===undefined || v===null || String(v).trim()==='' || !Number.isFinite(Number(v)) || Number(v)<0) return error(400,'INVALID_DEDUCTION','DOE category amounts must be non-negative numbers.');
+        total+=Number(v);
+      }
+      if (Math.abs(Math.round(total*10000)-Math.round(Number(fte)*1000000))>0) return error(400,'DOE_FTE_TOTAL_MISMATCH','Category DOE deductions must total FTE deduction × 100.');
+    }
+    specialLeave = { fteDeduction:Number(fte), allocationsByYear:values };
+  }
+  return { facultyId, startDate, endDate, reasonCode, notes: notes || null, availability, ...(specialLeave?{specialLeave}:{}), ...(payload.documentId?{documentId:payload.documentId}:{}) };
 }
 
 function validateAfcBatchInput(payload) {
@@ -277,7 +310,11 @@ function normalizeAfcRecord(row = {}) {
     legacyPurpose: row.legacyPurpose === null || row.legacyPurpose === undefined ? null : text(row.legacyPurpose),
     active: row.active !== false && row.active !== 0,
     sourceKind: text(row.sourceKind) || 'manual',
-    recordKey: text(row.recordKey), versionToken: text(row.versionToken),documentId:row.documentId||null
+    recordKey: text(row.recordKey), versionToken: text(row.versionToken),documentId:row.documentId||null,
+    availability: row.reasonCode === 'special' && row.availability === 'available' ? 'available' : 'unavailable',
+    // The AFC records endpoint is administrator-only. Faculty detail repositories
+    // must omit this field to avoid sharing private contract DOE deductions.
+    ...(row.specialLeave ? { specialLeave:row.specialLeave, approvedAtUtc:row.approvedAtUtc||null, approvalOrder:row.approvalOrder||null } : {})
   };
 }
 
@@ -291,7 +328,8 @@ function mapAfcWriteError(caught) {
     51207: ['INVALID_REASON', 'Reason is not recognised.'],
     51208: ['NOTES_REQUIRED', 'Notes are required for Special and Other.'],
     51209: ['NOTES_TOO_LONG', 'Notes must be 1000 characters or fewer.'],
-    51210: ['FACULTY_NOT_FOUND', 'Active Faculty record was not found.']
+    51210: ['FACULTY_NOT_FOUND', 'Active Faculty record was not found.'],
+    51213: ['INVALID_DEDUCTION', 'Special Leave deduction exceeds an available FTE / DOE allocation.']
   }[number];
   if (known) return error(number === 51210 ? 404 : 400, known[0], known[1]);
   if (caught && caught.code === 'FACULTY_NOT_FOUND') return error(404, 'FACULTY_NOT_FOUND', 'Active Faculty record was not found.');
@@ -393,6 +431,37 @@ function createDashboardApi({ verifyToken, findUser, repository, writeRepository
       } catch (caught) {
         const known = { 53602: [403, 'ROLE_DENIED', 'Administrator permission is required.'], 53603: [404, 'AFC_RECORD_NOT_FOUND', 'This AFC record no longer exists.'], 53604: [409, 'AFC_RECORD_CHANGED', 'This AFC record changed. Refresh and review it before withdrawing.'] }[Number(caught?.number)];
         return known ? error(...known) : error(503, 'SQL_UNAVAILABLE', 'The SQL write service is unavailable.');
+      }
+    },
+    // Explicit administrator review and reapplication after missing/changed DOE
+    // source or a previously suspended overlapping period.
+    async updateAfcSpecialLeave(token, afcRecordId, payload = {}) {
+      const auth=await authorize(token);
+      if(auth.status)return auth;
+      if(!auth.scope.administrator)return error(403,'ROLE_DENIED','Admin permission is required.');
+      if(writeGates.afcEdit!==true)return writeDisabled();
+      if(writeRepository.supportsSpecialLeave!==true)return error(501,'SPECIAL_LEAVE_NOT_SUPPORTED','A deduction-capable backend is required.');
+      if(!UUID.test(text(afcRecordId)))return error(400,'INVALID_AFC_RECORD_ID','Select an AFC record.');
+      if(!payload||typeof payload!=='object'||Array.isArray(payload)||
+        Object.keys(payload).some(k=>!['expectedVersion','specialLeave'].includes(k)))
+        return error(400,'INVALID_JSON','Only deduction and expectedVersion can be updated.');
+      const version=text(payload.expectedVersion);
+      if(!/^[0-9a-f]{16}$/i.test(version))return error(400,'INVALID_AFC_VERSION','Reload before confirming this deduction.');
+      const details=payload.specialLeave;
+      if(!details||typeof details!=='object'||Array.isArray(details)||
+        Object.keys(details).some(k=>!['fteDeduction','allocationsByYear'].includes(k)))
+        return error(400,'INVALID_DEDUCTION','Enter the FTE and three category DOE allocations.');
+      try {
+        const row=await writeRepository.updateAfcSpecialLeave({afcRecordId:text(afcRecordId),expectedVersion:version,specialLeave:details,actorFirebaseUid:auth.decoded.uid});
+        return result(200,{afcRecord:normalizeAfcRecord(row)});
+      }catch(caught) {
+        const n=Number(caught?.number);
+        if(n===56402)return error(403,'ROLE_DENIED','Admin permission is required.');
+        if(n===56403)return error(404,'AFC_RECORD_NOT_FOUND','AFC record was not found.');
+        if(n===56404)return error(409,'AFC_RECORD_CHANGED','This AFC record changed. Reload and try again.');
+        if(n===56406)return error(409,'AFC_RECORD_INACTIVE','Only active Available Special Leave can be updated.');
+        if(n===51213)return error(422,'INVALID_DEDUCTION',caught?.message||'FTE / DOE deduction is invalid.');
+        return error(503,'SPECIAL_LEAVE_UPDATE_FAILED','Special Leave could not be confirmed.');
       }
     },
     // UX-07: the ADFA office changes the dates of an active AFC record directly.
@@ -649,6 +718,11 @@ function createDashboardApi({ verifyToken, findUser, repository, writeRepository
       if (writeGates.afcSingle !== true) return writeDisabled();
       const input = validateAfcInput(payload);
       if (input.status) return input;
+      // The ported SQL writer has no approved deduction schema. Reject rather than
+      // silently saving an Available leave as a legacy Unavailable AFC record.
+      if (input.availability === 'available' && writeRepository.supportsSpecialLeave !== true) {
+        return error(501,'SPECIAL_LEAVE_NOT_SUPPORTED','Available Special Leave requires a trusted deduction-capable backend.');
+      }
       if(input.documentId&&writeGates.afcFormUpload!==true)return writeDisabled();
       try {
         const row = await writeRepository.createAfcRecord({
