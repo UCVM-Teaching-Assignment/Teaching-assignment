@@ -130,8 +130,12 @@ function createAfcApprovalRepository(store) {
     async recommendRequest(input) {
       const q = find(input.afcRequestId);
       if (q.status !== 'pending_report_to') throw sqlError(51603, 'Invalid state');
-      if (q.reportToFirebaseUid !== input.actorFirebaseUid) throw sqlError(51604, 'Not the Reports-To approver');
-      q.approvals.push(sign(input, 'report_to', 'recommended')); q.status = 'pending_admin';
+      // SQL RecommendAfcRequest: the assigned Reports-To recommends; an administrator
+      // may sign on their behalf (recorded as signedOnBehalf).
+      const admin = isAdministratorRole(userOf(store, input.actorFirebaseUid)?.baseRole);
+      if (!admin && q.reportToFirebaseUid !== input.actorFirebaseUid) throw sqlError(51604, 'Not the Reports-To approver');
+      const signedOnBehalf = admin && q.reportToFirebaseUid !== input.actorFirebaseUid;
+      q.approvals.push({ ...sign(input, 'report_to', 'recommended'), signedOnBehalf }); q.status = 'pending_admin';
       return done(q, 'afc_request_recommended', input.actorFirebaseUid);
     },
     async rejectRequest(input) {
@@ -139,7 +143,8 @@ function createAfcApprovalRepository(store) {
       if (!['pending_report_to', 'pending_admin'].includes(q.status)) throw sqlError(51603, 'Invalid state');
       const admin = isAdministratorRole(userOf(store, input.actorFirebaseUid)?.baseRole);
       if (!(admin || (q.status === 'pending_report_to' && q.reportToFirebaseUid === input.actorFirebaseUid))) throw sqlError(51604, 'Role denied');
-      q.approvals.push(sign(input, q.status === 'pending_admin' ? 'admin' : 'report_to', 'rejected')); q.status = 'rejected'; q.rejectionReason = input.rejectionReason;
+      // SQL RejectAfcRequest: an administrator's rejection is recorded at the admin stage.
+      q.approvals.push(sign(input, q.status === 'pending_admin' || admin ? 'admin' : 'report_to', 'rejected')); q.status = 'rejected'; q.rejectionReason = input.rejectionReason;
       return done(q, 'afc_request_rejected', input.actorFirebaseUid);
     },
     async approveRequest(input) {

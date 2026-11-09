@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-09",
+      "pr": 117,
+      "title": "Fix approval actions in the AFC and Teaching Assignment queues (QA-02)",
+      "changes": [
+        "Checked AFC, SWAP and Teaching Assignment approvals end to end in the browser for each role: authorized people can approve, push back or reject; others get no buttons or a clear message.",
+        "An Administrator can now sign & recommend an AFC request on behalf of the Reports To person, as the page and Beta allow. It is recorded as signed on behalf.",
+        "VISC Approve revision, ADFAD Save final assignment, Publish and HICC Save draft no longer fail when the optional note or comment box is left empty."
+      ]
+    },
+    {
       "date": "2026-11-06",
       "pr": 115,
       "title": "Testing AFC Special Leave date-scoped FTE and DOE prototype",
