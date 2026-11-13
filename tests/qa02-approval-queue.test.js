@@ -6,8 +6,10 @@
 //   The page sends null for an empty note box, which the API used to reject.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const { createStore } = require('../tools/pages-demo-api/store.js');
 const { createDemoRuntime } = require('../tools/pages-demo-api/runtime.js');
+const { createAfcArtifactRepository } = require('../tools/pages-demo-api/repos/afc.js');
 const { buildDataset } = require('../tools/seed/dataset.js');
 
 const seed = buildDataset().documents;
@@ -59,11 +61,16 @@ test('an administrator recommendation is recorded as signed on behalf', async ()
 });
 
 test('AFC decisions and approved PDFs follow the saved account role', async () => {
-  const { route } = setup({ roles: { 'uid-fac-003': 'administrator', 'uid-admin': 'faculty' } });
+  const { store, route } = setup({ roles: { 'uid-fac-003': 'administrator', 'uid-admin': 'faculty' } });
   const path = `/api/v1/afc-requests/${PENDING_REPORT_TO}`;
   assert.equal((await call(route, 'uid-admin', 'POST', `${path}/recommend`, signature('uid-admin'))).status, 403);
   assert.equal((await call(route, 'uid-fac-003', 'POST', `${path}/recommend`, signature('uid-fac-003'))).status, 200);
   assert.equal((await call(route, 'uid-fac-003', 'POST', `${path}/approve`, signature('uid-fac-003'))).status, 200);
+  const source = await createAfcArtifactRepository(store).getApprovedArtifactSource({
+    afcRequestId: PENDING_REPORT_TO, actorFirebaseUid: 'uid-fac-003'
+  });
+  const expectedDigest = createHash('sha256').update(source.sourceSnapshotJson, 'utf8').digest('hex');
+  assert.equal(Buffer.from(source.sourceSnapshotSha256).toString('hex'), expectedDigest);
   const artifact = await call(route, 'uid-fac-003', 'POST', `${path}/approved-artifact`);
   assert.equal(artifact.status, 201, JSON.stringify(artifact.body));
   assert.equal(artifact.bytes.subarray(0, 5).toString(), '%PDF-');
