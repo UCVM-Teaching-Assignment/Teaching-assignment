@@ -119,10 +119,13 @@ test('teaching assignment draft/finalization also reject pre-start faculty ID',a
   assert.ok(draft);
   const current=await repo.getPackage({packageId:draft.packageId,role:'developer'});
   const session=current.revisions.at(-1).sessions[0];
+  // Drafts are saved by the package's own HICC (QA-01 scope rule), so act as that HICC.
+  const raw=s.store.tables.extra.teachingAssignments.packages.find(p=>p.packageId===draft.packageId);
+  s.store.tables.users.push({firebaseUid:'uid-test-package-hicc',email:'hicc@example.test',displayName:'Package HICC',baseRole:'hicc',facultyId:raw.hiccFacultyId,active:true,mustChangePassword:false});
   await assert.rejects(()=>repo.saveDraft({packageId:draft.packageId,
     expectedWorkingRevision:current.workingRevision,
     sessions:[{sessionId:session.sessionId,assignments:[{facultyId:future.facultyId,teachingRole:'Lecture'}]}],
-    actorFirebaseUid:s.admin.firebaseUid}),error=>error.number===56551);
+    actorFirebaseUid:'uid-test-package-hicc'}),error=>error.number===56551);
 });
 
 test('Faculty editor exposes Add New, effective start date and the create API method',()=>{
