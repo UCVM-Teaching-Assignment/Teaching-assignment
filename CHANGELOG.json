@@ -2,6 +2,14 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-13",
+      "pr": 118,
+      "title": "Fix the source checksum for approved AFC PDFs in Testing",
+      "changes": [
+        "Approved AFC PDFs in the Testing Demo now record the SHA-256 checksum of the UTF-8 source snapshot."
+      ]
+    },
+    {
       "date": "2026-11-09",
       "pr": 117,
       "title": "Fix approval actions in the AFC and Teaching Assignment queues (QA-02)",
