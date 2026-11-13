@@ -213,6 +213,7 @@ test('SQL AFC request repository exposes only scoped list and exact stored-proce
   assert.match(calls[0].sql, /FROM paws\.AfcRequest/);
   assert.match(calls[0].sql, /RequesterFirebaseUid = @actorFirebaseUid/);
   assert.match(calls[0].sql, /ReportToFirebaseUid = @actorFirebaseUid/);
+  assert.match(calls[0].sql, /CASE WHEN ar\.Status = N'rejected' THEN ar\.RejectionReason END AS rejectionReason/);
   assert.equal(calls[0].params.administrator, 0);
 
   assert.equal(SUBMIT_PROCEDURE, 'paws_api.SubmitAfcRequest');

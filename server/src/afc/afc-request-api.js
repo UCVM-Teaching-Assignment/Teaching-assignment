@@ -150,6 +150,7 @@ function normalizeRequest(row = {}) {
     requesterFirebaseUid: text(row.requesterFirebaseUid),
     reportToFirebaseUid: text(row.reportToFirebaseUid) || null,
     status: text(row.status),
+    rejectionReason: row.status === 'rejected' ? text(row.rejectionReason) || null : null,
     startDate: text(row.startDate),
     endDate: text(row.endDate),
     workDays: Number(row.workDays || 0),
