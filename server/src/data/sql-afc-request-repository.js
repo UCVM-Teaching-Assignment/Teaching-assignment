@@ -14,6 +14,7 @@ function createSqlAfcRequestRepository(db) {
            ar.RequesterFirebaseUid AS requesterFirebaseUid,
            ar.ReportToFirebaseUid AS reportToFirebaseUid,
            ar.Status AS status,
+           CASE WHEN ar.Status = N'rejected' THEN ar.RejectionReason END AS rejectionReason,
            CONVERT(varchar(10), ar.StartDate, 23) AS startDate,
            CONVERT(varchar(10), ar.EndDate, 23) AS endDate,
            ar.WorkDays AS workDays,

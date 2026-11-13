@@ -2,9 +2,9 @@
 // AFC requests, two-stage approval, approved-PDF artifacts and archived AFC
 // form documents for the Frontend Demo. Approved artifacts are rendered by the
 // real Beta renderer in the browser; PDFs are kept in memory only.
-const { isAdministratorRole } = require('../../../server/src/auth/role-policy.js');
+const { isAdministratorRole, isSelfServiceRole } = require('../../../server/src/auth/role-policy.js');
 const { sha256Hex, uuidFor, toHex, sha256Bytes } = require('../ids.js');
-const { clone, sqlError, facultyName } = require('./core.js');
+const { clone, sqlError, facultyName, createUserRepository } = require('./core.js');
 const { dateRange, versionOf, bumpVersion, requireCoverage, ensureApprovedRecord } = require('./afc-date-change.js');
 
 const userOf = (store, uid) => store.tables.users.find(u => u.firebaseUid === uid) || null;
@@ -43,7 +43,9 @@ function reportToFor(store, facultyId) {
 function createAfcRequestRepository(store) {
   return {
     async listRequests({ actorFirebaseUid, administrator = false }) {
-      return requests(store).filter(q => administrator || q.requesterFirebaseUid === actorFirebaseUid || q.reportToFirebaseUid === actorFirebaseUid).sort((a, b) => b.submittedAtUtc.localeCompare(a.submittedAtUtc)).map(rowView);
+      return requests(store).filter(q => administrator || q.requesterFirebaseUid === actorFirebaseUid || q.reportToFirebaseUid === actorFirebaseUid)
+        .sort((a, b) => b.submittedAtUtc.localeCompare(a.submittedAtUtc))
+        .map(q => ({ ...rowView(q), rejectionReason: q.status === 'rejected' ? q.rejectionReason ?? null : null }));
     },
     async submitRequest(input) {
       const user = userOf(store, input.actorFirebaseUid);
@@ -123,29 +125,50 @@ function createAfcRequestRepository(store) {
 }
 
 function createAfcApprovalRepository(store) {
+  const users = createUserRepository(store);
+  const roleOf = async uid => {
+    const actor = await users.findByUid(uid);
+    if (actor?.active !== true || actor.mustChangePassword === true) throw sqlError(51601, 'An active decision actor is required.');
+    return actor.baseRole;
+  };
   const find = id => { const q = requests(store).find(x => x.afcRequestId === id); if (!q) throw sqlError(51602, 'Not found'); return q; };
   const sign = (input, stage, decision) => ({ stage, decision, signatureMode: input.signatureMode, signatureName: input.signatureName, approverFirebaseUid: input.actorFirebaseUid, signatureSignedAtUtc: input.signatureSignedAt, signatureFingerprint: input.signatureFingerprint, signatureImageDataUrl: input.signatureImageDataUrl || null });
-  const done = (q, change, actor) => { q.updatedAtUtc = store.nowIso(); store.audit({ domain: 'afc', changeType: change, facultyId: q.facultyId, actorFirebaseUid: actor, after: decisionView(q) }); store.commit(); return decisionView(q); };
+  const done = (q, change, actor, evidence = {}) => {
+    q.updatedAtUtc = store.nowIso();
+    const view = decisionView(q);
+    store.audit({ domain: 'afc', changeType: change, facultyId: q.facultyId, actorFirebaseUid: actor, after: { ...view, ...evidence } });
+    store.commit();
+    return view;
+  };
   return {
     async recommendRequest(input) {
+      const role = await roleOf(input.actorFirebaseUid);
       const q = find(input.afcRequestId);
-      if (q.status !== 'pending_report_to') throw sqlError(51603, 'Invalid state');
-      if (q.reportToFirebaseUid !== input.actorFirebaseUid) throw sqlError(51604, 'Not the Reports-To approver');
-      q.approvals.push(sign(input, 'report_to', 'recommended')); q.status = 'pending_admin';
-      return done(q, 'afc_request_recommended', input.actorFirebaseUid);
+      if (q.status !== 'pending_report_to' || !q.reportToFirebaseUid) throw sqlError(51603, 'Invalid state');
+      // SQL RecommendAfcRequest: the assigned Reports-To recommends; an administrator
+      // may sign on their behalf (recorded as signedOnBehalf).
+      const assigned = q.reportToFirebaseUid === input.actorFirebaseUid;
+      if (!isAdministratorRole(role) && !(assigned && isSelfServiceRole(role))) throw sqlError(51604, 'Not the Reports-To approver');
+      const signedOnBehalf = !assigned;
+      q.approvals.push({ ...sign(input, 'report_to', 'recommended'), signedOnBehalf }); q.status = 'pending_admin';
+      return done(q, 'afc_request_recommended', input.actorFirebaseUid, { signedOnBehalf });
     },
     async rejectRequest(input) {
+      const role = await roleOf(input.actorFirebaseUid);
       const q = find(input.afcRequestId);
       if (!['pending_report_to', 'pending_admin'].includes(q.status)) throw sqlError(51603, 'Invalid state');
-      const admin = isAdministratorRole(userOf(store, input.actorFirebaseUid)?.baseRole);
-      if (!(admin || (q.status === 'pending_report_to' && q.reportToFirebaseUid === input.actorFirebaseUid))) throw sqlError(51604, 'Role denied');
-      q.approvals.push(sign(input, q.status === 'pending_admin' ? 'admin' : 'report_to', 'rejected')); q.status = 'rejected'; q.rejectionReason = input.rejectionReason;
-      return done(q, 'afc_request_rejected', input.actorFirebaseUid);
+      const admin = isAdministratorRole(role);
+      const reportTo = q.status === 'pending_report_to' && q.reportToFirebaseUid === input.actorFirebaseUid && isSelfServiceRole(role);
+      if (!admin && !reportTo) throw sqlError(51604, 'Role denied');
+      const decisionStage = admin ? 'admin' : 'report_to';
+      q.approvals.push(sign(input, decisionStage, 'rejected')); q.status = 'rejected'; q.rejectionReason = input.rejectionReason;
+      return done(q, 'afc_request_rejected', input.actorFirebaseUid, { decisionStage });
     },
     async approveRequest(input) {
+      const role = await roleOf(input.actorFirebaseUid);
       const q = find(input.afcRequestId);
       if (q.status !== 'pending_admin') throw sqlError(q.status === 'pending_report_to' ? 51608 : 51603, 'Invalid state');
-      if (!isAdministratorRole(userOf(store, input.actorFirebaseUid)?.baseRole)) throw sqlError(51604, 'Role denied');
+      if (!isAdministratorRole(role)) throw sqlError(51604, 'Role denied');
       // Recheck the original revision at final approval; a stale replacement must
       // never supersede newer office dates or a second approved replacement.
       let original = null;
@@ -173,22 +196,28 @@ function createAfcApprovalRepository(store) {
 
 function createAfcArtifactRepository(store) {
   const memory = new Map();
+  const users = createUserRepository(store);
   const notFound = () => { throw Object.assign(new Error('The approved AFC artifact is not available.'), { code: 'ARTIFACT_NOT_FOUND', statusCode: 404 }); };
-  const allowed = (q, uid) => q.requesterFirebaseUid === uid || q.reportToFirebaseUid === uid || isAdministratorRole(userOf(store, uid)?.baseRole);
+  const allowed = async (q, uid) => {
+    const actor = await users.findByUid(uid);
+    if (actor?.active !== true || actor.mustChangePassword === true) return false;
+    return isAdministratorRole(actor.baseRole) || (isSelfServiceRole(actor.baseRole) &&
+      (q.requesterFirebaseUid === uid || q.reportToFirebaseUid === uid));
+  };
   return {
     async getApprovedArtifact({ afcRequestId, actorFirebaseUid }) {
       const q = requests(store).find(x => x.afcRequestId === afcRequestId);
-      if (!q || !allowed(q, actorFirebaseUid) || !memory.has(afcRequestId)) notFound();
+      if (!q || !(await allowed(q, actorFirebaseUid)) || !memory.has(afcRequestId)) notFound();
       return memory.get(afcRequestId);
     },
     async getApprovedArtifactSource({ afcRequestId, actorFirebaseUid }) {
       const q = requests(store).find(x => x.afcRequestId === afcRequestId);
-      if (!q || q.status !== 'approved' || !allowed(q, actorFirebaseUid)) throw Object.assign(new Error('The approved AFC artifact is not available.'), { code: 'REQUEST_NOT_FOUND', statusCode: 404 });
+      if (!q || q.status !== 'approved' || !(await allowed(q, actorFirebaseUid))) throw Object.assign(new Error('The approved AFC artifact is not available.'), { code: 'REQUEST_NOT_FOUND', statusCode: 404 });
       const member = store.tables.faculty.find(f => f.facultyId === q.facultyId) || {};
       const sessions = store.tables.sessions.filter(s => s.date >= q.startDate && s.date <= q.endDate && s.assignments.some(a => a.facultyId === q.facultyId)).map(s => ({ date: s.date, courseCode: s.courseCode, sessionType: s.sessionType, startTime: s.startTime, endTime: s.endTime, topic: s.topic }));
       const snapshot = { afcRequestId: q.afcRequestId, facultyName: q.facultyName, preferredFirstName: member.preferredFirstName, preferredLastName: member.preferredLastName, employeeId: member.ucid, rank: member.rank, requesterFirebaseUid: q.requesterFirebaseUid, reportToFirebaseUid: q.reportToFirebaseUid, approvedAtUtc: q.approvedAtUtc, startDate: q.startDate, endDate: q.endDate, workDays: q.workDays, reason: q.reason, purposeDestination: q.purposeDestination, contactAddress: q.contactAddress, contactPhone: q.contactPhone, coverage: q.coverage || (sessions.length ? 'Coverage arranged with the course HICC' : null), teachingSessions: sessions, applicantSignatureMode: q.signatureMode, applicantSignatureName: q.signatureName, applicantSignatureUid: q.requesterFirebaseUid, applicantSignatureSignedAtUtc: q.signatureSignedAt, applicantSignatureFingerprint: q.signatureFingerprint, applicantSignatureImageDataUrl: q.signatureImageDataUrl, approvals: q.approvals.filter(a => a.decision !== 'rejected') };
       const json = JSON.stringify(snapshot);
-      return { sourceSnapshotJson: json, sourceSnapshotSha256: sha256Hex(json) };
+      return { sourceSnapshotJson: json, sourceSnapshotSha256: sha256Bytes(json) };
     },
     async createOrGetApprovedArtifact({ afcRequestId, sourceSnapshotSha256, pdfBytes, pdfSha256, byteLength, templateSha256, rendererVersion }) {
       if (memory.has(afcRequestId)) return memory.get(afcRequestId);

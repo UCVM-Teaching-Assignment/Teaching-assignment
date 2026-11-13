@@ -2,6 +2,17 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-09",
+      "pr": 117,
+      "title": "Fix approval actions in the AFC and Teaching Assignment queues (QA-02)",
+      "changes": [
+        "Checked AFC, SWAP and Teaching Assignment approvals end to end in the browser for each role: authorized people can approve, push back or reject; others get no buttons or a clear message.",
+        "AFC decisions and approved PDFs use the saved account role. Administrators can recommend on behalf of Reports To, and the audit records who signed on behalf.",
+        "An AFC rejection reason stays visible to people authorized to see the request after refresh.",
+        "VISC Approve revision, ADFAD Save final assignment, Publish and HICC Save draft no longer fail when the optional note or comment box is left empty."
+      ]
+    },
+    {
       "date": "2026-11-05",
       "pr": 116,
       "title": "Check role access and limit Teaching Assignment edits to the package HICC (QA-01)",
