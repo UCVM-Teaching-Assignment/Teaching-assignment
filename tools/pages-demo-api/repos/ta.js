@@ -2,13 +2,18 @@
 // Teaching Assignment packages for the Frontend Demo: HICC draft -> VISC review
 // -> HICC final submit -> ADFAD finalization -> published release snapshots.
 const { isAdministratorRole, normalizeBaseRole } = require('../../../server/src/auth/role-policy.js');
+const { calgaryDate, classify } = require('../../../server/src/roles/role-effective-status.js');
 const { uuidFor } = require('../ids.js');
 const { clone, sqlError, createUserRepository } = require('./core.js');
 const { assertAssignable } = require('../faculty-activation.js');
 
 const userOf = (store, uid) => store.tables.users.find(u => u.firebaseUid === uid) || {};
-const conflict = () => Object.assign(new Error('Revision conflict'), { number: 52109, code: 'REVISION_CONFLICT' });
+const conflict = () => sqlError(52113, 'Working revision conflict');
 const name = (store, id) => (store.tables.faculty.find(f => f.facultyId === id) || {}).displayName || '';
+
+// G1 is the existing Demo review group and includes the VTMD 200 Anatomy fixture.
+// The other Demo groups have no recorded VISC lead.
+const VISC_SUBJECT_BY_GROUP = new Map([['G1', 'Anatomy']]);
 
 function state(store) {
   return store.bag('teachingAssignments', () => {
@@ -30,21 +35,32 @@ function state(store) {
 
 function inScope(store, p, { facultyId, role }) {
   if (isAdministratorRole(role)) return true;
-  if (role === 'hicc') return p.hiccFacultyId === facultyId;
-  if (role === 'visc') return ['visc_review', 'changes_requested', 'visc_approved'].includes(p.status) || p.groupId === 'G1';
+  if (!facultyId) return false;
+  const asOf = calgaryDate(store.now());
+  const active = appointment => appointment.academicYear === p.academicYear && classify({
+    ...appointment, hasSchedule: appointment.validityPeriods != null, periodsJson: appointment.validityPeriods
+  }, asOf).status === 'active';
+  if (role === 'hicc') return store.tables.roles.some(appointment =>
+    appointment.roleType === 'HICC' && appointment.roleAssignmentId === p.responsibleHiccResponsibilityId &&
+    appointment.facultyId === facultyId && active(appointment));
+  const subject = VISC_SUBJECT_BY_GROUP.get(p.groupId);
+  if (role === 'visc' && subject) {
+    const leads = store.tables.roles.filter(appointment => appointment.roleType === 'VISC' &&
+      appointment.courseOrSubjectOrRotation === subject && active(appointment));
+    return leads.length === 1 && leads[0].facultyId === facultyId;
+  }
   return false;
 }
 const queueRow = p => ({ packageId: p.packageId, academicYear: p.academicYear, groupId: p.groupId, groupName: p.groupName, hiccLabel: p.hiccLabel, responsibleHiccResponsibilityId: p.responsibleHiccResponsibilityId, status: p.status, workingRevision: p.workingRevision, dueAtUtc: p.dueAtUtc, lastActivityAtUtc: p.updatedAtUtc, nextAction: null, warning: null, courseCode: p.revisions.at(-1).sessions[0]?.courseCode || '', courseName: p.revisions.at(-1).sessions[0]?.courseName || '' });
 const packageView = p => { const { hiccFacultyId, activities, ...rest } = p; return clone(rest); };
 
 function createTeachingAssignmentRepository(store) {
-  // Mirror SQL CanActOnTeachingAssignmentPackage: a write needs the actor's own
-  // package scope, not only the role (THROW 52112/52121/52132/52141/52172).
   const users = createUserRepository(store);
-  const actorScope = async uid => { const u = await users.findByUid(uid) || {}; return { facultyId: u.facultyId || null, role: normalizeBaseRole(u.baseRole) || '' }; };
   const requireScope = async (p, uid, kind, number, message) => {
-    const scope = await actorScope(uid);
-    if (scope.role !== kind || !inScope(store, p, scope)) throw sqlError(number, message);
+    const actor = await users.findByUid(uid);
+    const role = normalizeBaseRole(actor?.baseRole);
+    if (actor?.active !== true || actor.mustChangePassword === true || role !== kind ||
+        !inScope(store, p, { facultyId: actor.facultyId, role })) throw sqlError(number, message);
   };
   const find = (id, scope) => { const p = state(store).packages.find(x => x.packageId === id); return p && (!scope || inScope(store, p, scope)) ? p : null; };
   const touch = (p, uid, eventType) => { p.updatedAtUtc = store.nowIso(); p.activities.unshift({ eventType, occurredAtUtc: p.updatedAtUtc, actorName: userOf(store, uid).displayName || 'PAWS user', revisionNumber: p.workingRevision }); store.commit(); return packageView(p); };

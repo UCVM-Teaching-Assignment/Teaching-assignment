@@ -7,7 +7,8 @@
       "title": "Check role access and limit Teaching Assignment edits to the package HICC (QA-01)",
       "changes": [
         "Checked Owner, Administrator, Developer, ADFA, ADC, LAB, HICC, VISC, Faculty and Other Office accounts against the role matrix: page access, data visibility, edits, submissions, reviews and approvals.",
-        "Fixed: any HICC account could save a draft, submit or final-submit another HICC's Teaching Assignment package. Now only the package's own HICC can, matching Beta.",
+        "Teaching Assignment drafts, submissions and HICC suggestions require the package's current HICC appointment. Only a current lead can view and review packages for their Demo VISC group.",
+        "SWAP refuses access for unsupported roles, including Other Office. Stale Teaching Assignment changes prompt the user to reload.",
         "Accounts that are inactive or must change their password stay blocked from PAWS data."
       ]
     },

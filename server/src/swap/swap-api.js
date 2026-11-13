@@ -1,7 +1,7 @@
 'use strict';
 const {UUID,validChanges,onlyKeys}=require('./swap-domain');
 const {writeDisabled}=require('../data/write-gates');
-const {isAdministratorRole}=require('../auth/role-policy');
+const {isAdministratorRole,isSupportedRole}=require('../auth/role-policy');
 const approvalView=require('./swap-view');
 const fail=(status,code,message)=>({status,body:{error:{code,message}}});
 const number=value=>value===null||value===undefined||value===''?null:Number.isFinite(Number(value))?Number(value):null;
@@ -14,6 +14,7 @@ function createSwapApi({verifyToken,findUser,repository,workflowPreviewService,w
     const user=await findUser(decoded.uid);
     if(!user||user.active!==true)return {response:fail(403,'PROFILE_REQUIRED','An active SQL profile is required.')};
     if(user.mustChangePassword===true)return {response:fail(403,'PASSWORD_CHANGE_REQUIRED','Change your password before accessing SWAP.')};
+    if(!isSupportedRole(user.baseRole))return {response:fail(403,'ROLE_DENIED','This role cannot access SWAP requests.')};
     return {uid:decoded.uid,user};
   }
   async function call(token,method,params={},gate){
