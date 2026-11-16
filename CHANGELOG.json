@@ -2,6 +2,26 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-16",
+      "pr": 120,
+      "title": "Check edge cases and show clear DOE override errors (QA-04)",
+      "changes": [
+        "Checked empty calendars, zero and blank values, invalid input, special characters, server outages, inactive faculty, expired roles, stale edits, double clicks and Back/Forward across roles.",
+        "An invalid Office DOE override (for example a negative value) now shows what is wrong instead of saying the DOE service is temporarily unavailable."
+      ]
+    },
+    {
+      "date": "2026-11-16",
+      "pr": 119,
+      "title": "Fix daily workflow blockers found in role walk-throughs (QA-03)",
+      "changes": [
+        "Walked through the Calendar, Faculty Dashboard, Teaching Assignments and User Management as Owner, Administrator, Developer, ADFA, ADC, LAB, HICC, VISC and Faculty.",
+        "Working activities in the Calendar List view and Faculty Dashboard Other working activities load again; they failed for any year with more than 100 activities.",
+        "Developer can open Teaching Assignments again, like other administrators.",
+        "User Management shows the signed-in name instead of Checking sign-in when the account has no access."
+      ]
+    },
+    {
       "date": "2026-11-13",
       "pr": 118,
       "title": "Fix the source checksum for approved AFC PDFs in Testing",
