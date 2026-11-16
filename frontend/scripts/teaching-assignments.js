@@ -7,7 +7,9 @@
   const displayFaculty = value => window.PAWS_FACULTY_NAME.format(value);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]);
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  const adminRoles = new Set(['owner','administrator','adfa_general','adfa_regular','admin']);
+  // Developer is an administrator for Teaching Assignments (server ADMINISTRATOR_ROLES,
+  // SQL AUTH-1 migration 025); without it the page turned Developer away.
+  const adminRoles = new Set(['developer','owner','administrator','adfa_general','adfa_regular','admin']);
   const queueRoles = new Set(['hicc','visc',...adminRoles]);
   let profile = null, packages = [], selectedId = '', selectedPackage = null, capabilities = {}, facultyOptions = [], facultyEvidence = new Map();
   let auth = null, authGeneration = 0, activeView = 'queue', busy = false, focusedAssignmentEditor = null, controlsBound = false;

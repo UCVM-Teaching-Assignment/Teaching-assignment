@@ -54,8 +54,17 @@ function createCalendarActivityRepository(store) {
         .filter(a => !category || a.category === category)
         .filter(a => admin || a.category === 'ccc' || a.category === 'rotation_participant' || a.facultyKey === profile.facultyId)
         .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.activityId.localeCompare(b.activityId));
-      const offset = Number(cursor || 0) || 0, page = rows.slice(offset, offset + limit);
-      const next = offset + page.length < rows.length ? String(offset + page.length) : null;
+      // Keyset cursor "YYYY-MM-DD|activityId" (the shape the API validates and SQL
+      // returns). An offset cursor such as "100" was refused by the API, so any
+      // range with more than one page failed to load.
+      let from = 0;
+      if (cursor) {
+        const [cursorDate, cursorId] = [String(cursor).slice(0, 10), String(cursor).slice(11)];
+        from = rows.findIndex(a => a.startDate > cursorDate || (a.startDate === cursorDate && a.activityId > cursorId));
+        if (from < 0) from = rows.length;
+      }
+      const page = rows.slice(from, from + limit), last = page[page.length - 1];
+      const next = from + page.length < rows.length && last ? `${last.startDate}|${last.activityId}` : null;
       const result = { activities: page.map(publicRow), nextCursor: next };
       if (includeFacultyKeys) result.facultyKeys = [...new Set(rows.map(a => a.facultyKey).filter(Boolean))].map(id => ({ facultyId: id, facultyKey: id }));
       return result;
