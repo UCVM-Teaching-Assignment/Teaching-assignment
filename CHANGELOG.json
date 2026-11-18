@@ -2,6 +2,18 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-18",
+      "pr": 121,
+      "title": "Fix calendar, timetable and Excel downloads (QA-05)",
+      "changes": [
+        "Checked calendar, timetable, Change History, Reports, Trainees, Faculty database and AFC PDF downloads against filters, source data and user permissions for each role.",
+        "Calendar (.ics) files now have a valid timestamp and Edmonton time zone details, so calendar apps import sessions at the right local time.",
+        "Faculty, HICC and VISC users can export their own timetable again; it no longer says no records match.",
+        "Excel downloads for Reports, Change History and the CCC template now work on the testing site.",
+        "Demo AFC requests now show their real work days and coverage notes on the approved PDF."
+      ]
+    },
+    {
       "date": "2026-11-16",
       "pr": 120,
       "title": "Check edge cases and show clear DOE override errors (QA-04)",

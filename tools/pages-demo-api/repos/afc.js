@@ -13,6 +13,8 @@ const fp = text => sha256Hex(`signature:${text}`);
 function requests(store) {
   return store.bag('afcRequests', () => {
     const t = store.tables, f = id => t.faculty.find(x => x.legacyId === id);
+    // Seeded requests store real workday counts and coverage text, so the list,
+    // the approval cards and the approved PDF all show the same values (QA-05).
     const seed = [
       ['fac-002', 'pending_report_to', '2026-11-16', '2026-11-20', 'business_other', 'AVMA conference, Denver'],
       ['fac-004', 'pending_admin', '2026-12-07', '2026-12-09', 'vacation', ''],
@@ -25,7 +27,7 @@ function requests(store) {
       const approvals = [];
       if (['pending_admin', 'approved', 'rejected'].includes(status)) approvals.push({ stage: 'report_to', decision: 'recommended', signatureMode: 'typed', signatureName: 'Avery Lindqvist', approverFirebaseUid: 'uid-fac-001', signatureSignedAtUtc: '2026-09-25T15:00:00.000Z', signatureFingerprint: fp('rt' + i), signatureImageDataUrl: null });
       if (status === 'approved') approvals.push({ stage: 'admin', decision: 'approved', signatureMode: 'typed', signatureName: 'ADFA General', approverFirebaseUid: 'uid-adfa-general', signatureSignedAtUtc: '2026-09-28T15:00:00.000Z', signatureFingerprint: fp('ad' + i), signatureImageDataUrl: null });
-      return { afcRequestId: uuidFor(`afc-request:${i}`), facultyId: member.facultyId, facultyName: member.displayName, requesterFirebaseUid: requester, reportToFirebaseUid: 'uid-fac-001', status, startDate, endDate, workDays: 3 + (i % 3), reason, purposeDestination: purpose || null, coverage: i % 2 ? 'Lectures covered by HICC; lab rescheduled' : null, contactAddress: '123 Example Street, Calgary AB', contactPhone: '403-555-01' + (10 + i), termsVersion: '2026-09', termsSource: 'absence-from-campus-terms.pdf', signatureMode: 'typed', signatureName: member.displayName, signatureSignedAt: signedAt, signatureFingerprint: fp('app' + i), signatureImageDataUrl: null, submittedAtUtc: signedAt, updatedAtUtc: signedAt, rejectionReason: status === 'rejected' ? 'Overlaps scheduled OSCE week; please choose other dates.' : null, approvedAtUtc: status === 'approved' ? '2026-09-28T15:00:00.000Z' : null, approvals };
+      return { afcRequestId: uuidFor(`afc-request:${i}`), facultyId: member.facultyId, facultyName: member.displayName, requesterFirebaseUid: requester, reportToFirebaseUid: 'uid-fac-001', status, startDate, endDate, workDays: dateRange(startDate, endDate), reason, purposeDestination: purpose || null, coverage: i % 2 ? 'Lectures covered by HICC; lab rescheduled' : 'Coverage arranged with the course HICC', contactAddress: '123 Example Street, Calgary AB', contactPhone: '403-555-01' + (10 + i), termsVersion: '2026-09', termsSource: 'absence-from-campus-terms.pdf', signatureMode: 'typed', signatureName: member.displayName, signatureSignedAt: signedAt, signatureFingerprint: fp('app' + i), signatureImageDataUrl: null, submittedAtUtc: signedAt, updatedAtUtc: signedAt, rejectionReason: status === 'rejected' ? 'Overlaps scheduled OSCE week; please choose other dates.' : null, approvedAtUtc: status === 'approved' ? '2026-09-28T15:00:00.000Z' : null, approvals };
     });
   });
 }
