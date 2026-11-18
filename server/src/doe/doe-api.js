@@ -65,6 +65,11 @@ function createDoeApi({ verifyToken, findUser, repository, calculationService, w
         : caught.code === 'DOE_VALIDATION_FAILED' ? 422
         : ['COURSE_MAPPING_REQUIRED','SUBJECT_MAPPING_REQUIRED','REQUIRED_INPUT_MISSING','NEEDS_REVIEW','AMBIGUOUS_RULE','EXCEPTION_AMBIGUOUS','MAPPING_INVALID','MAPPING_REQUIREMENT_INVALID','CALCULATION_MODE_INVALID','PARAMETER_MISSING','PARAMETER_INVALID','TIER_INVALID','TIER_NOT_FOUND','OUTPUT_NON_FINITE','OUTPUT_OUT_OF_RANGE'].includes(caught.code) ? 422
         : 503;
+      // A DOE service may reject input with its own 4xx status (for example the
+      // target override service: a negative value or unknown Faculty). Pass that
+      // message through instead of reporting the service as unavailable.
+      const own = Number(caught?.status);
+      if (status === 503 && Number.isInteger(own) && own >= 400 && own < 500 && typeof caught.code === 'string') return fail(own, caught.code, caught.message);
       if (status === 503) return fail(status, 'DOE_UNAVAILABLE', 'The DOE service is temporarily unavailable.');
       return fail(status, caught.code, caught.message);
     }
