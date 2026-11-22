@@ -144,7 +144,7 @@
 .testing-only-check{display:inline-flex;align-items:center;gap:5px;font-size:13px;white-space:nowrap}
 .testing-only-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;z-index:2147483001;background:#1e293b;color:#fff;padding:9px 14px;border-radius:8px;font-size:13px;transition:.2s}
 .testing-only-toast.show{opacity:1;transform:translateX(-50%)}.testing-only-toast.is-error{background:#991b1b}
-.testing-only-notify{position:fixed;right:16px;bottom:16px;z-index:2147482000;max-width:340px;background:var(--surface,#fff);color:var(--text,#111);border:1px solid #b45309;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:12px 14px;font-size:13px}
+.testing-only-notify{position:fixed;right:16px;bottom:16px;z-index:140;max-width:340px;background:var(--surface,#fff);color:var(--text,#111);border:1px solid #b45309;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:12px 14px;font-size:13px}
 .testing-only-notify h3{margin:0 0 6px;font-size:14px}.testing-only-notify ul{margin:0 0 8px;padding-left:18px}
 .testing-only-closure{background:repeating-linear-gradient(45deg,#fef3c7,#fef3c7 6px,#fde68a 6px,#fde68a 12px)!important;color:#78350f!important;border-color:#b45309!important}
 .testing-only-panel{padding:14px}

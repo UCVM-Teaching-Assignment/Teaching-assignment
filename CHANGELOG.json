@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-22",
+      "pr": 122,
+      "title": "Keep main controls usable on phone and laptop screens (QA-06)",
+      "changes": [
+        "Checked the timetable, Teaching Assignments, Faculty Dashboard, User Management and Change password pages at 1280px, 1440px and 390px widths for Owner, Faculty, ADC and HICC.",
+        "On phones, the timetable view buttons now wrap onto a second row, so Compare Weeks and Course List can be reached.",
+        "Testing site: the Workflow notifications popup, Demo role tester and Test site banner no longer cover dialog buttons such as Edit Session and Save. The two panels start collapsed on phone-width screens."
+      ]
+    },
+    {
       "date": "2026-11-18",
       "pr": 121,
       "title": "Fix calendar, timetable and Excel downloads (QA-05)",
