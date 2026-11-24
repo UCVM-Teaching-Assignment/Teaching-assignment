@@ -410,15 +410,23 @@
     dates.forEach(date=>sessionCacheDates.add(date));
     return rows.filter(row=>dates.includes(String(row.date||'').slice(0,10)));
   }
+  // Workflow widgets keep the original identity-scoped read even when the
+  // synthetic Calendar can display the shared Teaching Schedule.
+  function workflowSessionRows(rows){
+    return rows.filter(row=>row.assignedToViewer!==false);
+  }
+  function allWorkflowSessions(options){
+    return ensureAllSessions(options).then(workflowSessionRows);
+  }
   window.UCVM_PAGE_DATA={
     profile:()=>pageProfile(),
     academicYear:()=>viewMode==='list'?listAcademicYear:sqlAcademicYearForDate(ymd(weekStart(selectedWeek,selectedSemester))),
     faculty:()=>currentFacultyRecord,
-    sessions:()=>pageSessions(),
-    ensureSessionsForRange,
+    sessions:()=>workflowSessionRows(pageSessions()),
+    ensureSessionsForRange:(start,end)=>ensureSessionsForRange(start,end).then(workflowSessionRows),
     subscribe:callback=>{pageDataSubscribers.add(callback);return()=>pageDataSubscribers.delete(callback)},
     facultyDirectory:()=>facultyDirectory.slice(),
-    allSessions:()=>ensureAllSessions(),
+    allSessions:()=>allWorkflowSessions(),
     profileSnapshot:uid=>{
       if(!profileSnapshots.has(uid))profileSnapshots.set(uid,db.collection('users').doc(uid).get());
       return profileSnapshots.get(uid);
@@ -429,7 +437,7 @@
   window.PAWS_SWAP?.configure({getUser:()=>currentUser,onChanged:async()=>{
     invalidateAllSessions();await Promise.all([refreshSessionScope(),window.PAWS_SWAP.refreshPending()]);render();window.PAWS_TASKS?.refresh();
   }});
-  window.PAWS_TASKS?.configure({hasUser:()=>Boolean(currentUser),identity:()=>currentUser?.uid||'',role:()=>currentUser?.role||'',academicYear:()=>listAcademicYear,allSessions:()=>ensureAllSessions({refresh:true,notify:false}),disposition:calendarTimingDisposition,reason:unpositionedReason,openSession:async id=>{
+  window.PAWS_TASKS?.configure({hasUser:()=>Boolean(currentUser),identity:()=>currentUser?.uid||'',role:()=>currentUser?.role||'',academicYear:()=>listAcademicYear,allSessions:()=>allWorkflowSessions({refresh:true,notify:false}),disposition:calendarTimingDisposition,reason:unpositionedReason,openSession:async id=>{
     const ownerUid=currentUser?.uid;
     let rows;
     try{rows=await ensureAllSessions({refresh:true,notify:false});}

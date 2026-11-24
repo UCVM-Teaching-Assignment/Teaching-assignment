@@ -87,8 +87,8 @@ async function verifyFacultySchedule() {
   try {
     await until(() => document.querySelector('#cal-week-btn.active') && document.querySelector('#my-timetable-btn:not(.hidden)'),
       'Faculty did not open on the shared Teaching Schedule');
-    if (document.querySelector('#paws-global-academic-year')?.value !== '2026-27' ||
-        document.body.classList.contains('paws-my-year-preview-required')) throw Error('Current academic year was not available');
+    await until(() => document.querySelector('#paws-global-academic-year')?.value === '2026-27' &&
+      !document.body.classList.contains('paws-my-year-preview-required'), 'Current academic year was not available');
     const api = window.UCVM_PAWS_DATA;
     const [schedule, personal] = await Promise.all([
       api.listSessions({ ...week, teachingSchedule: true }),
@@ -97,6 +97,14 @@ async function verifyFacultySchedule() {
     for (const row of schedule) byId.set(row.id, row);
     for (const row of personal) own.add(row.id);
     if (schedule.length !== 74 || !own.size) throw Error('Shared or personal fixture unavailable');
+    const pageData = window.UCVM_PAGE_DATA;
+    const workflowRows = await pageData.allSessions();
+    if (workflowRows.length !== own.size || workflowRows.some(row => !own.has(row.id)))
+      throw Error('Faculty workflow data includes other instructors’ Sessions');
+    const workflowWeek = await pageData.ensureSessionsForRange(week.start, '2026-11-06');
+    const ownWeek = schedule.filter(row => own.has(row.id));
+    if (workflowWeek.length !== ownWeek.length || workflowWeek.some(row => !own.has(row.id)) ||
+        pageData.sessions().some(row => !own.has(row.id))) throw Error('Range or cached workflow data lost its Faculty scope');
 
     if (document.querySelector('#schedule-filter-toggle[aria-expanded=false]')) click('#schedule-filter-toggle');
     click('#semester-btn-row [data-semester=fall]');
@@ -417,7 +425,7 @@ async function main(){
        console.log('ok   Default PAWS Testing loads packed synthetic data, 74 Fall W11 sessions via API and visible November Month teaching blocks');
        try {
          await facultyTransitionSmoke(cdp);
-         console.log('ok   Developer → Faculty: Years 1–3 in Week and Month, scoped SWAP, My Teaching and reset in List');
+         console.log('ok   Developer → Faculty: Years 1–3 in Week and Month, personal workflow data, scoped SWAP, and My Teaching and reset in List');
        } catch (error) {
          problems.push(label + ': Faculty role transition failed: ' + error.message);
        }
