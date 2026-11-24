@@ -373,6 +373,7 @@
       timeUnknown:!row?.startTime||!row?.endTime,
       room:String(row?.room||''),
       instructor,
+      assignedToViewer: row?.assignedToViewer,
       assignments:canonicalAssignments.length?canonicalAssignments:(instructor ? splitInstructorNames(instructor).map(name=>({name})) : []),
       unresolvedAssignmentCount:Number(row?.unresolvedAssignmentCount)||0,
       assignmentManagementAvailable:canonicalAssignments.every(item=>item.active===true)&&Number(row?.unresolvedAssignmentCount||0)===0,
@@ -381,7 +382,7 @@
   }
   async function fetchPawsSessions(range={}){
     if(!window.UCVM_PAWS_DATA)throw new Error('The PAWS data client is unavailable.');
-    const rows=await window.UCVM_PAWS_DATA.listSessions(range);
+    const rows=await window.UCVM_PAWS_DATA.listSessions({...range,teachingSchedule:true});
     return rows.map(mapPawsSessionRow).filter(row=>row.id);
   }
   async function ensureSessionsForRange(start,end){
@@ -960,10 +961,17 @@
   }
 
   function roleIsFaculty(profile){ return ['faculty','hicc','visc'].includes(String(profile?.role||'').trim().toLowerCase()); }
+  function usesDemoTeachingSchedule(){ return window.UCVM_PAWS_DEMO_API?.authoritative===false; }
+  function startsOnMyTimetable(){ return roleIsFaculty(currentUser)&&!usesDemoTeachingSchedule(); }
+  function setMyTimetableOnly(value){
+    myTimetableOnly=value;
+    $('my-timetable-btn').textContent=value?'Show All Timetable':'My Timetable';
+  }
   function sessionBelongsToCurrentFaculty(s){
     if(!currentUser)return false;
     const facultyId=String(currentUser.profile?.facultyId||'').trim();
     if(s.isWorkingActivity)return s.activityOwnerUid===currentUser.uid&&Boolean(facultyId)&&s.activityFacultyId===facultyId;
+    if(typeof s.assignedToViewer==='boolean')return s.assignedToViewer;
     const aliases=new Set([currentUser.instructorName,currentUser.name,currentUser.email].map(swapNameKey).filter(Boolean));
     const assignments=Array.isArray(s.assignments)?s.assignments:[];
     if(facultyId&&assignments.some(a=>String(a?.ucid||a?.facultyId||'').trim()===facultyId))return true;
@@ -1069,7 +1077,7 @@
     $('teaching-assignments-btn').addEventListener('click', () => {
       if (currentUser && ['faculty','hicc','visc','developer','owner','administrator','adfa_general','adfa_regular','admin'].includes(String(currentUser.role || '').trim().toLowerCase())) window.location.href = 'teaching-assignments.html';
     });
-    $('my-timetable-btn').addEventListener('click', () => { myTimetableOnly = !myTimetableOnly; $('my-timetable-btn').textContent = myTimetableOnly ? 'Show All Timetable' : 'My Timetable'; render(); });
+    $('my-timetable-btn').addEventListener('click', () => { setMyTimetableOnly(!myTimetableOnly); render(); });
     // CCC, VISC and HICC–CC are tabs of the single Teaching Lists popup.
     $('export-csv').addEventListener('click', () => openExportDialog('csv'));
     $('export-calendar').addEventListener('click', () => openExportDialog('ics'));
@@ -1078,8 +1086,8 @@
     $('publish-firestore-schedule').addEventListener('click', initializeLiveSchedule);
     addEventListener('ucvm:show-teaching',()=>{
       if(!currentUser)return;
-      if(roleIsFaculty(currentUser)){viewMode=lastFacultyTeachingView;myTimetableOnly=true}
-      setViewButtons();refreshSessionScope();
+      if(roleIsFaculty(currentUser)){viewMode=lastFacultyTeachingView;setMyTimetableOnly(true)}
+      setViewButtons();refreshContentFilterScope();
     });
     initializeWorkspaceNavigation();
   }
@@ -1135,9 +1143,9 @@
     document.querySelectorAll('[data-semester]').forEach(x => x.classList.toggle('active', x.dataset.semester === 'fall'));
     $('search-input').value = ''; $('filter-month').value = 'all'; activityTypeFilter.reset();
     selectedCourses.clear(); courseFilterActive=false; populateCourseFilter();
-    myTimetableOnly = roleIsFaculty(currentUser); if (currentUser) $('my-timetable-btn').textContent = myTimetableOnly ? 'Show All Timetable' : 'My Timetable';
+    setMyTimetableOnly(startsOnMyTimetable());
     selectedWeek = 1; renderWeekControls();
-    refreshSessionScope();
+    refreshContentFilterScope();
   }
 
   function setViewButtons() {
@@ -1863,6 +1871,10 @@
     return true;
   }
 
+  function canRequestTimetableSwap(session) {
+    return !session.isCcc&&session.assignedToViewer!==false&&currentUser&&window.PAWS_SWAP&&scheduleSource==='vetmed-ops';
+  }
+
   function openSessionDetail(id, currentSession = null) {
     const s = currentSession || renderedSessions.find(x => x.id === id) || sessions.find(x => x.id === id) || sessionCache.get(id); if (!s) return;
     if(s.readOnlyActivity){
@@ -1873,7 +1885,7 @@
     if (!s.isCcc && String(s.type).toUpperCase() === 'LAB' && window.UCVM_LAB_DETAIL) return openLabSessionDetail(s);
     const edit = !s.isCcc&&canEditExistingSqlSession()&&window.UCVM_PAWS_DATA?.sessionEditEnabled?.() ? `<button class="btn btn-primary" id="detail-edit">Edit Session</button>` : '';
     const assignmentEdit = !s.isCcc&&s.assignmentManagementAvailable===true&&canEditExistingSqlSession()&&window.UCVM_PAWS_DATA?.sessionEditEnabled?.() ? `<button class="btn btn-secondary" id="detail-assignments">Manage Instructors</button>` : '';
-    const swap = !s.isCcc&&currentUser&&window.PAWS_SWAP&&scheduleSource==='vetmed-ops' ? `<button class="btn btn-primary" id="detail-swap">SWAP request</button>` : '';
+    const swap = canRequestTimetableSwap(s) ? `<button class="btn btn-primary" id="detail-swap">SWAP request</button>` : '';
     const labDetails = Array.isArray(s.labDetails) && s.labDetails.length > 1
       ? `<div class="login-cheatsheet"><strong>Lab stations / activities</strong><br><br>${s.labDetails.map(d => `<div style="margin-bottom:8px"><strong>${escapeHtml(d.topic)}</strong>${d.instructor ? `<br>${escapeHtml(displayFacultyList(d.instructor))}` : ''}${d.room ? `<br><span style="color:var(--text-3)">${escapeHtml(d.room)}</span>` : ''}</div>`).join('')}</div>`
       : '';
@@ -1902,7 +1914,7 @@
     const actions = row => {
       const id = escapeHtml(row.id);
       const edit = canEditExistingSqlSession() && window.UCVM_PAWS_DATA?.sessionEditEnabled?.();
-      return `${currentUser && window.PAWS_SWAP && scheduleSource === 'vetmed-ops' ? `<button class="btn btn-secondary" data-lab-action="swap" data-lab-id="${id}">SWAP request</button>` : ''}${edit && row.assignmentManagementAvailable === true ? `<button class="btn btn-secondary" data-lab-action="instructors" data-lab-id="${id}">Manage Instructors</button>` : ''}${edit ? `<button class="btn btn-primary" data-lab-action="edit" data-lab-id="${id}">Edit Session</button>` : ''}`;
+      return `${canRequestTimetableSwap(row) ? `<button class="btn btn-secondary" data-lab-action="swap" data-lab-id="${id}">SWAP request</button>` : ''}${edit && row.assignmentManagementAvailable === true ? `<button class="btn btn-secondary" data-lab-action="instructors" data-lab-id="${id}">Manage Instructors</button>` : ''}${edit ? `<button class="btn btn-primary" data-lab-action="edit" data-lab-id="${id}">Edit Session</button>` : ''}`;
     };
     const title = seed.courseName ? `${seed.course} - ${seed.courseName}` : `${seed.course} · LAB`;
     const position = [seed.semester, seed.week ? `Week ${seed.week}` : ''].filter(Boolean).join(' ');
@@ -2364,9 +2376,9 @@
           try { await window.UCVM_PAWS_DATA.refreshWriteCapabilities(); }
           catch (capabilityError) { console.warn('[write capabilities]', capabilityError); }
           publishPageData();
-          viewMode = roleIsFaculty(currentUser) ? 'day' : 'week';
+          myTimetableOnly = startsOnMyTimetable();
+          viewMode = myTimetableOnly ? 'day' : 'week';
           setViewButtons();
-          myTimetableOnly = roleIsFaculty(currentUser);
           updateAuthUI();
           const initialSessionLoad=subscribeSessions();
           unsubscribeFacultyDirectory();
@@ -2758,8 +2770,8 @@
     for(const id of ['my-teaching-btn','afc-request-btn','my-change-history-btn','cal-changes-btn'])$(id).classList.toggle('hidden',!currentUser);
     $('publish-firestore-schedule').classList.add('hidden');
     updateScheduleSourceUI();
-    $('my-timetable-btn').classList.toggle('hidden', !currentUser || roleIsFaculty(currentUser));
-    $('my-timetable-btn').textContent = currentUser && myTimetableOnly ? 'Show All Timetable' : 'My Timetable';
+    $('my-timetable-btn').classList.toggle('hidden', !currentUser || (roleIsFaculty(currentUser)&&!usesDemoTeachingSchedule()));
+    setMyTimetableOnly(Boolean(currentUser&&myTimetableOnly));
     scheduleWorkspace?.sync(Boolean(currentUser));
     window.dispatchEvent(new CustomEvent('ucvm-timetable-user',{detail:{user:currentUser}})); // Testing site only.
   }

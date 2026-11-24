@@ -25,8 +25,9 @@ const CHECKS=Object.freeze([
  {page:'index.html',uid:'uid-fac-001',text:['Teaching Schedule','My Teaching']},
  {page:'faculty-admin.html',uid:'uid-developer',text:['Faculty Dashboard','Lookup','DOE Overview','AFC Records','Academic Years · Demo']},
  {page:'faculty-admin.html',uid:'uid-admin',text:['Faculty Dashboard','Teaching Summary']},
+ {page:'faculty-admin.html',uid:'uid-fac-001',text:['My Faculty Profile']},
  {page:'teaching-assignments.html',uid:'uid-admin',text:['Teaching Assignments','Academic Years · Demo']},
- {page:'teaching-assignments.html',uid:'uid-fac-001',text:['Teaching Assignments']},
+ {page:'teaching-assignments.html',uid:'uid-fac-001',text:['Teaching Assignments','Published assignments']},
  {page:'user-management.html',uid:'uid-owner',text:['User Management','Accounts']},
  {page:'password.html',uid:'uid-fac-001',text:['Change Password']}
 ]);
@@ -53,6 +54,105 @@ async function waitForText(cdp,texts,timeoutMs=20000){
   await wait(250);
  }
  return {ok:false,body};
+}
+
+async function verifyFacultySchedule() {
+  const click = selector => {
+    const node = document.querySelector(selector);
+    if (!node || node.closest('.hidden,[hidden]')) throw Error('Unavailable control: ' + selector);
+    node.click();
+  };
+  const until = async (ready, message) => {
+    for (let attempt = 0; attempt < 80; attempt++) {
+      if (ready()) return;
+      await new Promise(resolve => setTimeout(resolve, 125));
+    }
+    throw Error(message);
+  };
+  const rowsIn = selector => [...document.querySelectorAll('#calendar-body ' + selector)];
+  const byId = new Map();
+  const own = new Set();
+  const week = { start: '2026-11-02', end: '2026-11-07' };
+  const showYear = year => click('#year-btn-row [data-year="' + year + '"]');
+  const yearOf = node => String(byId.get(node.dataset.sessionId)?.curriculumYear || '');
+  const verifyYears = async selector => {
+    for (const year of ['1', '2', '3']) {
+      showYear(year);
+      await until(() => rowsIn(selector).some(node => yearOf(node) === year), 'Year ' + year + ' has no teaching in ' + selector);
+      if (rowsIn(selector).some(node => yearOf(node) && yearOf(node) !== year)) throw Error('Curriculum year filter mixed years');
+    }
+    showYear('all');
+  };
+
+  try {
+    await until(() => document.querySelector('#cal-week-btn.active') && document.querySelector('#my-timetable-btn:not(.hidden)'),
+      'Faculty did not open on the shared Teaching Schedule');
+    if (document.querySelector('#paws-global-academic-year')?.value !== '2026-27' ||
+        document.body.classList.contains('paws-my-year-preview-required')) throw Error('Current academic year was not available');
+    const api = window.UCVM_PAWS_DATA;
+    const [schedule, personal] = await Promise.all([
+      api.listSessions({ ...week, teachingSchedule: true }),
+      api.listSessions()
+    ]);
+    for (const row of schedule) byId.set(row.id, row);
+    for (const row of personal) own.add(row.id);
+    if (schedule.length !== 74 || !own.size) throw Error('Shared or personal fixture unavailable');
+
+    if (document.querySelector('#schedule-filter-toggle[aria-expanded=false]')) click('#schedule-filter-toggle');
+    click('#semester-btn-row [data-semester=fall]');
+    click('#academic-week-navigator [data-week="11"]');
+    await verifyYears('[data-session-id]');
+    click('#cal-month-btn');
+    await verifyYears('.cal-event');
+
+    const lectures = rowsIn('.cal-event').filter(node => byId.get(node.dataset.sessionId)?.sessionType === 'LEC');
+    const otherLecture = lectures.find(node => !own.has(node.dataset.sessionId));
+    const ownLecture = lectures.find(node => own.has(node.dataset.sessionId));
+    if (!otherLecture || !ownLecture) throw Error('Own and other lecture fixtures were not rendered');
+    otherLecture.click();
+    await until(() => document.querySelector('#detail-close'), 'Read-only Session detail did not open');
+    if (document.querySelector('#detail-edit,#detail-assignments,#detail-swap')) throw Error('Other instructor’s Session exposed actions');
+    click('#detail-close');
+    ownLecture.click();
+    await until(() => document.querySelector('#detail-swap'), 'Own Session lost its SWAP action');
+    click('#detail-close');
+
+    click('#cal-list-btn');
+    const listRows = () => rowsIn('.schedule-list tbody tr[data-session-id]');
+    await until(() => listRows().some(node => !own.has(node.dataset.sessionId)), 'List view did not show the shared schedule');
+    click('#my-teaching-btn');
+    await until(() => listRows().length && listRows().every(node => own.has(node.dataset.sessionId)), 'My Teaching did not narrow List view');
+    if (document.querySelector('#my-timetable-btn')?.textContent !== 'Show All Timetable') throw Error('My Teaching return control missing');
+    click('#my-timetable-btn');
+    await until(() => listRows().some(node => !own.has(node.dataset.sessionId)), 'Could not return to shared schedule');
+    click('#my-timetable-btn');
+    click('#reset-filters');
+    await until(() => listRows().some(node => !own.has(node.dataset.sessionId)), 'Reset kept the personal scope');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
+async function facultyTransitionSmoke(cdp) {
+  await cdp.send('Runtime.evaluate', { expression: `setTimeout(() => {
+    const select = document.querySelector('#ucvm-pages-demo-toolbar select');
+    select.value = 'uid-fac-001';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }, 50)` });
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const status = await cdp.send('Runtime.evaluate', {
+      expression: "window.UCVM_TIMETABLE_TESTING_HOOKS?.currentUser?.()?.uid === 'uid-fac-001'",
+      returnByValue: true
+    }).catch(() => null);
+    if (status?.result?.value === true) {
+      const result = await cdp.send('Runtime.evaluate', { expression: '(' + verifyFacultySchedule.toString() + ')()', awaitPromise: true, returnByValue: true });
+      if (!result.result?.value?.ok) throw Error(result.result?.value?.error || result.exceptionDetails?.text || 'No browser result');
+      return;
+    }
+    await wait(125);
+  }
+  throw Error('Role Tester did not reload as Faculty');
 }
 
 async function verifyAdfadOfficeWorkflow(action){
@@ -164,8 +264,6 @@ async function main(){
    const label=`${check.page} as ${check.uid}`;
    const {ok,body}=await waitForText(cdp,['PAWS Frontend Demo',...check.text]);
    if(!ok)problems.push(`${label}: missing ${check.text.filter(text=>!body.includes(text)).join(', ')||'banner'}`);
-   if(errors.length)problems.push(`${label}: script error ${errors[0].split('\n')[0]}`);
-   if(apiCalls.length)problems.push(`${label}: request reached the real PAWS API ${apiCalls[0]}`);
    if(check.page==='index.html'&&check.uid==='uid-owner'&&ok){
      // Empty academic years are created deliberately; no automatic sample Sessions.
      const probe=await cdp.send('Runtime.evaluate',{expression:"(function verifyEmptyAcademicYear(){\n  try{\n    const launcher=document.getElementById('paws-multi-year-open');\n    if(!launcher)return{ok:false,error:'Academic Year launcher missing'};\n    launcher.click();\n    const dialog=document.getElementById('paws-multi-year-demo');\n    if(!dialog?.open)return{ok:false,error:'Academic Year dialog did not open'};\n    const model=window.PAWS_MULTI_YEAR_DEMO_MODEL;\n    const initial=JSON.parse(localStorage.getItem(model.STORAGE_KEY)||'null');\n    if(Object.keys(initial?.annual?.['2026-27']||{}).length)return{ok:false,error:'Initial Academic Year has example Sessions'};\n    if(initial?.annual?.['2027-28']&&Object.keys(initial.annual['2027-28']).length)return{ok:false,error:'2027-28 sample should not be preloaded'};\n    if(dialog.querySelector('[data-my-action=\"load-2027-28-sample\"]'))return{ok:false,error:'Sample loading shortcut should not be visible'};\n    const create=dialog.querySelector('[data-my-action=\"create-year\"]');\n    if(!create)return{ok:false,error:'Create Next Year unavailable'};\n    create.click();\n    const selected=dialog.querySelector('[data-my-year]');\n    const next=JSON.parse(localStorage.getItem(model.STORAGE_KEY)||'null');\n    if(selected?.value!=='2027-28'||next?.years?.['2027-28']?.status!=='planning')\n      return{ok:false,error:'2027-28 planning year was not created'};\n    if(Object.keys(next.annual['2027-28']||{}).length)return{ok:false,error:'New academic year contains sample Courses'};\n    if(!dialog.querySelector('[data-my-tab=\"review\"]'))return{ok:false,error:'Publish Review tab unavailable'};\n    dialog.querySelector('[data-my-tab=\"compare\"]').click();\n    if(!dialog.textContent.includes('Cross-year Teaching / DOE Comparison'))return{ok:false,error:'Year Comparison missing'};\n    const header=document.getElementById('paws-global-academic-year');\n    if(header?.value!=='2027-28')return{ok:false,error:'Global Academic Year not synchronized'};\n    const notice=document.getElementById('paws-year-preview-notice');\n    if(!notice||notice.hidden||!document.body.classList.contains('paws-my-year-preview-required'))\n      return{ok:false,error:'Future year did not mask original Calendar'};\n    return{ok:true};\n  }catch(error){return{ok:false,error:String(error?.message||error)}}\n})()",returnByValue:true});
@@ -315,10 +413,20 @@ async function main(){
        " }catch(error){return{ok:false,error:String(error?.message||error)}}\n"+
        "})()",awaitPromise:true,returnByValue:true});
      if(!probe.result?.value?.ok)problems.push(label+': default synthetic calendar unavailable: '+JSON.stringify(probe.result?.value||probe.exceptionDetails||'no result').slice(0,700));
-     else console.log('ok   Default PAWS Testing loads packed synthetic data, 74 Fall W11 sessions via API and visible November Month teaching blocks');
+     else {
+       console.log('ok   Default PAWS Testing loads packed synthetic data, 74 Fall W11 sessions via API and visible November Month teaching blocks');
+       try {
+         await facultyTransitionSmoke(cdp);
+         console.log('ok   Developer → Faculty: Years 1–3 in Week and Month, scoped SWAP, My Teaching and reset in List');
+       } catch (error) {
+         problems.push(label + ': Faculty role transition failed: ' + error.message);
+       }
+     }
      }
      await cdp.send('Runtime.evaluate',{expression:"window.UCVM_PAWS_DEMO_API?.reset?.()",returnByValue:true});
    }
+   if(errors.length)problems.push(`${label}: script error ${errors[0].split('\n')[0]}`);
+   if(apiCalls.length)problems.push(`${label}: request reached the real PAWS API ${apiCalls[0]}`);
    console.log(`${ok&&!errors.length&&!apiCalls.length?'ok  ':'FAIL'} ${label}`);
    cdp.close();await fetch(`http://127.0.0.1:${port}/json/close/${target.id}`).catch(()=>{});
   }

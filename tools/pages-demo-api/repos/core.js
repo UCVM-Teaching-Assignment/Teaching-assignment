@@ -21,7 +21,7 @@ function checkNeeded(session) {
   return end <= start;
 }
 
-function sessionView(store, session, { includeAssignmentTargets = false, includeUnresolvedAssignmentLabels = false } = {}) {
+function sessionView(store, session, { includeAssignmentTargets = false, includeUnresolvedAssignmentLabels = false, viewerFacultyId = null } = {}) {
   const names = session.assignments.map(row => facultyName(store, row.facultyId) || row.sourceFacultyName).filter(Boolean);
   const out = {
     id: session.id, academicYear: session.academicYear, curriculumYear: session.curriculumYear,
@@ -48,6 +48,7 @@ function sessionView(store, session, { includeAssignmentTargets = false, include
     out.assignmentsJson = '[]';
     out.unresolvedAssignmentCount = 0;
   }
+  if (viewerFacultyId) out.assignedToViewer = session.assignments.some(row => row.facultyId === viewerFacultyId);
   return out;
 }
 
@@ -100,12 +101,12 @@ function createSessionRepository(store) {
     });
   }
   const repo = {
-    async list({ start = null, end = null, facultyId = null, academicYear = null, includeAssignmentTargets = false, includeUnresolvedAssignmentLabels = false } = {}) {
+    async list({ start = null, end = null, facultyId = null, academicYear = null, includeAssignmentTargets = false, includeUnresolvedAssignmentLabels = false, viewerFacultyId = null } = {}) {
       return t().sessions
         .filter(row => academicYear === null || row.academicYear === academicYear)
         .filter(row => !(start && end) || (row.date >= start && row.date < end))
         .filter(row => !facultyId || row.assignments.some(a => a.facultyId === facultyId))
-        .map(row => sessionView(store, row, { includeAssignmentTargets, includeUnresolvedAssignmentLabels }));
+        .map(row => sessionView(store, row, { includeAssignmentTargets, includeUnresolvedAssignmentLabels, viewerFacultyId }));
     },
     async updateExisting({ sessionId, patch, actorFirebaseUid, actorName = null } = {}) {
       const session = find(sessionId);

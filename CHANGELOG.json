@@ -9,7 +9,8 @@
         "Open a planning year and review Working, Confirmed and Published course versions in the existing Academic Year Workspace.",
         "Preview and recover a scoped Teaching Calendar import, review historical instructor suggestions, and track progress by dataset, course or faculty.",
         "Record an office confirmation and generate complete or change-only CSV and Excel schedule exports with separate delivery status.",
-        "View independent Calendar layers using synthetic activity and AFC dates in the Frontend Demo."
+        "View independent Calendar layers using synthetic activity and AFC dates in the Frontend Demo.",
+        "Switch to Faculty in the Frontend Demo to see the Year 1–3 Teaching Schedule, with My Teaching kept personal."
       ]
     },
     {
