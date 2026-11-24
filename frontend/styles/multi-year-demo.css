@@ -1,14 +1,14 @@
 /* PAWS Testing-only multi-year workspace. Not loaded in Beta or Firebase Lab. */
 .paws-my-launch{flex:none;display:inline-flex;align-items:center;border:1px solid #b45309;border-radius:7px;background:#fff8e6;color:#7c2d12;padding:7px 12px;font:600 12px/1.3 Arial,sans-serif;cursor:pointer;white-space:nowrap}
 .paws-my-launch:hover{background:#fef0cb}
-.paws-my-dialog{border:0;border-radius:14px;padding:0;width:min(1200px,94vw);max-height:91vh;background:#fff;color:#172033;box-shadow:0 24px 90px #0005;font:14px/1.45 Arial,sans-serif}
+.paws-my-dialog{position:fixed;inset:0;margin:auto;border:0;border-radius:14px;padding:0;width:min(1200px,94vw);max-height:91vh;background:#fff;color:#172033;box-shadow:0 24px 90px #0005;font:14px/1.45 Arial,sans-serif}
 .paws-my-dialog::backdrop{background:rgba(11,24,42,.68)}
 .paws-my-shell{max-height:90vh;display:flex;flex-direction:column}
 .paws-my-head{display:flex;justify-content:space-between;align-items:center;gap:18px;background:#17345f;color:#fff;padding:18px 24px}
 .paws-my-head small{text-transform:uppercase;letter-spacing:.08em;color:#f7d279;font-size:11px}
 .paws-my-head h2{font-size:22px;margin:4px 0}
 .paws-my-head p{font-size:12px;margin:0;color:#dbe6ff}
-.paws-my-head button{background:transparent;color:#fff;border:1px solid #adbed5}
+.paws-my-head button{background:transparent;color:#fff;border:1px solid #adbed5;white-space:nowrap}
 .paws-my-dialog button{font:inherit;border-radius:7px;padding:7px 11px;cursor:pointer;border:1px solid #b7c5d8;background:#f7fafc;color:#14233c}
 .paws-my-dialog button:hover{background:#eaf0f8}
 .paws-my-dialog button:focus-visible,.paws-my-dialog select:focus-visible,.paws-my-dialog input:focus-visible{outline:2px solid #a82b2f;outline-offset:2px}
@@ -63,6 +63,13 @@
 .paws-my-calendar-layers label{display:inline-flex;align-items:center;gap:5px}
 .paws-my-panel summary{cursor:pointer}
 @media(max-width:650px){.paws-my-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.paws-my-rollover-sources{grid-template-columns:1fr}.paws-my-global-controls{width:100%;justify-content:flex-start}.paws-my-global-phase{max-width:none}}
+@media(max-width:800px){
+  .paws-my-dialog .paws-my-toolbar{gap:6px;padding:8px 10px}
+  .paws-my-toolbar label,.paws-my-toolbar button,.paws-my-toolbar select{font-size:12px}
+  .paws-my-dialog .paws-my-tabs{overflow-x:auto;flex-wrap:nowrap;flex-shrink:0}
+  .paws-my-tabs button{flex:none;white-space:nowrap;font-size:12px}
+  .paws-my-panel{padding:10px}
+}
 /* Never mislabel the original 2026-27 timetable as a selected future/archived year. */
 body.paws-my-year-preview-required #cal-card,
 body.paws-my-year-preview-required #compact-export-bar,

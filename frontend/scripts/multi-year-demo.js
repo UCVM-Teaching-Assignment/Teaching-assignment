@@ -205,14 +205,14 @@
         count(row.needsReview),count(row.awaitingInformation),count(row.awaitingConfirmation),E(row.status),E(row.nextAction)]));
     if(officeView==='courses')body+=table(['Course','Sessions','Outstanding','Status','Responsible Person','Last Confirmed','Versions'],info.courses.map(row=>[
       '<button type="button" data-my-open-course="'+E(row.code)+'">'+E(row.code)+'</button> '+E(row.title),count(row.sessions),count(row.outstanding),
-      E(row.status),E(row.responsiblePerson?displayName(row.responsiblePerson):'Unassigned'),E(row.lastUpdated||'—'),
+      E(row.status),E(row.responsiblePerson?displayName(row.responsiblePerson):'Unassigned'),E(row.confirmedOn||row.lastUpdated?.slice(0,10)||'—'),
       E('Working '+row.revision+(row.confirmedVersion?' · Confirmed '+row.confirmedVersion:'')+(row.publishedVersion?' · Published '+row.publishedVersion:''))]
     ));
     if(officeView==='faculty')body+=table(['Faculty','Working Sessions','Confirmed Sessions','Annual Roles'],info.faculty.map(row=>[
       E(displayName(row.name)),count(row.sessions),count(row.confirmed),count(row.roles)
     ]));
     const current=info.courses.find(row=>row.code===selectedCode)||info.courses[0];
-    if(writable&&current){
+    if(writable&&current&&current.confirmedRevision!==current.revision){
       const courseChoices=info.courses.map(row=>'<option value="'+E(row.code)+'" '+(row.code===current.code?'selected':'')+'>'+E(row.code+' · '+row.title)+'</option>').join('');
       body+=wrap('Record External Confirmation',
         '<form data-my-form="confirm-office" data-revision="'+E(current.revision)+'" class="paws-my-form">'+
@@ -223,6 +223,9 @@
         input('Responsible person','responsiblePerson','text','maxlength="150" placeholder="Last name, First name"')+
         input('Reference or notes','reference','text','maxlength="500"')+
         '<button type="submit">Confirm Working Revision '+E(current.revision)+'</button></form>');
+    }
+    if(current?.confirmedRevision===current?.revision&&current?.confirmedVersion){
+      body+='<p class="paws-my-pass">'+E(current.code)+' · Confirmed v'+E(current.confirmedVersion)+' · '+E(current.confirmedOn)+'</p>';
     }
     if(writable&&info.courses.length){
       const draft=teachingImport?.preview;
@@ -401,6 +404,8 @@
     const selectEl=dialog.querySelector('[data-my-year]');if(selectEl)selectEl.value=selectedYear;
     const monthEl=dialog.querySelector('[data-my-calendar-month]');if(monthEl)monthEl.value=calendarMonth;
     const compareEl=dialog.querySelector('[data-my-compare-year]');if(compareEl)compareEl.value=comparisonYear;
+    const tabStrip=dialog.querySelector('.paws-my-tabs'),selectedTab=tabStrip.querySelector('.active');
+    if(selectedTab&&tabStrip.scrollWidth>tabStrip.clientWidth)tabStrip.scrollLeft=selectedTab.offsetLeft-tabStrip.offsetLeft;
     syncHeader();
   }
   function submitAction(form){const a=actual(),m=load(),values=Object.fromEntries(new FormData(form).entries()),kind=form.dataset.myForm;
@@ -422,7 +427,7 @@
     }
     if(kind==='office-export'){
       const result=m.generateOfficeExport(a,selectedYear,{...values,changesOnly:values.changesOnly==='on'});
-      message='Generated '+result.rowCount+' rows for '+selectedYear+'. Download the file from Export and Delivery History.';
+      message='Generated '+result.rowCount+' '+(result.rowCount===1?'row':'rows')+' for '+selectedYear+'. Download from Export and Delivery History.';
     }
     if(kind==='override')m.setOverride(a,selectedYear,values.facultyId,values.value);
     if(kind==='add-afc')m.addAfc(a,{afcRecordId:'demo-afc-'+Date.now(),facultyId:values.facultyId,startDate:values.startDate,endDate:values.endDate,active:true});

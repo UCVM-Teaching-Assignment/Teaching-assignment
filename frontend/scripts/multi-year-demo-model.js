@@ -97,7 +97,8 @@
         }
       }
     }
-    let lastSaved=storage?.getItem(STORAGE_KEY);
+    let lastSaved;
+    try{lastSaved=storage?.getItem(STORAGE_KEY);}catch(_){/* Storage errors are reported when saving. */}
     const persist=()=>{
       if(!storage)return;
       const serialized=JSON.stringify(state);
@@ -624,6 +625,7 @@
           if(confirmed)person.confirmed++;
         }
         return {code:row.code,title:row.title,revision:row.revision,confirmedVersion:receipt?.version||null,
+          confirmedRevision:receipt?.revision||null,confirmedOn:receipt?.confirmedOn||null,
           publishedVersion:currentRelease(row)?.version||null,responsiblePerson:receipt?.responsiblePerson||null,
           lastUpdated:receipt?.at||currentRelease(row)?.at||null,sessions:items.length,
           outstanding:items.filter(item=>!item.confirmed).length,
