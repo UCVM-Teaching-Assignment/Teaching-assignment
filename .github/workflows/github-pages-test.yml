@@ -6,6 +6,7 @@ on:
     branches: [main]
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -22,6 +23,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      PAGES_ARTIFACT_NAME: github-pages-${{ github.run_attempt }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -94,11 +97,37 @@ jobs:
         uses: actions/configure-pages@v6
 
       - name: Upload GitHub Pages artifact
+        id: pages-artifact
         uses: actions/upload-pages-artifact@v5
         with:
+          name: ${{ env.PAGES_ARTIFACT_NAME }}
           path: .deploy-static
           include-hidden-files: true
+
+      - name: Wait for the uploaded Pages artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAGES_ARTIFACT_ID: ${{ steps.pages-artifact.outputs.artifact_id }}
+        run: |
+          if [[ ! "$PAGES_ARTIFACT_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Pages upload did not return an artifact ID."
+            exit 1
+          fi
+          for attempt in {1..10}; do
+            sleep 5
+            visible=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=$PAGES_ARTIFACT_NAME" \
+              --jq ".artifacts | any(.id == $PAGES_ARTIFACT_ID and .expired == false)") || continue
+            if [[ "$visible" == true ]]; then
+              echo "Pages artifact $PAGES_ARTIFACT_ID is available."
+              exit 0
+            fi
+          done
+          echo "::error::The uploaded Pages artifact is still missing from this run's artifact list."
+          exit 1
 
       - name: Deploy GitHub Pages test site
         id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ env.PAGES_ARTIFACT_NAME }}

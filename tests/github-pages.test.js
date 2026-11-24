@@ -62,6 +62,19 @@ test('Pages workflow deploys only verified same-repository PRs to one fixed envi
   assert.match(workflow,/url:\s*\$\{\{ steps\.deployment\.outputs\.page_url \}\}/);
 });
 
+test('Pages deploy waits for the uploaded artifact from the current attempt',()=>{
+  const workflow=read('.github/workflows/github-pages-test.yml');
+  const upload=workflow.indexOf('Upload GitHub Pages artifact');
+  const wait=workflow.indexOf('Wait for the uploaded Pages artifact');
+  const deploy=workflow.indexOf('Deploy GitHub Pages test site');
+  assert.ok(upload>=0&&upload<wait&&wait<deploy);
+  assert.match(workflow,/actions:\s*read/);
+  assert.match(workflow,/PAGES_ARTIFACT_NAME: github-pages-\$\{\{ github\.run_attempt \}\}/);
+  assert.match(workflow.slice(upload,wait),/name: \$\{\{ env\.PAGES_ARTIFACT_NAME \}\}/);
+  assert.match(workflow.slice(wait,deploy),/steps\.pages-artifact\.outputs\.artifact_id/);
+  assert.match(workflow.slice(deploy),/artifact_name: \$\{\{ env\.PAGES_ARTIFACT_NAME \}\}/);
+});
+
 test('Pages workflow leaves the independent Test workflow in place',()=>{
   const workflow=read('.github/workflows/test.yml');
   assert.match(workflow,/name:\s*Test/);
