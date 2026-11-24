@@ -20,12 +20,12 @@
 | MYD-01 | Owner, open 2026-27 Teaching | Existing synthetic assignments visible from initial Published snapshot | | Not run |
 | MYD-02 | Owner, open 2026-27 DOE | Existing visible DOE and override values preserved | | Not run |
 | MYD-03 | Owner, click Create Next Year | 2027-28 Planning; Course and Session lists empty; rules Draft | | Not run |
-| MYD-04 | Owner, Roles for 2027-28 | Eligible full-May-Apr roles Confirmed; partial/exception roles Draft with reasons | | Not run |
+| MYD-04 | Owner, Roles for 2027-28 | All renewals are Draft proposals with eligibility and source-year evidence | | Not run |
 | MYD-05 | ADFAD, confirm one Draft role | Annual 2027-28 role becomes Confirmed; 2026-27 unchanged | | Not run |
 | MYD-06 | Owner/ADFAD, add VTMD 306 from Catalog | New annual Course snapshot created with no sessions/assignments | | Not run |
 | MYD-07 | ADFAD, change VTMD 306 Catalog title | Existing annual Course retains original title; Catalog uses new title | | Not run |
 | MYD-08 | ADFAD, add 2027-28 session | Working contains session; Faculty sees no unpublished Teaching | | Not run |
-| MYD-09 | ADFAD, Finalize Working; HICC course lead, Publish | VTMD 306 gets Published v1; other Courses remain Draft | | Not run |
+| MYD-09 | ADFAD, confirm the teaching lead’s renewal and finalize Working. HICC course lead, Publish | VTMD 306 gets Published v1 and other Courses remain Draft | | Not run |
 | MYD-10 | Course lead outside VTMD 306 scope, attempt Publish VTMD 304 | Denied in simulated domain model | | Not run |
 | MYD-11 | ADFAD, edit Published session instructor | Working changes, Published Faculty Teaching stays v1 until Publish Changes | | Not run |
 | MYD-12 | ADFAD, Finalize; Course lead, Publish Changes | New immutable Course release and published instructor becomes visible | | Not run |
@@ -78,3 +78,15 @@
 ## Handoff rule
 
 After Owner manually accepts the Testing UI, plan a separate Beta review of actual table schema, authorization, DOE rules, data migration and integration. Do not merge sample identities or change live data as part of this acceptance.
+
+## ADFAD Office workflow
+
+| ID | Manual scenario | Expected behavior | Result |
+| --- | --- | --- | --- |
+| MYD-38 | Owner or ADFA General, open 2027-28 | Office opens Working for 2027-28. Faculty still defaults to the current teaching year | Not run |
+| MYD-39 | ADFAD, enter an external confirmation reference for one complete Working Course | An immutable internal confirmation records the office actor, date, method and responsible person. Faculty visibility still depends on publication | Not run |
+| MYD-40 | ADFAD, preview a complete Teaching Calendar file for one Course, apply and recover | Exact year and Course are visible, pending removals require confirmation, and recovery affects only the latest unconfirmed Working import | Not run |
+| MYD-41 | ADFAD, inspect two topics in the same Course and accept a precise eligible match | The previous confirmed source and matching fields are shown. Only the matching new Working Session receives the instructor | Not run |
+| MYD-42 | ADFAD, turn off CCC and Rotation layers, then review historical availability | The display changes and the underlying conflict check still uses the source time evidence | Not run |
+| MYD-43 | ADFAD, generate and download confirmed CSV/Excel, then record delivery | The same complete version is exported; download and delivery are separately recorded | Not run |
+| MYD-44 | Developer, attempt business confirmation or archive | Staff view is available and business confirmation and Owner archive controls are denied | Not run |

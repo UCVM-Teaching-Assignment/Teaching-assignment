@@ -16,6 +16,10 @@ const shimPlugin = {
   setup(build) {
     build.onResolve({ filter: /.*/ }, args => {
       if (ALIASES[args.path]) return { path: path.join(SHIMS, ALIASES[args.path]) };
+      if (args.path === 'exceljs' && /[\\/]reports[\\/]report-export\.js$/.test(args.importer)) {
+        // The approved report serializer also serves the synthetic Office workbook.
+        return { path: require.resolve('exceljs/dist/exceljs.min.js', { paths: [path.join(ROOT, 'server')] }) };
+      }
       if (UNAVAILABLE.test(args.path)) return { path: path.join(SHIMS, 'unavailable.js') };
       return undefined;
     });

@@ -1,27 +1,47 @@
 (function(root,factory){
   'use strict';
-  const api=factory();
+  const names=root?.PAWS_FACULTY_NAME||(typeof module==='object'&&module.exports?require('./faculty-name'):null);
+  const api=factory(names);
   if(typeof module==='object'&&module.exports)module.exports=api;
   if(root)root.PAWS_MULTI_YEAR_DEMO_MODEL=api;
-})(typeof window==='undefined'?null:window,function(){
+})(typeof window==='undefined'?null:window,function(names){
   'use strict';
   const STORAGE_KEY='paws-multi-year-demo-v1';
   const clone=x=>JSON.parse(JSON.stringify(x));
   const invalid=message=>{throw new Error(message)};
   const normalized=v=>String(v||'').trim();
+  const nameFor=value=>names?.format(value)||value?.displayName||value?.name||(typeof value==='string'?normalized(value):'');
   const codeFor=v=>normalized(v).toUpperCase();
   const startOf=year=>year.slice(0,4)+'-05-01';
   const nextOf=year=>String(Number(year.slice(0,4))+1)+'-05-01';
   const endOf=year=>String(Number(year.slice(0,4))+1)+'-04-30';
   const validateYear=year=>{const m=/^(\d{4})-(\d{2})$/.exec(year||'');if(!m||Number(m[2])!==(Number(m[1])+1)%100)invalid('Invalid academic year');return year};
   const nextYear=year=>{const n=Number(year.slice(0,4))+1;return n+'-'+String((n+1)%100).padStart(2,'0')};
-  const currentYear=date=>{const d=date instanceof Date?date:new Date(date),n=d.getUTCFullYear()-(d.getUTCMonth()<4?1:0);return n+'-'+String((n+1)%100).padStart(2,'0')};
+  const calgaryDate=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Edmonton',year:'numeric',month:'2-digit',day:'2-digit'});
+  const currentYear=date=>{
+    const parts=Object.fromEntries(calgaryDate.formatToParts(new Date(date)).map(part=>[part.type,part.value]));
+    const year=Number(parts.year)-(Number(parts.month)<5?1:0);
+    return year+'-'+String((year+1)%100).padStart(2,'0');
+  };
+  const validDate=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&
+    Number.isFinite(Date.parse(value+'T00:00:00Z'))&&new Date(value+'T00:00:00Z').toISOString().slice(0,10)===value;
+  const previousYear=year=>{
+    const start=Number(year.slice(0,4));
+    return String(start-1)+'-'+String(start%100).padStart(2,'0');
+  };
   const isFaculty=a=>['faculty','hicc','visc'].includes(normalized(a&&a.role).toLowerCase());
   const canPlan=a=>['owner','developer','adfa_general','adfa_regular','administrator','admin','adc','lab','hicc','visc'].includes(normalized(a&&a.role).toLowerCase());
   const canAdfa=a=>['owner','developer','adfa_general','adfa_regular','administrator','admin'].includes(normalized(a&&a.role).toLowerCase());
-  const owner=a=>['owner','developer'].includes(normalized(a&&a.role).toLowerCase());
+  const actorRole=a=>normalized(a?.role).toLowerCase();
+  const owner=a=>actorRole(a)==='owner';
+  const canManageYears=a=>['owner','adfa_general'].includes(actorRole(a));
+  const canConfirm=a=>canAdfa(a)&&actorRole(a)!=='developer';
+  const inCourseScope=(scope,code)=>{
+    const value=codeFor(scope);
+    return value===code||(value.startsWith(code)&&/^[\s:·,(/-]/.test(value.slice(code.length)));
+  };
   function bootstrap(source){
-    const faculty=clone(source.faculty||[]).map(f=>({id:f.facultyId,name:f.displayName||f.preferredLastName||f.facultyId,active:f.active!==false,activationDate:typeof f.activationDate==='string'?f.activationDate:null,appointmentValid:f.appointmentValid!==false,contractDoe:knownNumber(f.contractTeachingDoe)}));
+    const faculty=clone(source.faculty||[]).map(f=>({id:f.facultyId,name:nameFor(f)||'Name unavailable',active:f.active!==false,activationDate:typeof f.activationDate==='string'?f.activationDate:null,appointmentValid:f.appointmentValid!==false,contractDoe:knownNumber(f.contractTeachingDoe)}));
     const users=clone(source.users||[]).map(u=>({uid:u.firebaseUid,role:u.baseRole,facultyId:u.facultyId||null,name:u.displayName||u.firebaseUid}));
     const catalog=clone(source.courses||[]).map(c=>({code:codeFor(c.courseCode),title:c.courseName||c.courseCode,curriculumYear:c.curriculumYear||null}));
     const grouping={};
@@ -29,7 +49,7 @@
       if(raw.academicYear!=='2026-27')continue;
       const code=codeFor(raw.courseCode);
       if(!grouping[code])grouping[code]=[];
-      grouping[code].push({id:raw.id,courseCode:code,date:raw.date,topic:raw.topic||'',sessionType:raw.sessionType||'',startTime:raw.startTime||'',endTime:raw.endTime||'',room:raw.room||'',assignments:clone(raw.assignments||[]).map(a=>({facultyId:a.facultyId,teachingRole:a.teachingRole||'',doeCredit:knownNumber(a.doeCredit)}))});
+      grouping[code].push({id:raw.id,courseCode:code,date:raw.date,topic:raw.topic||'',sessionType:raw.sessionType||'',startTime:raw.startTime||'',endTime:raw.endTime||'',room:raw.room||'',...(raw.groupKey||raw.group?{group:raw.groupKey||raw.group}:{}),assignments:clone(raw.assignments||[]).map(a=>({facultyId:a.facultyId,teachingRole:a.teachingRole||'',doeCredit:knownNumber(a.doeCredit)}))});
     }
     const annual={'2026-27':{}};
     for(const [code,sessions] of Object.entries(grouping)){
@@ -52,7 +72,7 @@
     }
     return {version:1,faculty,users,catalog,afc:clone(source.afcRecords||[]),years:{'2026-27':{status:'active',revision:1}},annual,roles,doe:{'2026-27':{policy:{status:'approved',copiedFrom:null},released:true,records:doeRecords,overrides:{}}},archives:[],audit:clone(source.history||[]).map(h=>({event:h.changeType||h.eventType||'legacy_change',actor:h.actorFirebaseUid||h.actorName||'',year:h.academicYear||'2026-27',at:h.changedAtUtc||h.occurredAtUtc||'',legacy:true,detail:{original:h}})),preferences:{},serial:0};
   }
-  function createEngine({source={},storage=null,now=()=>new Date(),sampleYear2027=false}={}){
+  function createEngine({source={},readSource=null,storage=null,now=()=>new Date(),sampleYear2027=false}={}){
     let state;
     try{const saved=storage&&storage.getItem(STORAGE_KEY);if(saved){const decoded=JSON.parse(saved);if(decoded&&decoded.version===1&&decoded.years&&decoded.annual&&decoded.catalog)state=decoded}}catch(_){/* invalid local demo data; recreate safely */}
     if(!state)state=bootstrap(source);
@@ -77,57 +97,125 @@
         }
       }
     }
-    const persist=()=>{if(storage)storage.setItem(STORAGE_KEY,JSON.stringify(state))};
+    let lastSaved=storage?.getItem(STORAGE_KEY);
+    const persist=()=>{
+      if(!storage)return;
+      const serialized=JSON.stringify(state);
+      storage.setItem(STORAGE_KEY,serialized);
+      lastSaved=serialized;
+    };
     const stamp=()=>now().toISOString();
     const getState=()=>clone(state);
     const logged=(event,actor,year,detail={})=>{state.audit.push({event,actor:actor.uid||'',year,at:stamp(),detail:clone(detail)});persist()};
+    function commit(event,a,year,detail,apply){
+      if(storage&&storage.getItem(STORAGE_KEY)!==lastSaved)invalid('This academic workspace changed in another tab. Reload before continuing.');
+      const before=clone(state);
+      try{
+        const result=apply();
+        logged(event,a,year,detail);
+        return clone(result);
+      }catch(error){
+        state=before;
+        throw error;
+      }
+    }
     const who=a=>{if(!a||!normalized(a.uid)||!normalized(a.role))invalid('Signed-in demo actor required');if(!canPlan(a)&&!isFaculty(a))invalid('Unsupported role permission');return a};
     const inspect=year=>{validateYear(year);const y=state.years[year];if(!y)invalid('Academic year not found');return y};
     const editable=year=>{const y=inspect(year);if(y.status==='archived')invalid('Archived academic year is read-only');return y};
     const staff=a=>{who(a);if(!canPlan(a))invalid('Planning permission required')};
     const adfa=a=>{who(a);if(!canAdfa(a))invalid('ADFAD approval required')};
+    const business=a=>{who(a);if(!canConfirm(a))invalid('ADFAD approval required for business operations')};
     const ownerOnly=a=>{who(a);if(!owner(a))invalid('Owner only')};
+    const yearManager=a=>{who(a);if(!canManageYears(a))invalid('Academic year management permission required')};
     const annual=(year,code)=>{inspect(year);const row=state.annual[year]&&state.annual[year][codeFor(code)];if(!row)invalid('Annual Course not found');return row};
     const faculty=fid=>state.faculty.find(f=>f.id===fid);
     const effectiveOn=(f,date)=>Boolean(f?.active&&f?.appointmentValid&&(!f.activationDate||(date&&date>=f.activationDate)));
+    function sharedAfc(){
+      const rows=readSource?.()?.afcRecords;
+      if(!Array.isArray(rows))return state.afc;
+      const local=new Set(state.audit.filter(item=>item.event==='afc_added').map(item=>item.detail.afcRecordId));
+      const imported=new Map(rows.map(item=>[item.afcRecordId,item]));
+      for(const item of state.afc)if(local.has(item.afcRecordId))imported.set(item.afcRecordId,item);
+      return [...imported.values()];
+    }
+    const afcBlocks=item=>item.active!==false&&item.availability!=='available';
     const currentRelease=row=>row.published[row.published.length-1]||null;
     const publicationRows=year=>Object.values(state.annual[year]||{}).flatMap(c=>{const release=currentRelease(c);return release?release.sessions.map(s=>({...clone(s),courseCode:c.code,courseName:c.title})):[]});
-    function computeCredits(year){
-      const values={};for(const f of state.faculty)values[f.id]=0;
-      for(const s of publicationRows(year))for(const a of s.assignments||[])if(a.facultyId)values[a.facultyId]=(values[a.facultyId]||0)+(Number(a.doeCredit)||0);
+    function sumCredits(sessions){
+      const values=new Map();
+      for(const session of sessions){
+        const assignments=new Map();
+        for(const item of session.assignments||[]){
+          if(!item.facultyId)continue;
+          const credit=knownNumber(item.doeCredit);
+          const prior=assignments.get(item.facultyId);
+          assignments.set(item.facultyId,assignments.has(item.facultyId)&&prior!==credit?null:credit);
+        }
+        for(const [id,credit] of assignments){
+          const previous=values.has(id)?values.get(id):0;
+          values.set(id,previous===null||credit===null?null:previous+credit);
+        }
+      }
       return values;
     }
+    const creditFor=(values,id)=>values.has(id)?values.get(id):0;
+    const roundCredit=value=>value===null?null:Math.round(value*100)/100;
     function refreshPublishedDoe(year,afterChange){
       const d=state.doe[year];if(!d.released||d.policy.status!=='approved')return;
-      const values=computeCredits(year),records={};
+      const values=sumCredits(publicationRows(year)),records={};
       for(const f of state.faculty){
         const prior=d.records[f.id]||{};
         const override=d.overrides[f.id]!==undefined?Number(d.overrides[f.id]):prior.override??null;
-        const base=Math.round((values[f.id]||0)*100)/100;
-        records[f.id]={facultyId:f.id,base,override,effective:override===null?base:override,needsReview:Boolean(prior.needsReview||(afterChange&&override!==null&&prior.base!==base))};
+        const base=roundCredit(creditFor(values,f.id));
+        records[f.id]={facultyId:f.id,base,override,effective:override===null?base:override,
+          needsReview:Boolean(base===null||prior.needsReview||(afterChange&&override!==null&&prior.base!==base))};
       }
       d.records=records;
     }
     function authorizeCourseEditor(a,row){staff(a);if(canAdfa(a))return;
       const identity=state.users.find(u=>u.uid===a.uid);
       const fid=a.facultyId||identity&&identity.facultyId;
-      const source=(state.roles[row.year]||[]).filter(r=>r.status==='confirmed'&&r.facultyId===fid&&r.scope.toUpperCase().startsWith(row.course.code));
+      const source=(state.roles[row.year]||[]).filter(r=>r.status==='confirmed'&&r.facultyId===fid&&inCourseScope(r.scope,row.course.code));
       if(!row.course.publishers.includes(a.uid)&&!source.length)invalid('Course scope permission required');
     }
-    function canPublish(a,year,row){if(canAdfa(a))return true;
+    function canPublish(a,year,row){if(canConfirm(a))return true;
       const uid=normalized(a&&a.uid),fid=a&&a.facultyId||state.users.find(u=>u.uid===uid)?.facultyId;
       if(row.publishers.includes(uid))return true;
-      return (state.roles[year]||[]).some(r=>r.status==='confirmed'&&r.facultyId===fid&&['HICC','Course Coordinator'].includes(r.roleType)&&r.scope.toUpperCase().startsWith(row.code));
+      return (state.roles[year]||[]).some(r=>r.status==='confirmed'&&r.facultyId===fid&&['HICC','Course Coordinator'].includes(r.roleType)&&inCourseScope(r.scope,row.code));
     }
-    function createYear(a,year){ownerOnly(a);validateYear(year);if(state.years[year])invalid('Academic year already exists');
-      const previous=String(Number(year.slice(0,4))-1)+'-'+String(Number(year.slice(0,4))%100).padStart(2,'0');if(!state.years[previous])invalid('Prior academic year required');
-      state.years[year]={status:'planning',revision:1};state.annual[year]={};state.doe[year]={policy:{status:'draft',copiedFrom:previous},released:false,records:{},overrides:{}};
-      state.roles[year]=(state.roles[previous]||[]).map((r,index)=>{
+    const canEditCourse=(a,year,row)=>canAdfa(a)||canPublish(a,year,row);
+    function setPlanningDefault(year){
+      state.planningDefault={year,revision:(state.planningDefault?.revision||0)+1};
+    }
+    function setDefaultPlanningYear(a,year){
+      yearManager(a);
+      editable(year);
+      return commit('default_planning_year_set',a,year,{previous:state.planningDefault?.year||null},()=>{
+        setPlanningDefault(year);
+        return state.planningDefault;
+      });
+    }
+    function createYear(a,year){
+      yearManager(a);
+      validateYear(year);
+      if(state.years[year])invalid('Academic year already exists');
+      const previous=previousYear(year);
+      if(!state.years[previous])invalid('Prior academic year required');
+      const roles=(state.roles[previous]||[]).map((r,index)=>{
         const person=faculty(r.facultyId),eligible=effectiveOn(person,startOf(year));
         const full=r.start<=startOf(previous)&&r.end>=endOf(previous);
-        return {...clone(r),id:'renew-'+year+'-'+index,sourceId:r.id,start:startOf(year),end:endOf(year),status:full&&eligible?'confirmed':'draft',rolloverReason:!full?'partial year':!person?.active?'inactive Faculty':!person?.appointmentValid?'invalid Appointment':person?.activationDate&&person.activationDate>startOf(year)?'future Faculty activation':'eligible full year'};
+        const reason=full&&eligible?'eligible full year':!full?'partial year':!person?.active?'inactive Faculty':
+          !person?.appointmentValid?'invalid Appointment':'future Faculty activation';
+        return {...clone(r),id:'renew-'+year+'-'+index,sourceId:r.id,start:startOf(year),end:endOf(year),status:'draft',rolloverReason:reason};
       });
-      logged('year_created',a,year,{previous,roles:state.roles[year].length});return getState().years[year];
+      return commit('year_created',a,year,{previous,roles:roles.length},()=>{
+        state.years[year]={status:'planning',revision:1,referenceYear:previous};
+        state.annual[year]={};
+        state.doe[year]={policy:{status:'draft',copiedFrom:previous},released:false,records:{},overrides:{}};
+        state.roles[year]=roles;
+        setPlanningDefault(year);
+        return state.years[year];
+      });
     }
     // Synthetic 2027-28 showcase. It is isolated from Beta and only runs in
     // the browser-local Testing Demo (or from an explicit Owner action).
@@ -182,28 +270,34 @@
       logged('synthetic_2027_28_sample_loaded',a,year,{courses:3,workingSessions:9,publishedSessions:5});
       return {year,courses:3,workingSessions:9,publishedSessions:5};
     }
-    function addCourse(a,year,code){staff(a);editable(year);const key=codeFor(code),item=state.catalog.find(c=>c.code===key);if(!item)invalid('Course not found in shared Catalog');
+    function addCourse(a,year,code){adfa(a);editable(year);const key=codeFor(code),item=state.catalog.find(c=>c.code===key);if(!item)invalid('Course not found in shared Catalog');
       if(state.annual[year][key])invalid('Annual Course already exists');
       state.annual[year][key]={code:key,title:item.title,working:[],revision:1,finalizedRevision:0,published:[],publishers:[]};
       logged('annual_course_created',a,year,{code:key});return clone(state.annual[year][key]);
     }
     function updateCatalog(a,code,title){adfa(a);const key=codeFor(code),item=state.catalog.find(c=>c.code===key);if(!item)invalid('Catalog Course not found');if(!normalized(title))invalid('Course title required');item.title=normalized(title);logged('catalog_updated',a,'global',{code:key,title:item.title});return clone(item)}
-    function addSession(a,year,code,input){staff(a);editable(year);const row=annual(year,code);if(!canPublish(a,year,row))invalid('Course scope permission required');
-      const date=normalized(input&&input.date);if(date<startOf(year)||date>=nextOf(year))invalid('Session date outside academic year');
-      const id=normalized(input.id)||'demo-session-'+(++state.serial);if(row.working.some(s=>s.id===id))invalid('Session already exists');
+    function addSession(a,year,code,input){staff(a);editable(year);const row=annual(year,code);if(!canEditCourse(a,year,row))invalid('Course scope permission required');
+      const date=normalized(input&&input.date);if(!validDate(date)||date<startOf(year)||date>=nextOf(year))invalid('Session date outside academic year');
+      const id=normalized(input.id)||'demo-session-'+(state.serial+1);
+      if(Object.values(state.annual[year]).some(course=>course.working.some(s=>s.id===id)))invalid('Session already exists');
       const assignments=clone(input.assignments||[]).map(x=>({facultyId:x.facultyId||null,teachingRole:x.teachingRole||'',doeCredit:knownNumber(x.doeCredit)}));
+      const assigned=assignments.map(item=>item.facultyId).filter(Boolean);
+      if(new Set(assigned).size!==assigned.length)invalid('Duplicate Faculty assignment in one Session');
       for(const x of assignments){
         if(x.facultyId&&!faculty(x.facultyId))invalid('Unknown Faculty');
         if(x.facultyId&&(!faculty(x.facultyId).active||!faculty(x.facultyId).appointmentValid))invalid('Inactive or ineligible Faculty cannot be assigned');
         if(x.facultyId&&faculty(x.facultyId)?.activationDate&&date<faculty(x.facultyId).activationDate)invalid('Faculty cannot be assigned before activation date');
       }
-      row.working.push({id,courseCode:row.code,date,topic:normalized(input.topic),sessionType:normalized(input.sessionType),startTime:normalized(input.startTime),endTime:normalized(input.endTime),room:normalized(input.room),assignments});
+      if(!normalized(input.id))state.serial++;
+      row.working.push({id,courseCode:row.code,date,topic:normalized(input.topic),sessionType:normalized(input.sessionType),startTime:normalized(input.startTime),endTime:normalized(input.endTime),room:normalized(input.room),...(input.group?{group:normalized(input.group)}:{}),assignments});
       row.revision++;row.finalizedRevision=0;logged('session_added',a,year,{code:row.code,id});return id;
     }
-    function editAssignment(a,year,code,id,fid){staff(a);editable(year);const row=annual(year,code);if(!canPublish(a,year,row))invalid('Course scope permission required');const s=row.working.find(x=>x.id===id);if(!s)invalid('Session not found');if(fid&&!faculty(fid))invalid('Unknown Faculty');
+    function editAssignment(a,year,code,id,fid){staff(a);editable(year);const row=annual(year,code);if(!canEditCourse(a,year,row))invalid('Course scope permission required');const s=row.working.find(x=>x.id===id);if(!s)invalid('Session not found');if(fid&&!faculty(fid))invalid('Unknown Faculty');
       if(fid&&(!faculty(fid).active||!faculty(fid).appointmentValid))invalid('Inactive or ineligible Faculty cannot be assigned');
       if(fid&&faculty(fid)?.activationDate&&(!s.date||s.date<faculty(fid).activationDate))invalid('Faculty cannot be assigned before activation date');
-      const old=s.assignments[0]||{};s.assignments=fid?[{facultyId:fid,teachingRole:old.teachingRole||'Instructor',doeCredit:knownNumber(old.doeCredit)}]:[];
+      const [old={},...rest]=s.assignments||[];
+      if(fid&&rest.some(item=>item.facultyId===fid))invalid('Faculty is already assigned to this Session');
+      s.assignments=fid?[{facultyId:fid,teachingRole:old.teachingRole||'Instructor',doeCredit:knownNumber(old.doeCredit)},...rest]:rest;
       row.revision++;row.finalizedRevision=0;logged('assignment_updated',a,year,{code:row.code,sessionId:id});return clone(s);
     }
 
@@ -212,7 +306,7 @@
     // Used by Publish Review to unblock old browser-local edits safely.
     function resolveFacultyIssue(a,year,code,sessionId,priorFacultyId,nextFacultyId,expectedRevision){
       staff(a);editable(year);const row=annual(year,code);
-      if(!canPublish(a,year,row))invalid('Course scope permission required');
+      if(!canEditCourse(a,year,row))invalid('Course scope permission required');
       if(Number(expectedRevision)!==row.revision)invalid('Working revision changed; reload Publish Review before fixing the assignment');
       const session=row.working.find(s=>s.id===sessionId);
       if(!session)invalid('The blocking Session no longer exists');
@@ -229,7 +323,7 @@
       logged('ineligible_assignment_resolved',a,year,{code:row.code,sessionId,priorFacultyId,nextFacultyId:chosen});
       return clone(session);
     }
-    function finalizeCourse(a,year,code){adfa(a);editable(year);const row=annual(year,code);row.finalizedRevision=row.revision;logged('course_finalized',a,year,{code:row.code,revision:row.revision});return row.revision}
+    function finalizeCourse(a,year,code){business(a);editable(year);const row=annual(year,code);row.finalizedRevision=row.revision;logged('course_finalized',a,year,{code:row.code,revision:row.revision});return row.revision}
     function publishCourse(a,year,code){who(a);editable(year);const row=annual(year,code);if(!canPublish(a,year,row))invalid('Course publisher scope permission required');
       if(row.finalizedRevision!==row.revision)invalid('Current Working revision is not finalized');
       if(currentRelease(row)?.revision===row.revision)invalid('No changes: Working revision already published');
@@ -292,7 +386,7 @@
       return clone(course);
     }
     function setYearPhase(a,year,phase){
-      adfa(a);const item=editable(year),next=normalized(phase).toLowerCase();
+      business(a);const item=editable(year),next=normalized(phase).toLowerCase();
       const allowed={planning:['review'],review:['planning','active'],active:['review']};
       if(next===item.status)return clone(item);
       if(!allowed[item.status]?.includes(next))invalid('Invalid year phase transition');
@@ -316,12 +410,11 @@
         if(beforeAssignments!==afterAssignments)diff.assignmentChanges++;
       }
       for(const s of before)if(!newMap.has(s.id))diff.changes.push({kind:'removed',sessionId:s.id,topic:s.topic||''});
-      const totals=sessions=>{
-        const map={};for(const session of sessions)for(const x of session.assignments||[]){if(x.facultyId)map[x.facultyId]=(map[x.facultyId]||0)+(Number(x.doeCredit)||0)}return map;
-      };
-      const oldDoe=totals(before),newDoe=totals(after),faculties=new Set([...Object.keys(oldDoe),...Object.keys(newDoe)]);
-      const doeImpact=[...faculties].map(facultyId=>({facultyId,before:oldDoe[facultyId]||0,after:newDoe[facultyId]||0,
-        delta:Math.round(((newDoe[facultyId]||0)-(oldDoe[facultyId]||0))*100)/100})).filter(x=>x.delta!==0);
+      const oldDoe=sumCredits(before),newDoe=sumCredits(after),faculties=new Set([...oldDoe.keys(),...newDoe.keys()]);
+      const doeImpact=[...faculties].map(facultyId=>{
+        const previous=creditFor(oldDoe,facultyId),next=creditFor(newDoe,facultyId);
+        return {facultyId,before:previous,after:next,delta:previous===null||next===null?null:roundCredit(next-previous)};
+      }).filter(x=>x.delta!==0);
       const seen=new Map();
       for(const s of after){
         const date=s.date||'';
@@ -338,8 +431,8 @@
           const f=faculty(x.facultyId);
           if(!f||!f.active||!f.appointmentValid)problem('block','INACTIVE_FACULTY',(!f?'Unknown Faculty assignment':f.name)+' is inactive or ineligible for '+(s.topic||'this Session')+' ('+(date||'unscheduled')+'). Replace or remove this assignment before publishing.',s.id,x.facultyId);
           if(date&&f?.activationDate&&date<f.activationDate)problem('block','FUTURE_FACULTY_START',f.name+' starts '+f.activationDate+', after the Session date '+date+'. Choose an eligible replacement.',s.id,x.facultyId);
-          if(date)for(const afc of state.afc){
-            if(afc.active!==false&&afc.facultyId===x.facultyId&&date>=afc.startDate&&date<=afc.endDate)
+          if(date)for(const afc of sharedAfc()){
+            if(afcBlocks(afc)&&afc.facultyId===x.facultyId&&date>=afc.startDate&&date<=afc.endDate)
               problem('warn','AFC_CONFLICT','Instructor has an AFC overlap',s.id);
           }
         }
@@ -388,9 +481,9 @@
       return {fromYear,toYear,rows:people.map(f=>({facultyId:f.id,name:f.name,
         left:measure(fromYear,f.id),right:measure(toYear,f.id)}))};
     }
-    function approvePolicy(a,year){adfa(a);editable(year);state.doe[year].policy.status='approved';logged('doe_policy_approved',a,year);return true}
-    function publishDoe(a,year){adfa(a);editable(year);const d=state.doe[year];if(d.policy.status!=='approved')invalid('Approved DOE rules required');d.released=true;refreshPublishedDoe(year,false);logged('doe_initial_published',a,year);return clone(d.records)}
-    function setOverride(a,year,fid,value){adfa(a);editable(year);if(!faculty(fid))invalid('Unknown Faculty');if(!Number.isFinite(Number(value)))invalid('Invalid override');
+    function approvePolicy(a,year){business(a);editable(year);state.doe[year].policy.status='approved';logged('doe_policy_approved',a,year);return true}
+    function publishDoe(a,year){business(a);editable(year);const d=state.doe[year];if(d.policy.status!=='approved')invalid('Approved DOE rules required');d.released=true;refreshPublishedDoe(year,false);logged('doe_initial_published',a,year);return clone(d.records)}
+    function setOverride(a,year,fid,value){business(a);editable(year);if(!faculty(fid))invalid('Unknown Faculty');if(!Number.isFinite(Number(value)))invalid('Invalid override');
       const d=state.doe[year];d.overrides[fid]=Number(value);if(d.released){const row=d.records[fid]||{facultyId:fid,base:0};row.override=Number(value);row.effective=Number(value);row.needsReview=false;d.records[fid]=row}
       logged('doe_override_set',a,year,{facultyId:fid});return true;
     }
@@ -403,12 +496,466 @@
     function getDoe(a,year){who(a);inspect(year);if(!isFaculty(a)&&!canAdfa(a))invalid('DOE access denied');const d=state.doe[year];if(!d.released)return{status:'pending',items:[]};
       const items=Object.values(d.records).filter(r=>!isFaculty(a)||r.facultyId===a.facultyId).map(clone);return{status:'published',items};
     }
-    function getWorkingDoe(a,year){adfa(a);inspect(year);const values={};for(const c of Object.values(state.annual[year]||{}))for(const s of c.working)for(const x of s.assignments||[])values[x.facultyId]=(values[x.facultyId]||0)+(Number(x.doeCredit)||0);
-      return state.faculty.map(f=>({facultyId:f.id,base:Math.round((values[f.id]||0)*100)/100}));
+    function getWorkingDoe(a,year){
+      adfa(a);inspect(year);
+      const values=sumCredits(Object.values(state.annual[year]||{}).flatMap(course=>course.working));
+      return state.faculty.map(f=>({facultyId:f.id,base:roundCredit(creditFor(values,f.id))}));
     }
-    function conflictRows(year){const rows=[];
-      for(const s of Object.values(state.annual[year]||{}).flatMap(c=>c.working.map(x=>({...x,courseCode:c.code}))))for(const x of s.assignments||[])for(const afc of state.afc){if(afc.active===false||afc.facultyId!==x.facultyId)continue;if(s.date>=afc.startDate&&s.date<=afc.endDate){rows.push({courseCode:s.courseCode,sessionId:s.id,date:s.date,facultyId:x.facultyId,sourceId:afc.afcRecordId});}}
+    function conflictRows(year){const rows=[],afcRows=sharedAfc();
+      for(const s of Object.values(state.annual[year]||{}).flatMap(c=>c.working.map(x=>({...x,courseCode:c.code}))))for(const x of s.assignments||[])for(const afc of afcRows){if(!afcBlocks(afc)||afc.facultyId!==x.facultyId)continue;if(s.date>=afc.startDate&&s.date<=afc.endDate){rows.push({courseCode:s.courseCode,sessionId:s.id,date:s.date,facultyId:x.facultyId,sourceId:afc.afcRecordId});}}
       return rows;
+    }
+    const officeTemplates=Object.freeze({
+      'dvm-schedule':{label:'DVM Office Teaching Schedule',type:null},
+      'lab-schedule':{label:'LAB Schedule',type:'LAB'},
+      'course-assignments':{label:'Course Coordinator Teaching Assignments',type:null,courseRequired:true},
+      'faculty-teaching':{label:'Faculty Individual Teaching Schedule',type:null,facultyRequired:true}
+    });
+    const exportStatuses=['Generated','Exported','Delivered','Confirmed Received'];
+    const confirmedRelease=row=>row.confirmed?.at(-1)||null;
+    const clockPattern=/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
+    const hasTime=session=>clockPattern.test(session.startTime||'')&&clockPattern.test(session.endTime||'')&&
+      session.startTime.slice(0,5)<session.endTime.slice(0,5);
+    const withInstructor=session=>(session.assignments||[]).some(assignment=>assignment.facultyId);
+    const isCurrentReceipt=row=>[confirmedRelease(row),currentRelease(row)].some(receipt=>receipt?.revision===row.revision);
+    const exportHistory=year=>state.officeExports?.[year]||[];
+    const exportMetadata=record=>{
+      const {records,changes,...metadata}=record;
+      return {...metadata,rowCount:(changes||records).length};
+    };
+    const sessionKind=value=>({LECTURE:'LEC',LECTURES:'LEC','SELF-REGULATED LEARNING':'SRL',LABORATORY:'LAB'}[codeFor(value)]||codeFor(value));
+    const activityCategories=Object.freeze({
+      ccc:['ccc','CCC'],rotation_participant:['rotation','Rotation'],fourth_year:['fourthYear','Fourth-Year'],
+      clinical_day:['otherWork','Clinical day / PPVM'],vetm581_rounds:['otherWork','VETM 581 rounds'],
+      vetm571_clinical_pharmacology:['otherWork','VETM 571 clinical pharmacology'],
+      vetm591_presentations:['otherWork','VETM 591 presentations'],teaching_excellence:['otherWork','Teaching excellence']
+    });
+    function liveActivities(year){
+      const raw=(readSource?.()||source).activities||[];
+      const records=new Map();
+      for(const item of raw){
+        const category=Object.hasOwn(activityCategories,item.category)?activityCategories[item.category]:null;
+        if(!category||item.academicYear!==year||item.active===false||!item.activityId)continue;
+        const scoped=validDate(item.startDate)&&validDate(item.endDate)&&item.startDate<=item.endDate&&
+          item.startDate>=startOf(year)&&item.endDate<=endOf(year);
+        const times=Array.isArray(item.timeEvidence)?item.timeEvidence.filter(time=>validDate(time.date)&&
+          time.date>=item.startDate&&time.date<=item.endDate&&hasTime(time)).map(time=>({
+            date:time.date,startTime:time.startTime,endTime:time.endTime
+          })):[];
+        records.set(item.activityId,{
+          id:item.activityId,layer:category[0],type:category[1],courseCode:item.courseCode||'',
+          facultyId:item.facultyKey||item.facultyId||null,instructorNames:item.staffingLabel||'',
+          date:item.startDate,endDate:item.endDate,scoped,times
+        });
+      }
+      return [...records.values()];
+    }
+    function workActivities(year){
+      if(inspect(year).status!=='archived')return liveActivities(year);
+      return [...state.archives].reverse().find(item=>item.year===year)?.activities||[];
+    }
+    function getCalendarLayers(a,year){
+      who(a);
+      const archived=inspect(year).status==='archived';
+      if(archived&&isFaculty(a))invalid('Archived Calendar is hidden from Faculty');
+      const live=workActivities(year).filter(row=>row.scoped);
+      const canSeePerson=id=>canAdfa(a)||(Boolean(id)&&id===a.facultyId);
+      const rows=live.filter(row=>!isFaculty(a)||canSeePerson(row.facultyId)).map(row=>{
+        const {facultyId,times,scoped,...fields}=row;
+        return {...fields,instructorNames:fields.instructorNames||nameFor(faculty(facultyId)?.name),
+          timeText:row.date===row.endDate&&times.length===1?times[0].startTime+'–'+times[0].endTime:'Check time evidence'};
+      });
+      const absence=archived?([...state.archives].reverse().find(item=>item.year===year)?.absence||[]):afcLayer(year);
+      return rows.concat(absence.filter(row=>canSeePerson(row.facultyId)).map(({facultyId,...row})=>({
+        ...row,instructorNames:nameFor(faculty(facultyId)?.name)
+      })));
+    }
+    function afcLayer(year){
+      return sharedAfc().filter(item=>afcBlocks(item)&&validDate(item.startDate)&&validDate(item.endDate)&&
+        item.startDate<=endOf(year)&&item.endDate>=startOf(year)).map(item=>({
+        id:item.afcRecordId,facultyId:item.facultyId,layer:'afc',type:'Unavailable',
+        date:item.startDate<startOf(year)?startOf(year):item.startDate,
+        endDate:item.endDate>endOf(year)?endOf(year):item.endDate,timeText:'All day'
+      }));
+    }
+
+    function confirmOfficeCourse(a,year,code,expectedRevision,input){
+      business(a);
+      editable(year);
+      const row=annual(year,code);
+      if(!Number.isSafeInteger(expectedRevision)||expectedRevision!==row.revision)invalid('Working revision changed. Review the current Course.');
+      if(confirmedRelease(row)?.revision===row.revision)invalid('This Working revision is already confirmed.');
+      const method=normalized(input?.method).toLowerCase(),confirmedOn=input?.confirmedOn;
+      const responsiblePerson=normalized(input?.responsiblePerson),reference=normalized(input?.reference);
+      if(!['email','excel','meeting','other'].includes(method)||!validDate(confirmedOn))invalid('Choose a confirmation method and valid date.');
+      if(!responsiblePerson||responsiblePerson.length>150||!reference||reference.length>500)
+        invalid('Provide a responsible person and a confirmation reference.');
+      const review=previewPublication(a,year,row.code);
+      const issues=review.issues.filter(issue=>issue.severity==='block'&&!['NO_CHANGES','NOT_FINALIZED'].includes(issue.code));
+      if(issues.length||!row.working.length||row.working.some(session=>!hasTime(session)||!withInstructor(session)))
+        invalid('Complete scheduling details and resolve blocking issues before confirming this Course.');
+      const receipt={version:(row.confirmed?.length||0)+1,revision:row.revision,by:a.uid,at:stamp(),
+        method,confirmedOn,responsiblePerson,reference,sessions:clone(row.working)};
+      return commit('office_course_confirmed',a,year,{code:row.code,version:receipt.version,revision:row.revision,method,confirmedOn},()=>{
+        (row.confirmed??=[]).push(receipt);
+        return receipt;
+      });
+    }
+
+    function getOfficeProgress(a,year){
+      adfa(a);
+      const lifecycle=inspect(year).status;
+      const courses=Object.values(state.annual[year]||{}).sort((a,b)=>a.code.localeCompare(b.code));
+      const roleRows=state.roles[year]||[],people=new Map();
+      const liveConflicts=lifecycle==='archived'?getConflicts(a,year):conflictRows(year);
+      const conflicts=new Set(liveConflicts.map(item=>item.courseCode+'|'+item.sessionId));
+      const courseRows=courses.map(row=>{
+        const confirmed=isCurrentReceipt(row),receipt=confirmedRelease(row);
+        const items=row.working.map(session=>{
+          const needsReview=conflicts.has(row.code+'|'+session.id)||(session.assignments||[]).some(assignment=>
+            assignment.facultyId&&!effectiveOn(faculty(assignment.facultyId),session.date));
+          return {sessionId:session.id,courseCode:row.code,type:sessionKind(session.sessionType),
+            missingDate:!validDate(session.date)||!hasTime(session),assigned:withInstructor(session),confirmed,needsReview};
+        });
+        for(const session of row.working)for(const id of new Set((session.assignments||[]).map(x=>x.facultyId).filter(Boolean))){
+          if(!people.has(id))people.set(id,{name:faculty(id)?.name||'Name unavailable',sessions:0,confirmed:0,roles:0});
+          const person=people.get(id);
+          person.sessions++;
+          if(confirmed)person.confirmed++;
+        }
+        return {code:row.code,title:row.title,revision:row.revision,confirmedVersion:receipt?.version||null,
+          publishedVersion:currentRelease(row)?.version||null,responsiblePerson:receipt?.responsiblePerson||null,
+          lastUpdated:receipt?.at||currentRelease(row)?.at||null,sessions:items.length,
+          outstanding:items.filter(item=>!item.confirmed).length,
+          status:!items.length?'Awaiting Information':confirmed?'Confirmed':items.some(item=>item.needsReview)?'Needs Review':
+            items.every(item=>!item.missingDate&&item.assigned)?'Awaiting Confirmation':'In Progress',items};
+      });
+      for(const role of roleRows){
+        if(!people.has(role.facultyId))people.set(role.facultyId,{name:faculty(role.facultyId)?.name||'Name unavailable',sessions:0,confirmed:0,roles:0});
+        people.get(role.facultyId).roles++;
+      }
+      const sessions=courseRows.flatMap(row=>row.items);
+      const activities=workActivities(year);
+      function summarize(dataset,label,items,nextAction){
+        const counts={dataset,label,total:items.length||null,completed:0,outstanding:items.length||null,needsReview:0,
+          awaitingInformation:0,awaitingConfirmation:0,nextAction};
+        for(const item of items){
+          if(item.confirmed)counts.completed++;
+          else if(item.needsReview)counts.needsReview++;
+          else if(item.missingDate||item.assigned===false)counts.awaitingInformation++;
+          else counts.awaitingConfirmation++;
+        }
+        if(items.length)counts.outstanding-=counts.completed;
+        counts.status=!items.length?'Awaiting Information':counts.outstanding===0?'Confirmed':counts.needsReview?'Needs Review':
+          counts.awaitingConfirmation===counts.outstanding?'Awaiting Confirmation':'In Progress';
+        return counts;
+      }
+      const datasets=[
+        summarize('calendar','Teaching Calendar',sessions.map(item=>({...item,assigned:true})),'Check dates and times'),
+        summarize('teaching','Scheduled Teaching',sessions,'Review Course assignments'),
+        summarize('lab','LAB',sessions.filter(item=>item.type==='LAB'),'Review LAB assignments'),
+        summarize('srl','SRL',sessions.filter(item=>item.type==='SRL'),'Review SRL assignments'),
+        summarize('roles','Roles',roleRows.map(row=>({confirmed:row.status==='confirmed',needsReview:Boolean(roleApprovalIssue(year,row))})),'Review annual appointments'),
+        ...[['ccc','CCC'],['rotation','Rotation'],['fourthYear','Fourth-Year'],['trainees','Trainees'],['otherWork','Other Work']].map(([key,label])=>
+          summarize(key,label,activities.filter(row=>row.layer===key).map(row=>({
+            confirmed:false,needsReview:!row.scoped,assigned:Boolean(row.facultyId),missingDate:!row.times.length
+          })),'Verify the source in its existing workspace')),
+        summarize('doe','DOE',Object.values(state.doe[year]?.records||{}).map(row=>({
+          confirmed:state.doe[year].released&&row.effective!==null&&!row.needsReview,
+          needsReview:row.needsReview,missingDate:row.effective===null
+        })),'Review annual DOE and its source'),
+        summarize('exports','Exports',exportHistory(year).map(row=>({confirmed:row.status==='Confirmed Received'})),'Check export and delivery status')
+      ];
+      return {year,lifecycle,revision:inspect(year).revision,datasets,courses:courseRows.map(({items,...rest})=>rest),
+        faculty:[...people.values()].map(person=>({...person,name:nameFor(person.name)})).sort((a,b)=>a.name.localeCompare(b.name)),
+        imports:(state.officeImports?.[year]||[]).map(({before,...receipt})=>receipt).reverse(),
+        exports:exportHistory(year).map(exportMetadata).reverse(),
+        templates:Object.entries(officeTemplates).map(([id,template])=>({id,...template}))};
+    }
+
+    function previewTeachingImport(a,year,code,input){
+      business(a);
+      editable(year);
+      const course=annual(year,code),name=normalized(input?.name),sourceVersion=normalized(input?.sourceVersion);
+      if(!name||name.length>180||!sourceVersion||sourceVersion.length>100||typeof input?.replace!=='boolean'||
+        !Array.isArray(input?.records)||!input.records.length||input.records.length>750)
+        invalid('Supply a source name, version and 1 to 750 Session records.');
+      const prior=new Map(course.working.map(row=>[row.id,row]));
+      const otherIds=new Set(Object.values(state.annual[year]).filter(row=>row.code!==course.code).flatMap(row=>row.working.map(session=>session.id)));
+      const seen=new Set(),issues=[],working=[],changes=[];
+      const keys=['id','courseCode','academicYear','topic','sessionType','date','startTime','endTime','room','group'];
+      for(const [index,record] of input.records.entries()){
+        const row=index+1;
+        if(!record||typeof record!=='object'||Array.isArray(record)||
+          Object.entries(record).some(([key,value])=>!keys.includes(key)||typeof value!=='string')){
+          issues.push({row,message:'Only Teaching Calendar fields are permitted.'});
+          continue;
+        }
+        const id=normalized(record.id),topic=normalized(record.topic),date=record.date;
+        const sessionType=sessionKind(record.sessionType),startTime=normalized(record.startTime),endTime=normalized(record.endTime);
+        if(!/^[a-z0-9._:-]{1,80}$/i.test(id)||seen.has(id)||otherIds.has(id)){
+          issues.push({row,message:'Session ID is missing, duplicated or belongs to another Course.'});
+          continue;
+        }
+        seen.add(id);
+        if(record.academicYear!==year||codeFor(record.courseCode)!==course.code||!validDate(date)||date<startOf(year)||date> endOf(year)){
+          issues.push({row,message:'Session belongs to a different Course or academic year.'});
+          continue;
+        }
+        if(!topic||topic.length>500||!['LEC','SRL','LAB'].includes(sessionType)||!hasTime({startTime,endTime})||
+          normalized(record.room).length>100||normalized(record.group).length>100){
+          issues.push({row,message:'Complete the Topic, Session Type and scheduled time.'});
+          continue;
+        }
+        const old=prior.get(id);
+        const next={id,courseCode:course.code,topic,sessionType,date,startTime,endTime,room:normalized(record.room),
+          ...(normalized(record.group)?{group:normalized(record.group)}:{}),assignments:clone(old?.assignments||[])};
+        working.push(next);
+        const fields=['topic','sessionType','date','startTime','endTime','room','group'];
+        const status=!old?'Added':fields.some(key=>normalized(old[key])!==normalized(next[key]))?'Changed':'Existing';
+        changes.push({id,topic,status});
+      }
+      for(const previous of course.working.filter(row=>!seen.has(row.id))){
+        if(input.replace)changes.push({id:previous.id,topic:previous.topic,status:'Pending removal'});
+        else working.push(clone(previous));
+      }
+      return {year,courseCode:course.code,revision:course.revision,name,sourceVersion,replace:input.replace,
+        issues,changes,working,signature:JSON.stringify([year,course.code,course.revision,name,sourceVersion,input.replace,working])};
+    }
+    function commitTeachingImport(a,year,code,input,expected,approved){
+      const preview=previewTeachingImport(a,year,code,input);
+      if(approved!==true||preview.signature!==expected)invalid('The exact Teaching Calendar preview must be confirmed again.');
+      if(preview.issues.length)invalid('Resolve validation issues before applying the import.');
+      if(!preview.changes.some(row=>row.status!=='Existing'))invalid('No changes for this Teaching Calendar.');
+      const course=annual(year,code),imports=state.officeImports?.[year]||[];
+      if(imports.some(record=>record.courseCode===course.code&&record.sourceVersion===preview.sourceVersion&&record.status==='Applied'))
+        invalid('This source version already has an applied import for the Course.');
+      return commit('teaching_calendar_import_applied',a,year,{course:course.code,sourceVersion:preview.sourceVersion,source:preview.name},()=>{
+        const receipt={id:'calendar-import-'+(++state.serial),dataset:'Teaching Calendar',year,courseCode:course.code,
+          source:preview.name,sourceVersion:preview.sourceVersion,fromRevision:course.revision,
+          appliedRevision:course.revision+1,status:'Applied',by:a.uid,at:stamp(),changes:preview.changes,validationIssues:0,before:clone(course.working)};
+        course.working=preview.working;
+        course.revision++;
+        course.finalizedRevision=0;
+        state.officeImports??={};
+        (state.officeImports[year]??=[]).push(receipt);
+        const {before,...result}=receipt;
+        return result;
+      });
+    }
+    function recoverTeachingImport(a,year,id){
+      business(a);
+      editable(year);
+      const receipt=state.officeImports?.[year]?.find(row=>row.id===id&&row.status==='Applied');
+      if(!receipt)invalid('Applied Teaching Calendar import not found for this year.');
+      const course=annual(year,receipt.courseCode);
+      if(course.revision!==receipt.appliedRevision||confirmedRelease(course)?.revision===course.revision||
+        currentRelease(course)?.revision===course.revision)invalid('The imported revision changed or was confirmed. Review it before recovery.');
+      return commit('teaching_calendar_import_recovered',a,year,{id,course:course.code},()=>{
+        course.working=clone(receipt.before);
+        course.revision++;
+        course.finalizedRevision=0;
+        receipt.status='Recovered';
+        receipt.recoveredBy=a.uid;
+        receipt.recoveredAt=stamp();
+        return {revision:course.revision};
+      });
+    }
+    function generateOfficeExport(a,year,input){
+      business(a);
+      editable(year);
+      const templateId=normalized(input?.template);
+      const template=Object.hasOwn(officeTemplates,templateId)?officeTemplates[templateId]:null;
+      const version=input?.version,recipient=normalized(input?.recipient),course=codeFor(input?.course),facultyId=normalized(input?.facultyId);
+      if(!template||!['working','confirmed','published'].includes(version)||!recipient||recipient.length>150||
+        typeof input?.changesOnly!=='boolean')invalid('Choose an export template, data version and recipient.');
+      if((template.courseRequired&&!course)||(template.facultyRequired&&!facultyId))invalid('Select the required Course or Faculty.');
+      if(course)annual(year,course);
+      if(facultyId&&!faculty(facultyId))invalid('Faculty not found.');
+      const records=[],sourceVersions={};
+      for(const row of Object.values(state.annual[year]||{})){
+        if(course&&course!==row.code)continue;
+        const release=version==='confirmed'?confirmedRelease(row):version==='published'?currentRelease(row):row;
+        if(!release)continue;
+        sourceVersions[row.code]={revision:release.revision,version:release.version??null};
+        for(const session of release.sessions||release.working){
+          if(template.type&&sessionKind(session.sessionType)!==template.type)continue;
+          const assignments=(session.assignments||[]).filter(x=>!facultyId||x.facultyId===facultyId);
+          if(facultyId&&!assignments.length)continue;
+          records.push({key:row.code+'|'+session.id,year,course:row.code,topic:session.topic,type:session.sessionType,
+            date:session.date,start:session.startTime,end:session.endTime,room:session.room,
+            instructor:assignments.map(x=>nameFor(faculty(x.facultyId)?.name)||'Unassigned').join('; '),
+            instructorRole:assignments.map(x=>x.teachingRole||'').join('; '),
+            assignmentSignature:JSON.stringify(assignments.map(x=>[x.facultyId,x.teachingRole]).sort())});
+        }
+      }
+      if(!Object.keys(sourceVersions).length)invalid('The selected year has no data in that version and scope.');
+      records.sort((a,b)=>normalized(a.date).localeCompare(normalized(b.date))||
+        normalized(a.start).localeCompare(normalized(b.start))||a.key.localeCompare(b.key));
+      const prior=[...exportHistory(year)].reverse().find(row=>row.key===JSON.stringify([templateId,version,recipient,course,facultyId])&&row.status!=='Generated');
+      if(input.changesOnly&&!prior)invalid('Download one complete export in this scope before generating changes.');
+      let changes=null;
+      if(input.changesOnly){
+        const oldRows=new Map(prior.records.map(row=>[row.key,row]));
+        changes=[];
+        for(const row of records){
+          const old=oldRows.get(row.key);
+          oldRows.delete(row.key);
+          if(!old)changes.push({...row,change:'Added'});
+          else{
+            const fields=['topic','type','date','start','end','room','instructor','instructorRole','assignmentSignature'];
+            if(fields.some(field=>row[field]!==old[field]))changes.push({...row,change:'Changed'});
+          }
+        }
+        for(const old of oldRows.values())changes.push({...old,change:'Cancelled'});
+      }
+      return commit('office_export_generated',a,year,{template:templateId,version,recipient,records:(changes||records).length},()=>{
+        const id='office-export-'+(++state.serial);
+        const row={id,year,key:JSON.stringify([templateId,version,recipient,course,facultyId]),template:templateId,
+          title:template.label,version,sourceVersions,recipient,course,facultyId,by:a.uid,generatedAt:stamp(),status:'Generated',
+          baselineExportId:input.changesOnly?prior.id:null,records,changes};
+        state.officeExports??={};
+        (state.officeExports[year]??=[]).push(row);
+        return {...exportMetadata(row),rows:changes||records};
+      });
+    }
+
+    function getOfficeExport(a,year,id){
+      adfa(a);
+      inspect(year);
+      const row=exportHistory(year).find(item=>item.id===id);
+      if(!row)invalid('Export record not found for this year.');
+      return row;
+    }
+    function advanceOfficeExport(a,year,id,status){
+      business(a);
+      editable(year);
+      const row=getOfficeExport(a,year,id);
+      if(exportStatuses.indexOf(status)!==exportStatuses.indexOf(row.status)+1)invalid('Select the next delivery status in order.');
+      return commit('office_export_status_changed',a,year,{id,from:row.status,to:status},()=>{
+        row.status=status;
+        row.statusBy=a.uid;
+        row.statusAt=stamp();
+        return exportMetadata(row);
+      });
+    }
+    function officeExportTable(a,year,id){
+      const receipt=getOfficeExport(a,year,id);
+      const columns=[['Academic Year','year'],['Course','course'],['Topic','topic'],['Type','type'],['Date','date'],
+        ['Start','start'],['End','end'],['Room','room'],['Faculty','instructor'],['Instructor Role','instructorRole']];
+      if(receipt.changes)columns.push(['Change','change']);
+      const rows=(receipt.changes||receipt.records).map(row=>columns.map(([,field])=>row[field]??''));
+      return {source:'schedule',label:receipt.title,columns:columns.map(([label,id])=>({label,id,type:'text'})),
+        rows,total:rows.length};
+    }
+    function officeExportCsv(a,year,id){
+      const table=officeExportTable(a,year,id);
+      const cell=value=>{
+        const raw=String(value??''),text=/^[\s\x00-\x1f]*[=+@-]/u.test(raw)?"'"+raw:raw;
+        return /[",\r\n]/.test(text)?'"'+text.replace(/"/g,'""')+'"':text;
+      };
+      return [table.columns.map(column=>column.label).join(','),...table.rows.map(row=>row.map(cell).join(','))].join('\r\n');
+    }
+    const comparable=value=>normalized(value).normalize('NFKC').replace(/\s+/g,' ').toLowerCase();
+    const groupFor=session=>comparable(session.groupKey||session.group);
+    function availabilityFor(year,session,id,additional=[]){
+      if(!effectiveOn(faculty(id),session.date))return 'Ineligible Faculty';
+      if(!validDate(session.date)||!hasTime(session))return 'Check needed';
+      if(sharedAfc().some(item=>afcBlocks(item)&&item.facultyId===id&&session.date>=item.startDate&&session.date<=item.endDate))
+        return 'Unavailable';
+      let uncertainActivity=false;
+      for(const work of liveActivities(year)){
+        if(work.facultyId!==id||session.date<work.date||session.date>work.endDate)continue;
+        const times=work.times.filter(time=>time.date===session.date);
+        if(!work.scoped||!times.length)uncertainActivity=true;
+        if(times.some(time=>session.startTime.slice(0,5)<time.endTime.slice(0,5)&&time.startTime.slice(0,5)<session.endTime.slice(0,5)))return 'Busy';
+      }
+      const assigned=Object.values(state.annual[year]).flatMap(course=>course.working)
+        .filter(other=>other.id!==session.id&&(other.assignments||[]).some(item=>item.facultyId===id));
+      const scheduled=[...assigned,...additional.filter(other=>other.facultyId===id)];
+      if(scheduled.some(other=>other.date===session.date&&hasTime(other)&&
+        session.startTime.slice(0,5)<other.endTime.slice(0,5)&&other.startTime.slice(0,5)<session.endTime.slice(0,5)))
+        return 'Busy';
+      if(uncertainActivity||scheduled.some(other=>!validDate(other.date)||(other.date===session.date&&!hasTime(other))))return 'Check needed';
+      return 'No PAWS Conflict Found';
+    }
+
+    function historicalSuggestions(a,year,code){
+      staff(a);
+      const course=annual(year,code);
+      if(!canEditCourse(a,year,course))invalid('Course scope permission required');
+      const previous=previousYear(year),past=state.annual[previous]?.[course.code];
+      const published=past&&currentRelease(past),confirmed=past&&confirmedRelease(past);
+      const release=published||confirmed;
+      const source=release?{year:previous,version:release.version,kind:published?'Published':'Confirmed'}:null;
+      const workingCredits=canAdfa(a)?sumCredits(Object.values(state.annual[year]).flatMap(row=>row.working)):null;
+      return course.working.map(target=>{
+        const topic=comparable(target.topic);
+        const base={sessionId:target.id,topic:target.topic,sessionType:target.sessionType,date:target.date,
+          source,candidates:[],assigned:withInstructor(target)};
+        if(!past)return {...base,match:'No Match',reason:'No prior annual Course record.'};
+        if(!source||!topic)return {...base,match:'Course History Only',reason:'No dated Topic and confirmed teaching evidence to match.'};
+        const topicRows=release.sessions.filter(prior=>comparable(prior.topic)===topic);
+        if(!topicRows.length)return {...base,match:'New Topic',reason:'This Topic does not occur in the prior release.'};
+        const rows=topicRows.filter(prior=>sessionKind(prior.sessionType)===sessionKind(target.sessionType)&&groupFor(prior)===groupFor(target));
+        const declaredRoles=new Set((target.assignments||[]).map(item=>comparable(item.teachingRole)).filter(Boolean));
+        const candidates=new Map();
+        for(const prior of rows)for(const item of prior.assignments||[]){
+          if(!item.facultyId||!faculty(item.facultyId))continue;
+          const role=comparable(item.teachingRole);
+          if(declaredRoles.size&&!declaredRoles.has(role))continue;
+          if(!declaredRoles.size&&(sessionKind(target.sessionType)==='LAB'||!['instructor','primary'].includes(role)))continue;
+          const key=item.facultyId+'|'+role;
+          if(candidates.has(key)){candidates.get(key).frequency++;continue;}
+          const slot=(target.assignments||[]).find(line=>!line.facultyId&&comparable(line.teachingRole)===role);
+          const credit=knownNumber(slot?.doeCredit);
+          const working=workingCredits?creditFor(workingCredits,item.facultyId):null;
+          candidates.set(key,{facultyId:item.facultyId,name:faculty(item.facultyId).name,teachingRole:item.teachingRole,
+            previousSessionId:prior.id,previousCourse:course.code,previousTopic:prior.topic,previousType:prior.sessionType,
+            frequency:1,availability:availabilityFor(year,target,item.facultyId),
+            workingDoe:canAdfa(a)?working:null,projectedDoe:canAdfa(a)&&working!==null&&credit!==null?working+credit:null});
+        }
+        if(!candidates.size)return {...base,match:'Possible Match',reason:'Topic matches. Type, group or instructor role needs review.'};
+        const matches=[...candidates.values()].sort((a,b)=>b.frequency-a.frequency||a.name.localeCompare(b.name)||a.teachingRole.localeCompare(b.teachingRole));
+        return {...base,match:'Exact Match',reason:'Same Course, Topic, Session Type and applicable instructor context.',
+          candidates:matches};
+      });
+    }
+
+    function acceptHistoricalSuggestions(a,year,code,expectedRevision,ids,chosenFacultyId=null){
+      staff(a);
+      editable(year);
+      const course=annual(year,code);
+      if(!canEditCourse(a,year,course))invalid('Course scope permission required');
+      if(!Number.isSafeInteger(expectedRevision)||expectedRevision!==course.revision)invalid('Working revision changed. Refresh historical suggestions.');
+      if(!Array.isArray(ids)||!ids.length||ids.length>200||new Set(ids).size!==ids.length||(chosenFacultyId&&ids.length!==1))
+        invalid('Select distinct Working Sessions for review.');
+      const suggestions=new Map(historicalSuggestions(a,year,code).map(row=>[row.sessionId,row]));
+      const plans=[];
+      for(const id of ids){
+        const result=suggestions.get(id);
+        const session=course.working.find(row=>row.id===id);
+        const matches=(result?.candidates||[]).filter(item=>!chosenFacultyId||item.facultyId===chosenFacultyId);
+        if(!session||result?.match!=='Exact Match'||result.assigned||matches.length!==1)
+          invalid('Review each ambiguous, assigned or unmatched Session individually.');
+        const candidate=matches[0];
+        if(availabilityFor(year,session,candidate.facultyId,plans)!=='No PAWS Conflict Found')
+          invalid('Review Faculty availability or a possible conflict before accepting suggestions.');
+        const slot=(session.assignments||[]).find(item=>!item.facultyId&&comparable(item.teachingRole)===comparable(candidate.teachingRole));
+        plans.push({session,id,facultyId:candidate.facultyId,role:candidate.teachingRole,slot,
+          date:session.date,startTime:session.startTime,endTime:session.endTime,source:result.source,previousSessionId:candidate.previousSessionId});
+      }
+      return commit('historical_suggestions_accepted',a,year,{course:course.code,items:plans.map(plan=>({
+        sessionId:plan.id,facultyId:plan.facultyId,source:plan.source,previousSessionId:plan.previousSessionId
+      }))},()=>{
+        for(const plan of plans){
+          if(plan.slot)plan.slot.facultyId=plan.facultyId;
+          else plan.session.assignments.push({facultyId:plan.facultyId,teachingRole:plan.role,doeCredit:null});
+        }
+        course.revision++;
+        course.finalizedRevision=0;
+        return {accepted:plans.length,revision:course.revision};
+      });
     }
     function getConflicts(a,year){staff(a);if(!canAdfa(a)&&!['adc','lab'].includes(normalized(a.role).toLowerCase()))invalid('Office scope permission required');const y=inspect(year);if(y.status==='archived')return clone([...state.archives].reverse().find(v=>v.year===year)?.conflicts||[]);return clone(conflictRows(year));}
     function addAfc(a,input){adfa(a);if(!faculty(input.facultyId))invalid('Unknown Faculty');if(!input.startDate||!input.endDate||input.startDate>input.endDate)invalid('Invalid AFC dates');
@@ -416,10 +963,14 @@
     }
     function retireYear(a,year,confirmed=false){ownerOnly(a);const y=editable(year);if(confirmed!==true)invalid('Retire confirmation required');
       const conflicts=conflictRows(year);const pending=Object.values(state.annual[year]||{}).filter(c=>!currentRelease(c)||c.revision!==currentRelease(c).revision).map(c=>c.code);
-      const snapshot={year,at:stamp(),actor:a.uid,conflicts:clone(conflicts),published:Object.fromEntries(Object.entries(state.annual[year]).map(([code,c])=>[code,currentRelease(c)?.version||null])),pending};
-      state.archives.push(snapshot);y.status='archived';y.revision++;logged('year_retired',a,year,{pending:pending.length,conflicts:conflicts.length});return clone(snapshot);
+      const snapshot={year,at:stamp(),actor:a.uid,priorStatus:y.status,conflicts:clone(conflicts),activities:liveActivities(year),
+        absence:afcLayer(year),published:Object.fromEntries(Object.entries(state.annual[year]).map(([code,c])=>[code,currentRelease(c)?.version||null])),pending};
+      return commit('year_retired',a,year,{pending:pending.length,conflicts:conflicts.length},()=>{
+        state.archives.push(snapshot);y.status='archived';y.revision++;
+        return snapshot;
+      });
     }
-    function restoreYear(a,year){ownerOnly(a);const y=inspect(year);if(y.status!=='archived')invalid('Academic year is not archived');y.status='active';y.revision++;const count=conflictRows(year).length;logged('year_restored',a,year,{liveConflicts:count});return{liveConflicts:count};}
+    function restoreYear(a,year){ownerOnly(a);const y=inspect(year);if(y.status!=='archived')invalid('Academic year is not archived');y.status=[...state.archives].reverse().find(x=>x.year===year)?.priorStatus||'active';y.revision++;const count=conflictRows(year).length;logged('year_restored',a,year,{liveConflicts:count});return{liveConflicts:count};}
     function copyHistorical(a,year,code,sessionId,sourceId){staff(a);editable(year);const row=annual(year,code);if(!canPublish(a,year,row))invalid('Course scope permission required');const s=row.working.find(x=>x.id===sessionId);if(!s)invalid('Target Session not found');
       const previous=String(Number(year.slice(0,4))-1)+'-'+String(Number(year.slice(0,4))%100).padStart(2,'0');const history=publicationRows(previous).find(x=>x.id===sourceId&&x.courseCode===row.code);
       if(!history||!history.assignments.length)invalid('Published historical assignment not found');const chosen=history.assignments.find(x=>effectiveOn(faculty(x.facultyId),s.date));if(!chosen)invalid('Historical Faculty no longer eligible');
@@ -451,7 +1002,7 @@
         partialYear:eligible.filter(r=>r.rolloverReason==='partial year').length};
     }
     function confirmRolesBulk(a,year,expectedEligibleIds){
-      adfa(a);editable(year);
+      business(a);editable(year);
       if(!Array.isArray(expectedEligibleIds)||new Set(expectedEligibleIds).size!==expectedEligibleIds.length||
         expectedEligibleIds.some(id=>typeof id!=='string'))invalid('Invalid bulk role confirmation selection');
       const current=previewRoleConfirmations(a,year);
@@ -464,7 +1015,7 @@
       return {confirmed:ids.size,skipped:current.skipped.length,pending:current.pending};
     }
     function confirmRole(a,year,id){
-      adfa(a);editable(year);
+      business(a);editable(year);
       const role=(state.roles[year]||[]).find(r=>r.id===id);
       if(!role)invalid('Role not found');
       if(role.status!=='draft')invalid('Role is not draft');
@@ -474,11 +1025,21 @@
       logged('annual_role_confirmed',a,year,{roleId:id});
       return clone(role);
     }
-    function setPreferredYear(a,year){who(a);inspect(year);state.preferences[a.uid]=year;persist()}
-    function getPreferredYear(a){who(a);const current=currentYear(now());if(isFaculty(a))return state.years[current]?current:Object.keys(state.years)[0];return state.years[state.preferences[a.uid]]?state.preferences[a.uid]:state.years[current]?current:Object.keys(state.years)[0]}
+    function setPreferredYear(a,year){who(a);inspect(year);state.preferences[a.uid]={year,defaultRevision:state.planningDefault?.revision||0};persist()}
+    function getPreferredYear(a){
+      who(a);
+      const actual=currentYear(now()),fallback=state.years[actual]?actual:Object.keys(state.years).sort()[0];
+      if(isFaculty(a))return fallback;
+      const wanted=state.preferences[a.uid];
+      const defaultYear=state.planningDefault?.year;
+      if(canAdfa(a)&&state.years[defaultYear]&&state.years[defaultYear].status!=='archived'&&
+        wanted?.defaultRevision!==state.planningDefault.revision)return defaultYear;
+      const saved=typeof wanted==='string'?wanted:wanted?.year;
+      return state.years[saved]?saved:fallback;
+    }
     function reset(){state=bootstrap(source);if(sampleYear2027)seed2027Sample({uid:'demo-synthetic-fixture',role:'owner'});persist();return getState()}
     if(sampleYear2027&&!state.years['2027-28'])seed2027Sample({uid:'demo-synthetic-fixture',role:'owner'});
-    return Object.freeze({getState,createYear,seed2027Sample,addCourse,previewRollover,rolloverCourse,setYearPhase,previewPublication,compareYears,updateCatalog,addSession,editAssignment,resolveFacultyIssue,finalizeCourse,publishCourse,approvePolicy,publishDoe,setOverride,getTeaching,getCalendar,getDoe,getWorkingDoe,getConflicts,addAfc,retireYear,restoreYear,copyHistorical,confirmRole,previewRoleConfirmations,confirmRolesBulk,setPreferredYear,getPreferredYear,reset,currentYear});
+    return Object.freeze({getState,createYear,seed2027Sample,addCourse,previewRollover,rolloverCourse,setYearPhase,previewPublication,compareYears,updateCatalog,addSession,editAssignment,resolveFacultyIssue,finalizeCourse,publishCourse,approvePolicy,publishDoe,setOverride,getTeaching,getCalendar,getCalendarLayers,getDoe,getWorkingDoe,getConflicts,addAfc,retireYear,restoreYear,copyHistorical,confirmRole,previewRoleConfirmations,confirmRolesBulk,setPreferredYear,getPreferredYear,setDefaultPlanningYear,confirmOfficeCourse,getOfficeProgress,historicalSuggestions,acceptHistoricalSuggestions,previewTeachingImport,commitTeachingImport,recoverTeachingImport,generateOfficeExport,advanceOfficeExport,officeExportTable,officeExportCsv,reset,currentYear});
   }
   // UX-04: a missing DOE value is shown as a dash, never as 0.00; unknown
   // session credit is reported as not recorded rather than counted as 0.

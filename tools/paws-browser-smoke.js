@@ -55,6 +55,89 @@ async function waitForText(cdp,texts,timeoutMs=20000){
  return {ok:false,body};
 }
 
+async function verifyAdfadOfficeWorkflow(action){
+ try{
+  const dialog=document.getElementById('paws-multi-year-demo');
+  const click=selector=>{
+   const button=dialog?.querySelector(selector);
+   if(!button)throw Error('Control unavailable: '+selector);
+   button.click();
+  };
+  const submit=(name,values)=>{
+   const form=dialog.querySelector('form[data-my-form="'+name+'"]');
+   if(!form)throw Error('Form unavailable: '+name);
+   for(const [key,value] of Object.entries(values)){
+    const field=form.elements.namedItem(key);
+    if(!field)throw Error('Field unavailable: '+key);
+    field.value=value;
+   }
+   if(!form.checkValidity())throw Error('Office form failed input validation: '+name);
+   form.requestSubmit();
+   const message=dialog.querySelector('[role=status]')?.textContent||'';
+   if(dialog.textContent.includes('Open the Demo to')||message.startsWith('Provide '))throw Error(message);
+  };
+  const current=()=>JSON.parse(localStorage.getItem(window.PAWS_MULTI_YEAR_DEMO_MODEL.STORAGE_KEY));
+  if(action==='prepare'){
+   click('[data-my-tab=courses]');
+   const code=dialog.querySelector('[data-my-form=add-course] select')?.value;
+   if(!code)throw Error('Synthetic Course catalog missing');
+   submit('add-course',{code});
+   const people=dialog.querySelector('[data-my-form=add-session] select[name=facultyId]');
+   const id=people?.options[1]?.value;
+   if(!id)throw Error('Synthetic Faculty fixture missing');
+   submit('add-session',{date:'2027-10-15',topic:'Synthetic Office acceptance',sessionType:'LEC',facultyId:id,
+    startTime:'09:00',endTime:'10:00',room:'Demo Room',teachingRole:'Instructor',doeCredit:'0.3'});
+   click('[data-my-tab=office]');
+   click('[data-my-office-view=courses]');
+   if(!dialog.textContent.includes('Awaiting Confirmation'))throw Error('Working status missing');
+  }
+  if(action==='confirm'){
+   submit('confirm-office',{confirmedOn:'2026-11-24',method:'email',responsiblePerson:'Tester, Synthetic',reference:'Synthetic acceptance reference'});
+   const course=Object.values(current().annual['2027-28'])[0];
+   if(course.confirmed?.length!==1||course.published.length)throw Error('Office confirmation changed Faculty publication');
+   if(!dialog.textContent.includes('Confirmed v1')&&!dialog.textContent.includes('Confirmed 1'))throw Error('Confirmation version missing');
+   click('[data-my-office-view=faculty]');
+   if(!dialog.textContent.includes('Confirmed Sessions'))throw Error('By Faculty view missing');
+   submit('office-export',{template:'dvm-schedule',version:'confirmed',recipient:'Synthetic DVM Office'});
+   const exports=current().officeExports['2027-28'];
+   if(exports.length!==1||exports[0].status!=='Generated'||exports[0].records.length!==1)throw Error('Confirm/export status mismatch');
+   const model=window.PAWS_MULTI_YEAR_DEMO_MODEL.createEngine({storage:localStorage});
+   const table=model.officeExportTable({uid:'uid-owner',role:'owner'},'2027-28',exports[0].id);
+   const workbook=await window.UCVM_PAWS_DEMO_API.officeWorkbook(table,'2027-28');
+   if(workbook.bytes[0]!==0x50||workbook.bytes[1]!==0x4b)throw Error('Excel workbook was not generated');
+   click('[data-my-office-view=courses]');
+  }
+  if(!dialog?.open)throw Error('Office dialog closed unexpectedly');
+  const viewport=document.documentElement.clientWidth,rect=dialog.getBoundingClientRect();
+  if(rect.left<0||rect.right>viewport+1)throw Error('Office workspace exceeds viewport');
+  return {ok:true,viewport};
+ }catch(error){return {ok:false,error:String(error?.message||error)};}
+}
+
+async function officeWorkflowSmoke(cdp){
+ const evidenceDirectory=process.env.PAWS_OFFICE_SCREENSHOT_DIR;
+ if(evidenceDirectory)fs.mkdirSync(evidenceDirectory,{recursive:true});
+ const capture=async name=>{
+  if(!evidenceDirectory)return;
+  const image=await cdp.send('Page.captureScreenshot',{format:'png'});
+  fs.writeFileSync(path.join(evidenceDirectory,name+'.png'),Buffer.from(image.data,'base64'));
+ };
+ const run=async action=>{
+  const result=await cdp.send('Runtime.evaluate',{expression:'('+verifyAdfadOfficeWorkflow.toString()+')('+JSON.stringify(action)+')',
+   awaitPromise:true,returnByValue:true});
+  if(!result.result?.value?.ok)throw Error(JSON.stringify(result.result?.value||result.exceptionDetails||'no result'));
+ };
+ await cdp.send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+ await run('prepare');
+ await capture('office-before-confirmation');
+ await run('confirm');
+ await capture('office-confirmed-desktop');
+ await cdp.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
+ await run('resize');
+ await capture('office-confirmed-narrow');
+ await cdp.send('Emulation.clearDeviceMetricsOverride');
+}
+
 async function main(){
  if(!fs.existsSync(path.join(site,'pages-demo-api.js')))throw Error('Run tools/build-paws-pages.js and stage with --mode paws first.');
  const chrome=findChrome();if(!chrome)throw Error('Chrome or Chromium is required for the PAWS browser smoke.');
@@ -88,6 +171,12 @@ async function main(){
      const probe=await cdp.send('Runtime.evaluate',{expression:"(function verifyEmptyAcademicYear(){\n  try{\n    const launcher=document.getElementById('paws-multi-year-open');\n    if(!launcher)return{ok:false,error:'Academic Year launcher missing'};\n    launcher.click();\n    const dialog=document.getElementById('paws-multi-year-demo');\n    if(!dialog?.open)return{ok:false,error:'Academic Year dialog did not open'};\n    const model=window.PAWS_MULTI_YEAR_DEMO_MODEL;\n    const initial=JSON.parse(localStorage.getItem(model.STORAGE_KEY)||'null');\n    if(Object.keys(initial?.annual?.['2026-27']||{}).length)return{ok:false,error:'Initial Academic Year has example Sessions'};\n    if(initial?.annual?.['2027-28']&&Object.keys(initial.annual['2027-28']).length)return{ok:false,error:'2027-28 sample should not be preloaded'};\n    if(dialog.querySelector('[data-my-action=\"load-2027-28-sample\"]'))return{ok:false,error:'Sample loading shortcut should not be visible'};\n    const create=dialog.querySelector('[data-my-action=\"create-year\"]');\n    if(!create)return{ok:false,error:'Create Next Year unavailable'};\n    create.click();\n    const selected=dialog.querySelector('[data-my-year]');\n    const next=JSON.parse(localStorage.getItem(model.STORAGE_KEY)||'null');\n    if(selected?.value!=='2027-28'||next?.years?.['2027-28']?.status!=='planning')\n      return{ok:false,error:'2027-28 planning year was not created'};\n    if(Object.keys(next.annual['2027-28']||{}).length)return{ok:false,error:'New academic year contains sample Courses'};\n    if(!dialog.querySelector('[data-my-tab=\"review\"]'))return{ok:false,error:'Publish Review tab unavailable'};\n    dialog.querySelector('[data-my-tab=\"compare\"]').click();\n    if(!dialog.textContent.includes('Cross-year Teaching / DOE Comparison'))return{ok:false,error:'Year Comparison missing'};\n    const header=document.getElementById('paws-global-academic-year');\n    if(header?.value!=='2027-28')return{ok:false,error:'Global Academic Year not synchronized'};\n    const notice=document.getElementById('paws-year-preview-notice');\n    if(!notice||notice.hidden||!document.body.classList.contains('paws-my-year-preview-required'))\n      return{ok:false,error:'Future year did not mask original Calendar'};\n    return{ok:true};\n  }catch(error){return{ok:false,error:String(error?.message||error)}}\n})()",returnByValue:true});
      if(!probe.result?.value?.ok)problems.push(label+': empty Academic Year browser probe failed: '+JSON.stringify(probe.result?.value||probe.exceptionDetails||'no result'));
      else console.log('ok   Empty annual workspace, Create Next Year, no auto-samples, Year Comparison and future-year mask');
+     if(probe.result?.value?.ok){
+       try{
+         await officeWorkflowSmoke(cdp);
+         console.log('ok   ADFAD Office confirmation, annual progress, versioned export and narrow layout');
+       }catch(error){problems.push(label+': ADFAD Office browser acceptance failed '+error.message);}
+     }
    }
    if(check.page==='index.html'&&check.uid==='uid-developer'&&ok){
      const changelog=await cdp.send('Runtime.evaluate',{expression:"(async function verifyChangeLogDialog(){\n  const open=document.getElementById('site-changelog-open');\n  const dialog=document.getElementById('site-changelog-dialog');\n  const close=document.getElementById('site-changelog-close');\n  if(!open||!dialog||!close)return {ok:false,error:'Missing Change Log controls'};\n  open.click();\n  let body='';\n  for(let i=0;i<40;i++){\n    await new Promise(resolve=>setTimeout(resolve,100));\n    body=document.getElementById('site-changelog-entries')?.textContent||'';\n    if(body.includes(__EXPECTED_CHANGELOG_TITLE__))break;\n  }\n  const wasOpen=dialog.open;\n  const width=dialog.getBoundingClientRect().width;\n  close.click();\n  return {ok:wasOpen&&!dialog.open&&width>=600&&body.includes(__EXPECTED_CHANGELOG_TITLE__),\n    opened:wasOpen,closed:!dialog.open,width,loaded:body.includes(__EXPECTED_CHANGELOG_TITLE__)};\n})()".replaceAll('__EXPECTED_CHANGELOG_TITLE__',JSON.stringify(expectedChangeLogTitle)),awaitPromise:true,returnByValue:true});

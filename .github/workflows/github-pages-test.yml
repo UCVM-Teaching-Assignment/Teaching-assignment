@@ -79,7 +79,16 @@ jobs:
           --build-sha "${{ github.event.pull_request.head.sha }}"
 
       - name: Browser smoke staged frontend demo
+        env:
+          PAWS_OFFICE_SCREENSHOT_DIR: ${{ runner.temp }}/paws-office-evidence
         run: node tools/paws-browser-smoke.js
+
+      - name: Upload ADFAD Office browser evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: paws-adfad-office-browser-evidence
+          path: ${{ runner.temp }}/paws-office-evidence
+          if-no-files-found: error
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6

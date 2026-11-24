@@ -57,6 +57,11 @@
 .paws-my-calendar-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0}
 .paws-my-calendar-controls label{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700}
 .paws-my-calendar-controls span{font-size:12px;color:#627389}
+.paws-my-calendar-controls button[aria-pressed=true]{background:#17345f;color:#fff;border-color:#17345f}
+.paws-my-calendar-layers{display:flex;gap:8px 14px;flex-wrap:wrap;border:1px solid #dce4ee;border-radius:7px;margin:0 0 12px;padding:8px 12px}
+.paws-my-calendar-layers legend,.paws-my-panel summary{font-weight:700;color:#17345f}
+.paws-my-calendar-layers label{display:inline-flex;align-items:center;gap:5px}
+.paws-my-panel summary{cursor:pointer}
 @media(max-width:650px){.paws-my-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.paws-my-rollover-sources{grid-template-columns:1fr}.paws-my-global-controls{width:100%;justify-content:flex-start}.paws-my-global-phase{max-width:none}}
 /* Never mislabel the original 2026-27 timetable as a selected future/archived year. */
 body.paws-my-year-preview-required #cal-card,
