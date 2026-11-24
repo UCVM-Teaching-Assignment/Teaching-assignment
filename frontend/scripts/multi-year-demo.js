@@ -254,7 +254,7 @@
       '<label class="paws-my-field"><span>Template</span>'+select('template',info.templates,x=>x.id,x=>x.label)+'</label>'+
       '<label class="paws-my-field"><span>Data version</span>'+select('version',kinds,x=>x[0],x=>x[1])+'</label>'+
       '<label class="paws-my-field"><span>Course scope</span>'+select('course',[{code:'',title:'All Courses'},...info.courses],x=>x.code,x=>x.code||x.title)+'</label>'+
-      '<label class="paws-my-field"><span>Faculty scope</span>'+select('facultyId',[{id:'',name:'All Faculty'},...s.faculty],x=>x.id,x=>displayName(x.name))+'</label>'+
+      '<label class="paws-my-field"><span>Faculty scope</span>'+select('facultyId',[{id:'',name:'All Faculty'},...s.faculty],x=>x.id,x=>x.id?displayName(x.name):x.name)+'</label>'+
       input('Intended recipient','recipient','text','maxlength="150"')+
       '<label><input type="checkbox" name="changesOnly"> Changes since last export</label>'+
       '<button type="submit">Generate Export</button></form>');
@@ -404,9 +404,14 @@
     const selectEl=dialog.querySelector('[data-my-year]');if(selectEl)selectEl.value=selectedYear;
     const monthEl=dialog.querySelector('[data-my-calendar-month]');if(monthEl)monthEl.value=calendarMonth;
     const compareEl=dialog.querySelector('[data-my-compare-year]');if(compareEl)compareEl.value=comparisonYear;
-    const tabStrip=dialog.querySelector('.paws-my-tabs'),selectedTab=tabStrip.querySelector('.active');
-    if(selectedTab&&tabStrip.scrollWidth>tabStrip.clientWidth)tabStrip.scrollLeft=selectedTab.offsetLeft-tabStrip.offsetLeft;
+    revealCurrentTab();
     syncHeader();
+  }
+  function revealCurrentTab(){
+    const strip=dialog?.querySelector('.paws-my-tabs'),active=strip?.querySelector('.active');
+    if(!active||strip.scrollWidth<=strip.clientWidth)return;
+    const bounds=strip.getBoundingClientRect(),item=active.getBoundingClientRect();
+    if(item.left<bounds.left||item.right>bounds.right)strip.scrollLeft+=item.left-bounds.left-10;
   }
   function submitAction(form){const a=actual(),m=load(),values=Object.fromEntries(new FormData(form).entries()),kind=form.dataset.myForm;
     if(kind==='add-course')m.addCourse(a,selectedYear,values.code);
@@ -574,6 +579,7 @@
       open({year,tab:'calendar'});
     }));
     root.addEventListener('ucvm-timetable-user',syncHeader);
+    root.addEventListener('resize',revealCurrentTab);
     root.addEventListener('storage',event=>{
       if(event.key!==root.PAWS_MULTI_YEAR_DEMO_MODEL.STORAGE_KEY)return;
       engine=null;selectedYear='';clearYearSelection();
