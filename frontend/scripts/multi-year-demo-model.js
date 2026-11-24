@@ -563,8 +563,9 @@
       const canSeePerson=id=>canAdfa(a)||(Boolean(id)&&id===a.facultyId);
       const rows=live.filter(row=>!isFaculty(a)||canSeePerson(row.facultyId)).map(row=>{
         const {facultyId,times,scoped,...fields}=row;
-        return {...fields,instructorNames:fields.instructorNames||nameFor(faculty(facultyId)?.name),
-          timeText:row.date===row.endDate&&times.length===1?times[0].startTime+'–'+times[0].endTime:'Check time evidence'};
+        const timeText=row.date===row.endDate&&times.length===1?times[0].startTime+'–'+times[0].endTime:
+          times.length?'Check time evidence':'08:30–16:30 · Display default';
+        return {...fields,instructorNames:fields.instructorNames||nameFor(faculty(facultyId)?.name),timeText};
       });
       const absence=archived?([...state.archives].reverse().find(item=>item.year===year)?.absence||[]):afcLayer(year);
       return rows.concat(absence.filter(row=>canSeePerson(row.facultyId)).map(({facultyId,...row})=>({

@@ -153,6 +153,7 @@ test('Calendar layers use the actual same-year source and freeze at archive', ()
   plan(engine);
   const id = add(engine);
   assert.deepEqual(engine.getCalendarLayers(owner, nextYear).map(x => x.layer), ['rotation']);
+  assert.match(engine.getCalendarLayers(owner, nextYear)[0].timeText, /08:30–16:30 · Display default/);
   assert.equal(engine.historicalSuggestions(owner, nextYear, 'VTMD 304').find(x => x.sessionId === id).candidates[0].availability, 'Check needed');
   live.activities = live.activities.filter(x => x.activityId !== 'last-ccc');
   assert.deepEqual(engine.getCalendarLayers(owner, firstYear), []);
