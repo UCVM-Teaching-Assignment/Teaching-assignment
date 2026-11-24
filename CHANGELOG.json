@@ -2,6 +2,17 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-24",
+      "pr": 123,
+      "title": "Plan the next academic year in the ADFAD Office Demo",
+      "changes": [
+        "Open a planning year and review Working, Confirmed and Published course versions in the existing Academic Year Workspace.",
+        "Preview and recover a scoped Teaching Calendar import, review historical instructor suggestions, and track progress by dataset, course or faculty.",
+        "Record an office confirmation and generate complete or change-only CSV and Excel schedule exports with separate delivery status.",
+        "View independent Calendar layers using synthetic activity and AFC dates in the Frontend Demo."
+      ]
+    },
+    {
       "date": "2026-11-13",
       "pr": 118,
       "title": "Fix the source checksum for approved AFC PDFs in Testing",
