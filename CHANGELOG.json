@@ -8,7 +8,7 @@
       "changes": [
         "Walked through the Calendar, Faculty Dashboard, Teaching Assignments and User Management as Owner, Administrator, Developer, ADFA, ADC, LAB, HICC, VISC and Faculty.",
         "Working activities in the Calendar List view and Faculty Dashboard Other working activities load again; they failed for any year with more than 100 activities.",
-        "Developer can open Teaching Assignments again, like other administrators.",
+        "Developer can open Teaching Assignments again, with the route, office navigation and Faculty Dashboard link using the same administrator access.",
         "User Management shows the signed-in name instead of Checking sign-in when the account has no access."
       ]
     },

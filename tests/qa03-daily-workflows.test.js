@@ -11,6 +11,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+const routeAccess = require('../frontend/scripts/faculty-route-access.js');
 const { createStore } = require('../tools/pages-demo-api/store.js');
 const { createDemoRuntime } = require('../tools/pages-demo-api/runtime.js');
 
@@ -51,6 +53,18 @@ test('a full academic year of working activities loads across pages without gaps
 
 test('Developer can open Teaching Assignments', () => {
   assert.match(read('frontend/scripts/teaching-assignments.js'), /const adminRoles = new Set\(\['developer','owner','administrator','adfa_general','adfa_regular','admin'\]\)/);
+});
+
+test('Teaching Assignments navigation admits Developer without granting office-only roles access', () => {
+  const window = {};
+  vm.runInNewContext(read('frontend/scripts/faculty-access.js'), { window });
+  for (const canOpen of [routeAccess.canOpenTeachingAssignments, window.UCVM.canOpenTeachingAssignments]) {
+    assert.equal(canOpen({ role: 'developer' }), true);
+    assert.equal(canOpen({ baseRole: 'developer' }), true);
+    for (const role of ['adc', 'lab', 'other_office', 'contributor', 'editor', 'viewer', '']) {
+      assert.equal(canOpen({ role }), false, role || 'missing role');
+    }
+  }
 });
 
 test('User Management shows who is signed in before refusing access', () => {
