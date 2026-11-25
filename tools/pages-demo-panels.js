@@ -22,6 +22,8 @@
     const style=doc.createElement('style');style.id='paws-demo-floating-style';
     style.textContent=`
 [data-paws-floating-panel]{box-sizing:border-box;min-width:0;position:fixed}
+/* While a page dialog is open, sit below it so the panels never cover its buttons (most visible at phone widths). */
+body:has(#modal.open,.afc-timetable-panel:not([hidden]),[aria-modal="true"]:not([aria-hidden="true"])) [data-paws-floating-panel]{z-index:100!important}
 [data-paws-floating-panel] .paws-float-handle{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:grab;touch-action:none;user-select:none;margin:-3px -3px 4px;min-height:28px}
 [data-paws-floating-panel] .paws-float-handle:active{cursor:grabbing}
 [data-paws-floating-panel] .paws-float-title{font:800 12px/1.3 Arial,sans-serif;letter-spacing:.015em}
@@ -50,7 +52,9 @@
     }
     handle.append(title,toggle);node.append(handle,contents);
     node.dataset.pawsFloatingPanel=kind;
-    let collapsed=old.collapsed===true;
+    // On phone-width screens the expanded panels cover dialog buttons; start
+    // collapsed there unless the tester has already chosen.
+    let collapsed=typeof old.collapsed==='boolean'?old.collapsed:root.innerWidth<=600;
     const set=()=>{
       node.classList.toggle('paws-collapsed',collapsed);
       toggle.textContent=collapsed?'+':'−';

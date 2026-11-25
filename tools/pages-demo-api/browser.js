@@ -39,6 +39,23 @@ const { Buffer } = require('buffer');
     return new Response(JSON.stringify(result && result.jsonBody !== undefined ? result.jsonBody : {}), { status, headers });
   }
 
+  // Excel downloads need ExcelJS, published as pages-demo-exceljs.js and loaded
+  // only on the first Excel request so ordinary pages stay light.
+  const scriptBase = (root.document && root.document.currentScript && root.document.currentScript.src) || (root.location && root.location.href) || '';
+  let excelLoad = null;
+  const needsExcel = url => /^\/api\/v1\/ccc-replacements\/template$/.test(url.pathname) || (/^\/api\/v1\/(reports|change-history)\/export$/.test(url.pathname) && url.searchParams.get('format') === 'xlsx');
+  function ensureExcel() {
+    if (root.ExcelJS) return Promise.resolve();
+    if (!excelLoad) excelLoad = new Promise((resolve, reject) => {
+      const script = root.document.createElement('script');
+      script.src = new URL('pages-demo-exceljs.js', scriptBase).href;
+      script.onload = () => (root.ExcelJS ? resolve() : reject(new Error('Excel support did not load.')));
+      script.onerror = () => reject(new Error('Excel support could not be loaded.'));
+      root.document.head.appendChild(script);
+    }).catch(error => { excelLoad = null; throw error; });
+    return excelLoad;
+  }
+
   async function demoFetch(input, init) {
     const target = origin();
     const url = typeof input === 'string' ? input : input && input.url;
@@ -46,6 +63,7 @@ const { Buffer } = require('buffer');
     const request = new Request(url, init || (typeof input === 'string' ? undefined : input));
     const path = new URL(request.url).pathname;
     if (/\/approved-artifact\/?$/.test(path)) await ensureTemplate();
+    if (needsExcel(new URL(request.url))) { try { await ensureExcel(); } catch (error) { console.error('[PAWS Frontend Demo] Excel support', error); } }
     try {
       // Mirrors the University HTTP host: method and body pass through unchanged.
       const result = await route(new Request('https://pages-demo.invalid' + new URL(request.url).pathname + new URL(request.url).search, { method: request.method, headers: request.headers, body: ['GET', 'HEAD'].includes(request.method) ? undefined : await request.arrayBuffer() }));
@@ -62,7 +80,10 @@ const { Buffer } = require('buffer');
   root.UCVM_PAWS_DEMO_API = Object.freeze({ store, reset: () => store.reset(),
     backend: 'browser-memory', authoritative: false,
     testingOnly: require('./testing-only.js').createTestingOnly(store),
-    officeWorkbook: (table, academicYear) => require('../../server/src/reports/report-export').renderReportExport([table], { format: 'xlsx', academicYear })
+    async officeWorkbook(table, academicYear) {
+      await ensureExcel();
+      return require('../../server/src/reports/report-export').renderReportExport([table], { format: 'xlsx', academicYear });
+    }
   });
   // "Reset demo data" (UCVM_PAGES_DEMO.reset in pages-demo-runtime.js) calls
   // UCVM_PAWS_DEMO_API.reset, so the PAWS tables are cleared with the rest.

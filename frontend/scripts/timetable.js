@@ -980,11 +980,17 @@
     const facultyId=String(currentUser.profile?.facultyId||'').trim();
     if(s.isWorkingActivity)return s.activityOwnerUid===currentUser.uid&&Boolean(facultyId)&&s.activityFacultyId===facultyId;
     if(typeof s.assignedToViewer==='boolean')return s.assignedToViewer;
-    const aliases=new Set([currentUser.instructorName,currentUser.name,currentUser.email].map(swapNameKey).filter(Boolean));
+    // Profile names can be "Last, First" while session instructors are "First Last";
+    // match both orders, or a Faculty export dropped every one of their sessions.
+    const nameForms=value=>{const raw=String(value||'').trim(),comma=raw.match(/^([^,]+),\s*(.+)$/);return comma?[raw,`${comma[2]} ${comma[1]}`]:[raw]};
+    const aliases=new Set([currentUser.instructorName,currentUser.name,currentUser.email].flatMap(nameForms).map(swapNameKey).filter(Boolean));
     const assignments=Array.isArray(s.assignments)?s.assignments:[];
     if(facultyId&&assignments.some(a=>String(a?.ucid||a?.facultyId||'').trim()===facultyId))return true;
     if(assignments.some(a=>aliases.has(swapNameKey(a?.name))))return true;
-    return splitInstructorNames(s.instructor||'').some(name=>aliases.has(swapNameKey(name)));
+    if(splitInstructorNames(s.instructor||'').some(name=>aliases.has(swapNameKey(name))))return true;
+    // The server already scopes its sanitized rows to the signed-in faculty.
+    // The Testing Demo also has shared rows, which require ownership evidence.
+    return !usesDemoTeachingSchedule()&&roleIsFaculty(currentUser)&&!assignments.some(a=>String(a?.ucid||a?.facultyId||'').trim());
   }
   function renderWeekControls() {
     const r1 = $('week-btn-row-1');
@@ -2896,17 +2902,23 @@
   }
   function icsEscape(value){return String(value??'').replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;')}
   function icsDate(date){return String(date).replace(/-/g,'')}
+  // UTC DTSTAMP without the trailing Z (callers append it); toISOString already
+  // ends in Z, which produced an invalid "...ZZ" value.
+  function icsStamp(){return new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'').replace(/Z$/,'')}
+  // RFC 5545 requires a VTIMEZONE for every TZID used. Without it Outlook may not
+  // resolve America/Edmonton and can shift the event times.
+  const EDMONTON_VTIMEZONE=['BEGIN:VTIMEZONE','TZID:America/Edmonton','BEGIN:STANDARD','DTSTART:19701101T020000','RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU','TZOFFSETFROM:-0600','TZOFFSETTO:-0700','TZNAME:MST','END:STANDARD','BEGIN:DAYLIGHT','DTSTART:19700308T020000','RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU','TZOFFSETFROM:-0700','TZOFFSETTO:-0600','TZNAME:MDT','END:DAYLIGHT','END:VTIMEZONE'].join('\r\n');
   // CN is a parameter, not a TEXT value: quote commas and encode quotes/newlines
   // using RFC 6868. Keep DESCRIPTION and other TEXT fields on icsEscape().
   function icsParameter(value){return '"'+String(value??'').replace(/\^/g,'^^').replace(/\r\n|\r|\n/g,'^n').replace(/"/g,"^'")+'"'}
   function exportCalendar(data){
-    const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
+    const stamp=icsStamp();
     const events=data.map(s=>{
       const summary=icsEscape(`${s.course} ${s.type}${s.topic?` - ${s.topic}`:''}`),description=icsEscape(`Faculty: ${displayFacultyList(s.instructor||'TBD')}${s.room?`\nRoom: ${s.room}`:''}`);
       if(s.isCcc||s.timeUnknown||!s.start||!s.end){const next=ymd(addDays(parseYmd(s.date),1));return ['BEGIN:VEVENT',`UID:${icsEscape(s.id)}@ucvm-schedule`,`DTSTAMP:${stamp}Z`,`DTSTART;VALUE=DATE:${icsDate(s.date)}`,`DTEND;VALUE=DATE:${icsDate(next)}`,`SUMMARY:${summary}`,`DESCRIPTION:${description}`,'END:VEVENT'].join('\r\n')}
       return ['BEGIN:VEVENT',`UID:${icsEscape(s.id)}@ucvm-schedule`,`DTSTAMP:${stamp}Z`,`DTSTART;TZID=America/Edmonton:${icsDate(s.date)}T${s.start.replace(':','')}00`,`DTEND;TZID=America/Edmonton:${icsDate(s.date)}T${s.end.replace(':','')}00`,`SUMMARY:${summary}`,`DESCRIPTION:${description}`,s.room?`LOCATION:${icsEscape(s.room)}`:'','END:VEVENT'].filter(Boolean).join('\r\n');
     }).join('\r\n');
-    downloadFile(`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//UCVM//Teaching Schedule//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n${events}\r\nEND:VCALENDAR\r\n`,'text/calendar;charset=utf-8','ucvm-filtered-timetable.ics');
+    downloadFile(`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//UCVM//Teaching Schedule//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n${EDMONTON_VTIMEZONE}\r\n${events}\r\nEND:VCALENDAR\r\n`,'text/calendar;charset=utf-8','ucvm-filtered-timetable.ics');
   }
 
   function outlookAttendeesForSession(session){
@@ -2918,14 +2930,14 @@
     return [...emails].map(([email,name])=>({email,name:displayFaculty(name)}));
   }
   function exportOutlookInvites(data,organizer){
-    const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
+    const stamp=icsStamp();
     const organizerEmail=String(organizer?.email||'').trim(),organizerName=displayFaculty(organizer?.name||organizerEmail||'UCVM Scheduling');
     const events=data.map(session=>{
       const summary=icsEscape(`${session.course} ${session.type}${session.topic?` - ${session.topic}`:''}`),description=icsEscape(`Faculty: ${displayFacultyList(session.instructor||'TBD')}${session.room?`\nRoom: ${session.room}`:''}`),attendees=outlookAttendeesForSession(session).map(a=>`ATTENDEE;CN=${icsParameter(a.name)};ROLE=REQ-PARTICIPANT;RSVP=TRUE:mailto:${icsEscape(a.email)}`);
       const times=session.isCcc||session.timeUnknown||!session.start||!session.end?[`DTSTART;VALUE=DATE:${icsDate(session.date)}`,`DTEND;VALUE=DATE:${icsDate(ymd(addDays(parseYmd(session.date),1)))}`]:[`DTSTART;TZID=America/Edmonton:${icsDate(session.date)}T${session.start.replace(':','')}00`,`DTEND;TZID=America/Edmonton:${icsDate(session.date)}T${session.end.replace(':','')}00`];
       return ['BEGIN:VEVENT',`UID:${icsEscape(session.id)}@ucvm-outlook`,`DTSTAMP:${stamp}Z`,...times,`SUMMARY:${summary}`,`DESCRIPTION:${description}`,session.room?`LOCATION:${icsEscape(session.room)}`:'',organizerEmail?`ORGANIZER;CN=${icsParameter(organizerName)}:mailto:${icsEscape(organizerEmail)}`:'',...attendees,'STATUS:CONFIRMED','SEQUENCE:0','END:VEVENT'].filter(Boolean).join('\r\n');
     }).join('\r\n');
-    downloadFile(`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//UCVM//Outlook Teaching Invitations//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:REQUEST\r\n${events}\r\nEND:VCALENDAR\r\n`,'text/calendar;charset=utf-8','ucvm-outlook-invite-package.ics');
+    downloadFile(`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//UCVM//Outlook Teaching Invitations//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:REQUEST\r\n${EDMONTON_VTIMEZONE}\r\n${events}\r\nEND:VCALENDAR\r\n`,'text/calendar;charset=utf-8','ucvm-outlook-invite-package.ics');
   }
   async function openOutlookInviteDialog(){
     if(!UCVM.admin(currentUser)){toast('ADFA permission is required.',true);return}

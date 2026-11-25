@@ -30,7 +30,7 @@ class Element{
   fire(k,detail={}){for(const fn of this.events[k]||[])fn({pointerId:7,button:0,clientX:0,clientY:0,target:{closest:()=>null},preventDefault(){},...detail});}
   setPointerCapture(){}
 }
-function load(saved=new Map()){
+function load(saved=new Map(),innerWidth=1200){
   const banner=new Element('div',{id:'github-pages-test-site-banner',x:700,y:10,width:390,height:60});
   const role=new Element('div',{id:'ucvm-pages-demo-toolbar',x:12,y:650,width:410,height:100});
   const heading=new Element();heading.className='demo-title';role.appendChild(heading);
@@ -39,7 +39,7 @@ function load(saved=new Map()){
   const styles=new Map(),listeners={};
   const doc={readyState:'complete',querySelector:k=>mapping[k]||null,createElement:tag=>new Element(tag),
     getElementById:id=>styles.get(id)||null,head:{appendChild:n=>styles.set(n.id,n)},body:new Element('body')};
-  const root={document:doc,innerWidth:1200,innerHeight:800,
+  const root={document:doc,innerWidth,innerHeight:800,
     localStorage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v)},
     addEventListener:(k,fn)=>{listeners[k]=fn;}};
   vm.runInNewContext(script,{window:root,MutationObserver:class{},console});
@@ -79,4 +79,13 @@ test('stored panel state is restored on reload',()=>{
   const later=load(saved);
   assert.equal(later.role.classList.contains('paws-collapsed'),true);
   assert.equal(later.banner.classList.contains('paws-collapsed'),false);
+});
+test('panels start collapsed on phone-width screens unless the tester chose otherwise',()=>{
+  const phone=load(new Map(),390);
+  assert.equal(phone.banner.classList.contains('paws-collapsed'),true);
+  assert.equal(phone.role.classList.contains('paws-collapsed'),true);
+  const desktop=load(new Map(),1280);
+  assert.equal(desktop.role.classList.contains('paws-collapsed'),false);
+  const saved=new Map([['paws-pages-demo-panels-v1',JSON.stringify({role:{x:8,y:8,collapsed:false}})]]);
+  assert.equal(load(saved,390).role.classList.contains('paws-collapsed'),false);
 });
