@@ -41,9 +41,10 @@ test('ICS exports use a valid single-Z DTSTAMP and include the Edmonton VTIMEZON
   assert.equal((timetable.match(/METHOD:(PUBLISH|REQUEST)[^`]*\$\{EDMONTON_VTIMEZONE\}/g) || []).length, 2, 'both ICS exports embed the VTIMEZONE');
 });
 
-function belongs(currentUser, session) {
-  const src = [fn('swapNameKey'), fn('splitInstructorNames'), fn('roleIsFaculty'), fn('sessionBelongsToCurrentFaculty')].join('\n');
-  return vm.runInNewContext(`${src}; sessionBelongsToCurrentFaculty(s)`, { currentUser, s: session });
+function belongs(currentUser, session, demo = false) {
+  const window = demo ? { UCVM_PAWS_DEMO_API: { authoritative: false } } : {};
+  const src = [fn('swapNameKey'), fn('splitInstructorNames'), fn('roleIsFaculty'), fn('usesDemoTeachingSchedule'), fn('sessionBelongsToCurrentFaculty')].join('\n');
+  return vm.runInNewContext(`${src}; sessionBelongsToCurrentFaculty(s)`, { window, currentUser, s: session });
 }
 
 test('Faculty-role timetable export keeps their own sessions', () => {
@@ -54,6 +55,13 @@ test('Faculty-role timetable export keeps their own sessions', () => {
   assert.equal(belongs(hicc, { instructor: 'Someone Else', assignments: [{ name: 'Someone Else', facultyId: 'f2' }] }), false, 'rows with another Faculty ID are still excluded');
   const admin = { uid: 'uid-owner', name: 'Owner', role: 'owner', profile: {} };
   assert.equal(belongs(admin, { instructor: 'Someone Else', assignments: [{ name: 'Someone Else' }] }), false, 'admins do not get the server-scope fallback');
+});
+
+test('the shared Demo timetable uses its ownership flag for personal exports', () => {
+  const faculty = { role: 'faculty', name: 'Lindqvist, Avery', profile: { facultyId: 'f1' } };
+  assert.equal(belongs(faculty, { instructor: 'Someone Else', assignedToViewer: true }, true), true);
+  assert.equal(belongs(faculty, { instructor: 'Avery Lindqvist', assignedToViewer: false }, true), false);
+  assert.equal(belongs(faculty, { instructor: 'Someone Else' }, true), false);
 });
 
 test('demo AFC seed requests carry their work days and specific coverage text', () => {

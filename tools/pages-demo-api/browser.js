@@ -77,7 +77,14 @@ const { Buffer } = require('buffer');
   }
 
   root.fetch = demoFetch;
-  root.UCVM_PAWS_DEMO_API = Object.freeze({ store, reset: () => store.reset(), backend: 'browser-memory', authoritative: false, testingOnly: require('./testing-only.js').createTestingOnly(store) });
+  root.UCVM_PAWS_DEMO_API = Object.freeze({ store, reset: () => store.reset(),
+    backend: 'browser-memory', authoritative: false,
+    testingOnly: require('./testing-only.js').createTestingOnly(store),
+    async officeWorkbook(table, academicYear) {
+      await ensureExcel();
+      return require('../../server/src/reports/report-export').renderReportExport([table], { format: 'xlsx', academicYear });
+    }
+  });
   // "Reset demo data" (UCVM_PAGES_DEMO.reset in pages-demo-runtime.js) calls
   // UCVM_PAWS_DEMO_API.reset, so the PAWS tables are cleared with the rest.
 })(typeof window !== 'undefined' ? window : null);

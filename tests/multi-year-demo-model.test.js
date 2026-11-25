@@ -19,6 +19,7 @@ const faculty={uid:'faculty1',role:'faculty',facultyId:'f1'};
 const other={uid:'other1',role:'faculty',facultyId:'f2'};
 const memory=()=>{const data=new Map();return {getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)}};
 const engine=(storage=memory())=>createEngine({source,storage,now:()=>new Date('2026-10-29T18:00:00Z')});
+const confirmLead=m=>m.confirmRole(adfa,'2027-28','renew-2027-28-0');
 
 test('initial 2026-27 Published teaching and DOE remain Faculty visible',()=>{
  const m=engine(); const t=m.getTeaching(faculty,'2026-27');
@@ -32,7 +33,7 @@ test('create 2027-28 leaves annual courses empty and copies policy as Draft',()=
  assert.equal(s.years['2027-28'].status,'planning');
  assert.deepEqual(s.annual['2027-28'],{});
  assert.equal(s.doe['2027-28'].policy.status,'draft');
- assert.equal(s.roles['2027-28'].find(r=>r.sourceId==='r1').status,'confirmed');
+ assert.equal(s.roles['2027-28'].find(r=>r.sourceId==='r1').status,'draft');
  assert.equal(s.roles['2027-28'].find(r=>r.sourceId==='r2').status,'draft');
  assert.throws(()=>m.createYear(owner,'2027-28'),/already exists/i);
 });
@@ -47,6 +48,8 @@ test('new annual Course snapshots Catalog title and does not populate sessions',
 test('a scoped Course publisher must wait for finalization and cannot publish unrelated Course',()=>{
  const m=engine();m.createYear(owner,'2027-28');m.addCourse(adfa,'2027-28','VTMD 306');
  m.addSession(adfa,'2027-28','VTMD 306',{id:'s2',date:'2027-09-01',topic:'Lab 1',sessionType:'LAB',startTime:'08:00',endTime:'10:00',assignments:[{facultyId:'f1',doeCredit:4}]});
+ assert.throws(()=>m.publishCourse(lead,'2027-28','VTMD 306'),/scope permission/);
+ confirmLead(m);
  assert.throws(()=>m.publishCourse(lead,'2027-28','VTMD 306'),/finaliz/i);
  m.finalizeCourse(adfa,'2027-28','VTMD 306');
  const result=m.publishCourse(lead,'2027-28','VTMD 306');
@@ -57,6 +60,7 @@ test('a scoped Course publisher must wait for finalization and cannot publish un
 });
 test('Working edits remain private until next Course publication',()=>{
  const m=engine();m.createYear(owner,'2027-28');m.addCourse(adfa,'2027-28','VTMD 306');
+ confirmLead(m);
  m.addSession(adfa,'2027-28','VTMD 306',{id:'s2',date:'2027-09-01',topic:'Lab 1',assignments:[{facultyId:'f1',doeCredit:4}]});
  m.finalizeCourse(adfa,'2027-28','VTMD 306');m.publishCourse(lead,'2027-28','VTMD 306');
  m.editAssignment(adfa,'2027-28','VTMD 306','s2','f2');
@@ -68,6 +72,7 @@ test('Working edits remain private until next Course publication',()=>{
 });
 test('initial DOE Pending, approved policy release, automatic sync with override retained',()=>{
  const m=engine();m.createYear(owner,'2027-28');m.addCourse(adfa,'2027-28','VTMD 306');
+ confirmLead(m);
  m.addSession(adfa,'2027-28','VTMD 306',{id:'s2',date:'2027-09-01',topic:'Lab 1',assignments:[{facultyId:'f1',doeCredit:4}]});
  m.finalizeCourse(adfa,'2027-28','VTMD 306');m.publishCourse(lead,'2027-28','VTMD 306');
  assert.equal(m.getDoe(faculty,'2027-28').status,'pending');
@@ -120,6 +125,7 @@ test('working-session conflict checker responds to shared AFC, not only publishe
 });
 test('DOE override review remains pending until ADFAD explicitly confirms',()=>{
  const m=engine();m.createYear(owner,'2027-28');m.addCourse(adfa,'2027-28','VTMD 306');
+ confirmLead(m);
  m.addSession(adfa,'2027-28','VTMD 306',{id:'review-s1',date:'2027-09-01',topic:'A',assignments:[{facultyId:'f1',doeCredit:4}]});
  m.finalizeCourse(adfa,'2027-28','VTMD 306');m.publishCourse(lead,'2027-28','VTMD 306');
  m.approvePolicy(adfa,'2027-28');m.publishDoe(adfa,'2027-28');m.setOverride(adfa,'2027-28','f1',9);
@@ -139,11 +145,12 @@ test('publishing unchanged Working revision is rejected without duplicate releas
 });
 test('Faculty Calendar shows all Published sessions but no private DOE details',()=>{
  const m=engine();m.createYear(owner,'2027-28');m.addCourse(adfa,'2027-28','VTMD 306');
+ confirmLead(m);
  m.addSession(adfa,'2027-28','VTMD 306',{id:'public-s1',date:'2027-09-01',topic:'Public Lab',sessionType:'LAB',assignments:[{facultyId:'f2',doeCredit:6}]});
  m.finalizeCourse(adfa,'2027-28','VTMD 306');m.publishCourse(lead,'2027-28','VTMD 306');
  const rows=m.getCalendar(faculty,'2027-28');
  assert.equal(rows.length,1);
- assert.equal(rows[0].instructorNames,'Morgan Hart');
+ assert.equal(rows[0].instructorNames,'Hart, Morgan');
  assert.equal(Object.hasOwn(rows[0],'assignments'),false);
  assert.doesNotMatch(JSON.stringify(rows),/doeCredit|facultyId/);
  assert.equal(m.getTeaching(faculty,'2027-28').length,0);
@@ -197,12 +204,13 @@ test('initial migration retains original synthetic Change History as read-only e
  assert.equal(data.history.length,1);
 });
 
-test('Developer has Owner-level annual workspace authority to create and archive synthetic years',()=>{
+test('Developer technical access does not grant business year management',()=>{
  const m=engine(),developer={uid:'dev1',role:'developer'};
- m.createYear(developer,'2027-28');
- assert.equal(m.getState().years['2027-28'].status,'planning');
- m.retireYear(developer,'2027-28',true);
- assert.equal(m.getState().years['2027-28'].status,'archived');
+ assert.throws(()=>m.createYear(developer,'2027-28'),/permission/);
+ m.createYear(owner,'2027-28');
+ assert.throws(()=>m.retireYear(developer,'2027-28',true),/Owner/);
+ m.retireYear(owner,'2027-28',true);
+ assert.throws(()=>m.restoreYear(developer,'2027-28'),/Owner/);
 });
 
 test('unassigned Session is warning-only and does not masquerade as inactive Faculty',()=>{

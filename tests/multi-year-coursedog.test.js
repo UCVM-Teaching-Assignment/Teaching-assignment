@@ -26,6 +26,7 @@ const lead={uid:'lead',role:'hicc',facultyId:'f1'};
 const faculty1={uid:'fac1',role:'faculty',facultyId:'f1'};
 const faculty3={uid:'fac3',role:'faculty',facultyId:'f3'};
 const build=()=>createEngine({source,now:()=>new Date('2026-10-29T12:00:00Z')});
+const confirmLead=m=>m.confirmRole(adfa,'2027-28','renew-2027-28-0');
 const req=(options={})=>({fromYear:'2026-27',toYear:'2027-28',code:'VTMD 306',options});
 
 test('selective rollover defaults to one Catalog course while the new year starts empty',()=>{
@@ -41,6 +42,7 @@ test('selective rollover defaults to one Catalog course while the new year start
 
 test('copying session topics without schedule creates unscheduled Working-only sessions',()=>{
  const m=build();m.createYear(owner,'2027-28');
+ confirmLead(m);
  const c=m.rolloverCourse(adfa,req({sessions:true}));
  assert.equal(c.working.length,2);
  assert.ok(c.working.every(s=>s.date===''&&s.startTime===''&&s.room===''&&s.assignments.length===0));
@@ -85,6 +87,7 @@ test('published-only rollover cannot use unpublished previous Working changes',(
 
 test('publication review compares added assignments and DOE deltas without changing Published data',()=>{
  const m=build();m.createYear(owner,'2027-28');
+ confirmLead(m);
  m.rolloverCourse(adfa,req({sessions:true,schedule:true,instructors:true}));
  const initial=m.previewPublication(adfa,'2027-28','VTMD 306');
  assert.ok(initial.issues.some(x=>x.code==='NOT_FINALIZED'));
@@ -121,6 +124,7 @@ test('year phase is role-gated and independent of Course-level release',()=>{
 
 test('cross-year comparison respects Published-only data and self-only faculty DOE',()=>{
  const m=build();m.createYear(owner,'2027-28');
+ confirmLead(m);
  m.rolloverCourse(adfa,req({sessions:true,schedule:true,instructors:true}));
  m.finalizeCourse(adfa,'2027-28','VTMD 306');m.publishCourse(lead,'2027-28','VTMD 306');
  const comparison=m.compareYears(faculty1,'2026-27','2027-28');
@@ -146,7 +150,7 @@ test('validation blocks legacy stored ineligible assignments but accepts a targe
  const key='paws-multi-year-demo-v1',saved=JSON.parse(map.get(key));
  saved.annual['2027-28']['VTMD 306'].working[0].assignments.push({facultyId:'f2',doeCredit:3,teachingRole:'Lab support'});
  map.set(key,JSON.stringify(saved));
- const m=create();m.finalizeCourse(adfa,'2027-28','VTMD 306');
+ const m=create();confirmLead(m);m.finalizeCourse(adfa,'2027-28','VTMD 306');
  const before=m.previewPublication(adfa,'2027-28','VTMD 306');
  const issue=before.issues.find(x=>x.code==='INACTIVE_FACULTY'&&x.severity==='block');
  assert.equal(issue.sessionId,'legacy');assert.equal(issue.facultyId,'f2');

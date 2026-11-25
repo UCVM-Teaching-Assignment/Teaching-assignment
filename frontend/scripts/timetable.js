@@ -373,6 +373,7 @@
       timeUnknown:!row?.startTime||!row?.endTime,
       room:String(row?.room||''),
       instructor,
+      assignedToViewer: row?.assignedToViewer,
       assignments:canonicalAssignments.length?canonicalAssignments:(instructor ? splitInstructorNames(instructor).map(name=>({name})) : []),
       unresolvedAssignmentCount:Number(row?.unresolvedAssignmentCount)||0,
       assignmentManagementAvailable:canonicalAssignments.every(item=>item.active===true)&&Number(row?.unresolvedAssignmentCount||0)===0,
@@ -381,7 +382,7 @@
   }
   async function fetchPawsSessions(range={}){
     if(!window.UCVM_PAWS_DATA)throw new Error('The PAWS data client is unavailable.');
-    const rows=await window.UCVM_PAWS_DATA.listSessions(range);
+    const rows=await window.UCVM_PAWS_DATA.listSessions({...range,teachingSchedule:true});
     return rows.map(mapPawsSessionRow).filter(row=>row.id);
   }
   async function ensureSessionsForRange(start,end){
@@ -409,15 +410,23 @@
     dates.forEach(date=>sessionCacheDates.add(date));
     return rows.filter(row=>dates.includes(String(row.date||'').slice(0,10)));
   }
+  // Workflow widgets keep the original identity-scoped read even when the
+  // synthetic Calendar can display the shared Teaching Schedule.
+  function workflowSessionRows(rows){
+    return rows.filter(row=>row.assignedToViewer!==false);
+  }
+  function allWorkflowSessions(options){
+    return ensureAllSessions(options).then(workflowSessionRows);
+  }
   window.UCVM_PAGE_DATA={
     profile:()=>pageProfile(),
     academicYear:()=>viewMode==='list'?listAcademicYear:sqlAcademicYearForDate(ymd(weekStart(selectedWeek,selectedSemester))),
     faculty:()=>currentFacultyRecord,
-    sessions:()=>pageSessions(),
-    ensureSessionsForRange,
+    sessions:()=>workflowSessionRows(pageSessions()),
+    ensureSessionsForRange:(start,end)=>ensureSessionsForRange(start,end).then(workflowSessionRows),
     subscribe:callback=>{pageDataSubscribers.add(callback);return()=>pageDataSubscribers.delete(callback)},
     facultyDirectory:()=>facultyDirectory.slice(),
-    allSessions:()=>ensureAllSessions(),
+    allSessions:()=>allWorkflowSessions(),
     profileSnapshot:uid=>{
       if(!profileSnapshots.has(uid))profileSnapshots.set(uid,db.collection('users').doc(uid).get());
       return profileSnapshots.get(uid);
@@ -428,7 +437,7 @@
   window.PAWS_SWAP?.configure({getUser:()=>currentUser,onChanged:async()=>{
     invalidateAllSessions();await Promise.all([refreshSessionScope(),window.PAWS_SWAP.refreshPending()]);render();window.PAWS_TASKS?.refresh();
   }});
-  window.PAWS_TASKS?.configure({hasUser:()=>Boolean(currentUser),identity:()=>currentUser?.uid||'',role:()=>currentUser?.role||'',academicYear:()=>listAcademicYear,allSessions:()=>ensureAllSessions({refresh:true,notify:false}),disposition:calendarTimingDisposition,reason:unpositionedReason,openSession:async id=>{
+  window.PAWS_TASKS?.configure({hasUser:()=>Boolean(currentUser),identity:()=>currentUser?.uid||'',role:()=>currentUser?.role||'',academicYear:()=>listAcademicYear,allSessions:()=>allWorkflowSessions({refresh:true,notify:false}),disposition:calendarTimingDisposition,reason:unpositionedReason,openSession:async id=>{
     const ownerUid=currentUser?.uid;
     let rows;
     try{rows=await ensureAllSessions({refresh:true,notify:false});}
@@ -960,10 +969,17 @@
   }
 
   function roleIsFaculty(profile){ return ['faculty','hicc','visc'].includes(String(profile?.role||'').trim().toLowerCase()); }
+  function usesDemoTeachingSchedule(){ return window.UCVM_PAWS_DEMO_API?.authoritative===false; }
+  function startsOnMyTimetable(){ return roleIsFaculty(currentUser)&&!usesDemoTeachingSchedule(); }
+  function setMyTimetableOnly(value){
+    myTimetableOnly=value;
+    $('my-timetable-btn').textContent=value?'Show All Timetable':'My Timetable';
+  }
   function sessionBelongsToCurrentFaculty(s){
     if(!currentUser)return false;
     const facultyId=String(currentUser.profile?.facultyId||'').trim();
     if(s.isWorkingActivity)return s.activityOwnerUid===currentUser.uid&&Boolean(facultyId)&&s.activityFacultyId===facultyId;
+    if(typeof s.assignedToViewer==='boolean')return s.assignedToViewer;
     // Profile names can be "Last, First" while session instructors are "First Last";
     // match both orders, or a Faculty export dropped every one of their sessions.
     const nameForms=value=>{const raw=String(value||'').trim(),comma=raw.match(/^([^,]+),\s*(.+)$/);return comma?[raw,`${comma[2]} ${comma[1]}`]:[raw]};
@@ -972,10 +988,9 @@
     if(facultyId&&assignments.some(a=>String(a?.ucid||a?.facultyId||'').trim()===facultyId))return true;
     if(assignments.some(a=>aliases.has(swapNameKey(a?.name))))return true;
     if(splitInstructorNames(s.instructor||'').some(name=>aliases.has(swapNameKey(name))))return true;
-    // Faculty, HICC and VISC receive a server-scoped, sanitized timetable (no
-    // Faculty IDs on assignments): every row is already their own. The account
-    // name need not match the Faculty name, so trust the server scope there.
-    return roleIsFaculty(currentUser)&&!assignments.some(a=>String(a?.ucid||a?.facultyId||'').trim());
+    // The server already scopes its sanitized rows to the signed-in faculty.
+    // The Testing Demo also has shared rows, which require ownership evidence.
+    return !usesDemoTeachingSchedule()&&roleIsFaculty(currentUser)&&!assignments.some(a=>String(a?.ucid||a?.facultyId||'').trim());
   }
   function renderWeekControls() {
     const r1 = $('week-btn-row-1');
@@ -1076,7 +1091,7 @@
     $('teaching-assignments-btn').addEventListener('click', () => {
       if (currentUser && ['faculty','hicc','visc','developer','owner','administrator','adfa_general','adfa_regular','admin'].includes(String(currentUser.role || '').trim().toLowerCase())) window.location.href = 'teaching-assignments.html';
     });
-    $('my-timetable-btn').addEventListener('click', () => { myTimetableOnly = !myTimetableOnly; $('my-timetable-btn').textContent = myTimetableOnly ? 'Show All Timetable' : 'My Timetable'; render(); });
+    $('my-timetable-btn').addEventListener('click', () => { setMyTimetableOnly(!myTimetableOnly); render(); });
     // CCC, VISC and HICC–CC are tabs of the single Teaching Lists popup.
     $('export-csv').addEventListener('click', () => openExportDialog('csv'));
     $('export-calendar').addEventListener('click', () => openExportDialog('ics'));
@@ -1085,8 +1100,8 @@
     $('publish-firestore-schedule').addEventListener('click', initializeLiveSchedule);
     addEventListener('ucvm:show-teaching',()=>{
       if(!currentUser)return;
-      if(roleIsFaculty(currentUser)){viewMode=lastFacultyTeachingView;myTimetableOnly=true}
-      setViewButtons();refreshSessionScope();
+      if(roleIsFaculty(currentUser)){viewMode=lastFacultyTeachingView;setMyTimetableOnly(true)}
+      setViewButtons();refreshContentFilterScope();
     });
     initializeWorkspaceNavigation();
   }
@@ -1142,9 +1157,9 @@
     document.querySelectorAll('[data-semester]').forEach(x => x.classList.toggle('active', x.dataset.semester === 'fall'));
     $('search-input').value = ''; $('filter-month').value = 'all'; activityTypeFilter.reset();
     selectedCourses.clear(); courseFilterActive=false; populateCourseFilter();
-    myTimetableOnly = roleIsFaculty(currentUser); if (currentUser) $('my-timetable-btn').textContent = myTimetableOnly ? 'Show All Timetable' : 'My Timetable';
+    setMyTimetableOnly(startsOnMyTimetable());
     selectedWeek = 1; renderWeekControls();
-    refreshSessionScope();
+    refreshContentFilterScope();
   }
 
   function setViewButtons() {
@@ -1870,6 +1885,10 @@
     return true;
   }
 
+  function canRequestTimetableSwap(session) {
+    return !session.isCcc&&session.assignedToViewer!==false&&currentUser&&window.PAWS_SWAP&&scheduleSource==='vetmed-ops';
+  }
+
   function openSessionDetail(id, currentSession = null) {
     const s = currentSession || renderedSessions.find(x => x.id === id) || sessions.find(x => x.id === id) || sessionCache.get(id); if (!s) return;
     if(s.readOnlyActivity){
@@ -1880,7 +1899,7 @@
     if (!s.isCcc && String(s.type).toUpperCase() === 'LAB' && window.UCVM_LAB_DETAIL) return openLabSessionDetail(s);
     const edit = !s.isCcc&&canEditExistingSqlSession()&&window.UCVM_PAWS_DATA?.sessionEditEnabled?.() ? `<button class="btn btn-primary" id="detail-edit">Edit Session</button>` : '';
     const assignmentEdit = !s.isCcc&&s.assignmentManagementAvailable===true&&canEditExistingSqlSession()&&window.UCVM_PAWS_DATA?.sessionEditEnabled?.() ? `<button class="btn btn-secondary" id="detail-assignments">Manage Instructors</button>` : '';
-    const swap = !s.isCcc&&currentUser&&window.PAWS_SWAP&&scheduleSource==='vetmed-ops' ? `<button class="btn btn-primary" id="detail-swap">SWAP request</button>` : '';
+    const swap = canRequestTimetableSwap(s) ? `<button class="btn btn-primary" id="detail-swap">SWAP request</button>` : '';
     const labDetails = Array.isArray(s.labDetails) && s.labDetails.length > 1
       ? `<div class="login-cheatsheet"><strong>Lab stations / activities</strong><br><br>${s.labDetails.map(d => `<div style="margin-bottom:8px"><strong>${escapeHtml(d.topic)}</strong>${d.instructor ? `<br>${escapeHtml(displayFacultyList(d.instructor))}` : ''}${d.room ? `<br><span style="color:var(--text-3)">${escapeHtml(d.room)}</span>` : ''}</div>`).join('')}</div>`
       : '';
@@ -1909,7 +1928,7 @@
     const actions = row => {
       const id = escapeHtml(row.id);
       const edit = canEditExistingSqlSession() && window.UCVM_PAWS_DATA?.sessionEditEnabled?.();
-      return `${currentUser && window.PAWS_SWAP && scheduleSource === 'vetmed-ops' ? `<button class="btn btn-secondary" data-lab-action="swap" data-lab-id="${id}">SWAP request</button>` : ''}${edit && row.assignmentManagementAvailable === true ? `<button class="btn btn-secondary" data-lab-action="instructors" data-lab-id="${id}">Manage Instructors</button>` : ''}${edit ? `<button class="btn btn-primary" data-lab-action="edit" data-lab-id="${id}">Edit Session</button>` : ''}`;
+      return `${canRequestTimetableSwap(row) ? `<button class="btn btn-secondary" data-lab-action="swap" data-lab-id="${id}">SWAP request</button>` : ''}${edit && row.assignmentManagementAvailable === true ? `<button class="btn btn-secondary" data-lab-action="instructors" data-lab-id="${id}">Manage Instructors</button>` : ''}${edit ? `<button class="btn btn-primary" data-lab-action="edit" data-lab-id="${id}">Edit Session</button>` : ''}`;
     };
     const title = seed.courseName ? `${seed.course} - ${seed.courseName}` : `${seed.course} · LAB`;
     const position = [seed.semester, seed.week ? `Week ${seed.week}` : ''].filter(Boolean).join(' ');
@@ -2371,9 +2390,9 @@
           try { await window.UCVM_PAWS_DATA.refreshWriteCapabilities(); }
           catch (capabilityError) { console.warn('[write capabilities]', capabilityError); }
           publishPageData();
-          viewMode = roleIsFaculty(currentUser) ? 'day' : 'week';
+          myTimetableOnly = startsOnMyTimetable();
+          viewMode = myTimetableOnly ? 'day' : 'week';
           setViewButtons();
-          myTimetableOnly = roleIsFaculty(currentUser);
           updateAuthUI();
           const initialSessionLoad=subscribeSessions();
           unsubscribeFacultyDirectory();
@@ -2765,8 +2784,8 @@
     for(const id of ['my-teaching-btn','afc-request-btn','my-change-history-btn','cal-changes-btn'])$(id).classList.toggle('hidden',!currentUser);
     $('publish-firestore-schedule').classList.add('hidden');
     updateScheduleSourceUI();
-    $('my-timetable-btn').classList.toggle('hidden', !currentUser || roleIsFaculty(currentUser));
-    $('my-timetable-btn').textContent = currentUser && myTimetableOnly ? 'Show All Timetable' : 'My Timetable';
+    $('my-timetable-btn').classList.toggle('hidden', !currentUser || (roleIsFaculty(currentUser)&&!usesDemoTeachingSchedule()));
+    setMyTimetableOnly(Boolean(currentUser&&myTimetableOnly));
     scheduleWorkspace?.sync(Boolean(currentUser));
     window.dispatchEvent(new CustomEvent('ucvm-timetable-user',{detail:{user:currentUser}})); // Testing site only.
   }

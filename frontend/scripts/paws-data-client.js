@@ -381,10 +381,11 @@
         const body=await request('/api/v1/teaching-assignments/publications/history?'+query.toString());
         return Array.isArray(body.releases)?body.releases:[];
       },
-      async listSessions({start=null,end=null}={}){
+      async listSessions({start=null,end=null,teachingSchedule=false}={}){
         const query=new URLSearchParams();
         if(start)query.set('start',String(start));
         if(end)query.set('end',String(end));
+        if(teachingSchedule&&root?.UCVM_PAWS_DEMO_API?.authoritative===false)query.set('view','teaching-schedule');
         const suffix=query.toString()?'?'+query.toString():'';
         const body=await request('/api/v1/sessions'+suffix);
         return Array.isArray(body.sessions)?body.sessions:[];

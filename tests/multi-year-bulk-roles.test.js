@@ -40,20 +40,20 @@ function engine(storage=null){
 }
 test('ADFAD bulk review previews every Draft and skips invalid/inactive/future Faculty',()=>{
  const m=engine(),p=m.previewRoleConfirmations(adfa,'2027-28');
- assert.equal(p.pending,4);
- assert.equal(p.alreadyConfirmed,1);
- assert.deepEqual(p.eligibleIds,['renew-2027-28-0']);
+ assert.equal(p.pending,5);
+ assert.equal(p.alreadyConfirmed,0);
+ assert.deepEqual(p.eligibleIds,['renew-2027-28-0','renew-2027-28-4']);
  assert.equal(p.partialYear,1);
  assert.equal(p.skipped.length,3);
  assert.deepEqual(new Set(p.skipped.map(x=>x.reason)),
   new Set(['Invalid Faculty appointment','Faculty starts after role start','Inactive Faculty']));
  assert.deepEqual(m.getState().roles['2027-28'].map(x=>x.status),
-  ['draft','draft','draft','draft','confirmed']);
+  ['draft','draft','draft','draft','draft']);
 });
 test('one action confirms all eligible Drafts and audits once without touching DOE or published Courses',()=>{
  const m=engine(),before=m.getState(),p=m.previewRoleConfirmations(adfa,'2027-28');
  const result=m.confirmRolesBulk(adfa,'2027-28',p.eligibleIds);
- assert.deepEqual(result,{confirmed:1,skipped:3,pending:4});
+ assert.deepEqual(result,{confirmed:2,skipped:3,pending:5});
  const after=m.getState();
  assert.deepEqual(after.roles['2027-28'].map(x=>x.status),
   ['confirmed','draft','draft','draft','confirmed']);
@@ -62,12 +62,13 @@ test('one action confirms all eligible Drafts and audits once without touching D
  assert.deepEqual(after.annual,before.annual);
  const receipts=after.audit.filter(x=>x.event==='annual_roles_confirmed_bulk');
  assert.equal(receipts.length,1);
- assert.deepEqual(receipts[0].detail,{count:1,roleIds:['renew-2027-28-0'],skipped:3,partialYearReviewed:1});
+ assert.deepEqual(receipts[0].detail,{count:2,roleIds:['renew-2027-28-0','renew-2027-28-4'],skipped:3,partialYearReviewed:1});
 });
 test('single confirmation validates the same Faculty eligibility and keeps existing approved roles unchanged',()=>{
  const m=engine();
  for(const id of ['renew-2027-28-1','renew-2027-28-2','renew-2027-28-3'])
   assert.throws(()=>m.confirmRole(adfa,'2027-28',id),/Cannot confirm this Role/);
+ assert.equal(m.confirmRole(adfa,'2027-28','renew-2027-28-4').status,'confirmed');
  assert.throws(()=>m.confirmRole(adfa,'2027-28','renew-2027-28-4'),/not draft/i);
  assert.equal(m.confirmRole(adfa,'2027-28','renew-2027-28-0').status,'confirmed');
 });
@@ -75,6 +76,7 @@ test('bulk confirmation refuses stale selection and is idempotent when no eligib
  const m=engine(),p=m.previewRoleConfirmations(adfa,'2027-28');
  m.confirmRole(adfa,'2027-28',p.eligibleIds[0]);
  assert.throws(()=>m.confirmRolesBulk(adfa,'2027-28',p.eligibleIds),/changed/i);
+ m.confirmRole(adfa,'2027-28',p.eligibleIds[1]);
  const before=m.getState().audit.length;
  assert.deepEqual(m.confirmRolesBulk(adfa,'2027-28',[]),{confirmed:0,skipped:3,pending:3});
  assert.equal(m.getState().audit.length,before);
@@ -96,8 +98,8 @@ test('all eligible Drafts are processed including the rows beyond the UI table l
  const m=createEngine({source:many,now:()=>new Date('2026-11-03T12:00:00Z')});
  m.createYear(owner,'2027-28');
  const p=m.previewRoleConfirmations(adfa,'2027-28');
- assert.equal(p.eligibleIds.length,210);
- assert.equal(m.confirmRolesBulk(adfa,'2027-28',p.eligibleIds).confirmed,210);
+ assert.equal(p.eligibleIds.length,211);
+ assert.equal(m.confirmRolesBulk(adfa,'2027-28',p.eligibleIds).confirmed,211);
  assert.equal(m.getState().roles['2027-28'].every(x=>x.status==='confirmed'),true);
 });
 test('bulk role actions are visible only to ADFAD and preserve existing per-role review',()=>{

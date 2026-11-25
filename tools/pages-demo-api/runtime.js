@@ -40,12 +40,21 @@ function createDemoRuntime(store) {
     createSessionBatch: r.sessions.createBatch, replaceSessionAssignments: r.sessions.replaceAssignments,
     recalculateSessionDoe: routes.recalculateSessionDoe, health: async () => true, writeGates
   }) });
+  // The Demo can show the shared synthetic curriculum. The ordinary sessions
+  // route retains self scope, and this read identifies only the signed-in
+  // viewer's assignments for My Teaching.
+  const teachingSchedule = createSwaFunctions({ api: createDataApi({
+    verifyToken: verify, findUser,
+    listSessions: ({ facultyId: viewerFacultyId, ...range }) => r.sessions.list({ ...range, viewerFacultyId })
+  }) });
   const dashboardRoutes = createDashboardFunctions({
     traineeApi: routes.traineeApi,
     api: createDashboardApi({ verifyToken: verify, findUser, repository: r.dashboard, writeRepository: { ...r.afcWrite, ...r.facultyAdmin }, writeGates })
   });
   const route = async request => {
-    const pathname = new URL(request.url).pathname;
+    const { pathname, searchParams } = new URL(request.url);
+    if (pathname === '/api/v1/sessions' && request.method === 'GET' && searchParams.get('view') === 'teaching-schedule')
+      return teachingSchedule(request);
     if (pathname === '/api/v1/schedule-workflow' || pathname.startsWith('/api/v1/schedule-workflow/')) return schedulingWorkflow(request);
     if (pathname === '/api/v1/lab-scheduling' || pathname.startsWith('/api/v1/lab-scheduling/')) return labScheduling(request);
     const special = await routes.handle(pathname, request);
