@@ -45,7 +45,7 @@ Read the specific endpoint and repository predicate before altering permissions.
 
 ## Current Testing Pages permissions
 
-Scope: PAWS Frontend Demo, November 26, 2026. The public Role Tester lists ADFAD Owner, ADFAD Administrator and Faculty. A fresh session opens as ADFAD Owner. Developer and the other synthetic roles remain available for targeted Testing scenarios outside the dropdown.
+Scope: PAWS Frontend Demo, November 26, 2026. The public Role Tester lists ADFAD Owner, ADFAD Administrator and each active synthetic Faculty account that has a linked faculty profile and has completed its password setup. Faculty entries are listed by name and open the selected person's scoped view. A fresh session opens as ADFAD Owner. Developer and the other synthetic roles remain available for targeted Testing scenarios outside the dropdown.
 
 | Operation | ADFAD Administrator |
 | --- | --- |
