@@ -258,11 +258,10 @@ function createAfcFormRepository(store) {
   };
 }
 
-// Stand-in for the server's worker-thread PDF check: loads the PDF with pdf-lib.
+// Stand-in for the server's isolated worker check, used in the browser-local Demo.
 async function validateDemoPdf(bytes) {
-  const { PDFDocument } = require('pdf-lib');
-  const doc = await PDFDocument.load(bytes, { ignoreEncryption: false });
-  return { sha256: toHex(sha256Bytes(bytes)), pageCount: doc.getPageCount() };
+  const { readPdfPageCount } = require('../../../server/src/afc/afc-form-pdf');
+  return { sha256: toHex(sha256Bytes(bytes)), pageCount: await readPdfPageCount(bytes) };
 }
 
 module.exports = { createAfcRequestRepository, createAfcApprovalRepository, createAfcArtifactRepository, createAfcFormRepository, validateDemoPdf, requests };
