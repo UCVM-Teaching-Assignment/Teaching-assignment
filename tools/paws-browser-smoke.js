@@ -20,7 +20,7 @@ const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const CHECKS=Object.freeze([
  {page:'index.html',uid:'uid-developer',text:['Teaching Schedule','Week','DEMO ROLE TESTER','Change Log','Academic Years · Demo']},
  {page:'index.html',uid:'uid-owner',text:['Teaching Schedule','Academic Years · Demo']},
- {page:'index.html',uid:'uid-admin',text:['Teaching Schedule','AFC Request']},
+ {page:'index.html',uid:'uid-admin',text:['Teaching Schedule']},
  {page:'index.html',uid:'uid-hicc-1',text:['Teaching Schedule']},
  {page:'index.html',uid:'uid-fac-001',text:['Teaching Schedule','My Teaching']},
  {page:'faculty-admin.html',uid:'uid-developer',text:['Faculty Dashboard','Lookup','DOE Overview','AFC Records','Academic Years · Demo']},
@@ -274,14 +274,24 @@ async function main(){
    if(!ok)problems.push(`${label}: missing ${check.text.filter(text=>!body.includes(text)).join(', ')||'banner'}`);
    if(check.page==='index.html'&&ok){
      const probe=await cdp.send('Runtime.evaluate',{expression:`(async()=>{
-       const labels=Array.from(document.querySelectorAll('#ucvm-pages-demo-toolbar select option'),option=>option.textContent);
+       const expectedUid=${JSON.stringify(check.uid)};
+       const deadline=Date.now()+12000;
+       let selector,uid;
+       do {
+         selector=document.querySelector('#ucvm-pages-demo-toolbar select');
+         uid=window.UCVM_TIMETABLE_TESTING_HOOKS?.currentUser?.()?.uid;
+         if(selector&&uid===expectedUid)break;
+         await new Promise(resolve=>setTimeout(resolve,100));
+       }while(Date.now()<deadline);
+       if(!selector||uid!==expectedUid)return {ok:false,uid,error:'Testing identity or role picker did not load'};
+       const labels=Array.from(selector.options,option=>option.textContent);
        const expected=['ADFAD Owner','ADFAD Administrator','Faculty'];
        if(JSON.stringify(labels)!==JSON.stringify(expected))return {ok:false,labels};
-       const uid=firebase.auth().currentUser?.uid;
        if(uid==='uid-admin'){
          const menu=document.getElementById('cal-admin-menu');
          const gates=await UCVM_PAWS_DATA.swapCapabilities();
-         if(!menu?.classList.contains('hidden')||gates.canPreviewDoe!==false||gates.writeCapabilities.swapRequest!==false)
+         const afc=document.getElementById('afc-request-btn');
+         if(!menu?.classList.contains('hidden')||!afc||afc.classList.contains('hidden')||gates.canPreviewDoe!==false||gates.writeCapabilities.swapRequest!==false)
            return {ok:false,error:'Read-only Administrator still has a schedule or SWAP action'};
        }
        return {ok:true};
