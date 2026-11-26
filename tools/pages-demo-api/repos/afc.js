@@ -3,6 +3,7 @@
 // form documents for the Frontend Demo. Approved artifacts are rendered by the
 // real Beta renderer in the browser; PDFs are kept in memory only.
 const { isAdministratorRole, isSelfServiceRole } = require('../../../server/src/auth/role-policy.js');
+const { isReadOnlyAdministrator } = require('../administrator-access');
 const { sha256Hex, uuidFor, toHex, sha256Bytes } = require('../ids.js');
 const { clone, sqlError, facultyName, createUserRepository } = require('./core.js');
 const { dateRange, versionOf, bumpVersion, requireCoverage, ensureApprovedRecord } = require('./afc-date-change.js');
@@ -19,15 +20,16 @@ function requests(store) {
       ['fac-002', 'pending_report_to', '2026-11-16', '2026-11-20', 'business_other', 'AVMA conference, Denver'],
       ['fac-004', 'pending_admin', '2026-12-07', '2026-12-09', 'vacation', ''],
       ['fac-006', 'approved', '2026-10-05', '2026-10-07', 'business_other', 'External examiner visit, Saskatoon'],
-      ['fac-008', 'rejected', '2026-11-02', '2026-11-13', 'vacation', '']
+      ['fac-008', 'rejected', '2026-11-02', '2026-11-13', 'vacation', ''],
+      ['fac-010', 'pending_report_to', '2027-01-11', '2027-01-12', 'vacation', '', 'uid-admin']
     ];
-    return seed.map(([legacy, status, startDate, endDate, reason, purpose], i) => {
+    return seed.map(([legacy, status, startDate, endDate, reason, purpose, reportToFirebaseUid = 'uid-fac-001'], i) => {
       const member = f(legacy), requester = `uid-${legacy.replace('fac', 'fac')}`;
       const signedAt = '2026-09-2' + i + 'T16:00:00.000Z';
       const approvals = [];
       if (['pending_admin', 'approved', 'rejected'].includes(status)) approvals.push({ stage: 'report_to', decision: 'recommended', signatureMode: 'typed', signatureName: 'Avery Lindqvist', approverFirebaseUid: 'uid-fac-001', signatureSignedAtUtc: '2026-09-25T15:00:00.000Z', signatureFingerprint: fp('rt' + i), signatureImageDataUrl: null });
       if (status === 'approved') approvals.push({ stage: 'admin', decision: 'approved', signatureMode: 'typed', signatureName: 'ADFA General', approverFirebaseUid: 'uid-adfa-general', signatureSignedAtUtc: '2026-09-28T15:00:00.000Z', signatureFingerprint: fp('ad' + i), signatureImageDataUrl: null });
-      return { afcRequestId: uuidFor(`afc-request:${i}`), facultyId: member.facultyId, facultyName: member.displayName, requesterFirebaseUid: requester, reportToFirebaseUid: 'uid-fac-001', status, startDate, endDate, workDays: dateRange(startDate, endDate), reason, purposeDestination: purpose || null, coverage: i % 2 ? 'Lectures covered by HICC; lab rescheduled' : 'Coverage arranged with the course HICC', contactAddress: '123 Example Street, Calgary AB', contactPhone: '403-555-01' + (10 + i), termsVersion: '2026-09', termsSource: 'absence-from-campus-terms.pdf', signatureMode: 'typed', signatureName: member.displayName, signatureSignedAt: signedAt, signatureFingerprint: fp('app' + i), signatureImageDataUrl: null, submittedAtUtc: signedAt, updatedAtUtc: signedAt, rejectionReason: status === 'rejected' ? 'Overlaps scheduled OSCE week; please choose other dates.' : null, approvedAtUtc: status === 'approved' ? '2026-09-28T15:00:00.000Z' : null, approvals };
+      return { afcRequestId: uuidFor(`afc-request:${i}`), facultyId: member.facultyId, facultyName: member.displayName, requesterFirebaseUid: requester, reportToFirebaseUid, status, startDate, endDate, workDays: dateRange(startDate, endDate), reason, purposeDestination: purpose || null, coverage: i % 2 ? 'Lectures covered by HICC; lab rescheduled' : 'Coverage arranged with the course HICC', contactAddress: '123 Example Street, Calgary AB', contactPhone: '403-555-01' + (10 + i), termsVersion: '2026-09', termsSource: 'absence-from-campus-terms.pdf', signatureMode: 'typed', signatureName: member.displayName, signatureSignedAt: signedAt, signatureFingerprint: fp('app' + i), signatureImageDataUrl: null, submittedAtUtc: signedAt, updatedAtUtc: signedAt, rejectionReason: status === 'rejected' ? 'Overlaps scheduled OSCE week; please choose other dates.' : null, approvedAtUtc: status === 'approved' ? '2026-09-28T15:00:00.000Z' : null, approvals };
     });
   });
 }
@@ -147,10 +149,11 @@ function createAfcApprovalRepository(store) {
       const role = await roleOf(input.actorFirebaseUid);
       const q = find(input.afcRequestId);
       if (q.status !== 'pending_report_to' || !q.reportToFirebaseUid) throw sqlError(51603, 'Invalid state');
-      // SQL RecommendAfcRequest: the assigned Reports-To recommends; an administrator
-      // may sign on their behalf (recorded as signedOnBehalf).
       const assigned = q.reportToFirebaseUid === input.actorFirebaseUid;
-      if (!isAdministratorRole(role) && !(assigned && isSelfServiceRole(role))) throw sqlError(51604, 'Not the Reports-To approver');
+      const officeProxy = isAdministratorRole(role) && !isReadOnlyAdministrator(role);
+      if (!officeProxy && !(assigned && (isSelfServiceRole(role) || isReadOnlyAdministrator(role)))) {
+        throw sqlError(51604, 'Not the Reports-To approver');
+      }
       const signedOnBehalf = !assigned;
       q.approvals.push({ ...sign(input, 'report_to', 'recommended'), signedOnBehalf }); q.status = 'pending_admin';
       return done(q, 'afc_request_recommended', input.actorFirebaseUid, { signedOnBehalf });
@@ -159,8 +162,8 @@ function createAfcApprovalRepository(store) {
       const role = await roleOf(input.actorFirebaseUid);
       const q = find(input.afcRequestId);
       if (!['pending_report_to', 'pending_admin'].includes(q.status)) throw sqlError(51603, 'Invalid state');
-      const admin = isAdministratorRole(role);
-      const reportTo = q.status === 'pending_report_to' && q.reportToFirebaseUid === input.actorFirebaseUid && isSelfServiceRole(role);
+      const admin = isAdministratorRole(role) && !isReadOnlyAdministrator(role);
+      const reportTo = q.status === 'pending_report_to' && q.reportToFirebaseUid === input.actorFirebaseUid && (isSelfServiceRole(role) || isReadOnlyAdministrator(role));
       if (!admin && !reportTo) throw sqlError(51604, 'Role denied');
       const decisionStage = admin ? 'admin' : 'report_to';
       q.approvals.push(sign(input, decisionStage, 'rejected')); q.status = 'rejected'; q.rejectionReason = input.rejectionReason;
@@ -170,7 +173,7 @@ function createAfcApprovalRepository(store) {
       const role = await roleOf(input.actorFirebaseUid);
       const q = find(input.afcRequestId);
       if (q.status !== 'pending_admin') throw sqlError(q.status === 'pending_report_to' ? 51608 : 51603, 'Invalid state');
-      if (!isAdministratorRole(role)) throw sqlError(51604, 'Role denied');
+      if (!isAdministratorRole(role) || isReadOnlyAdministrator(role)) throw sqlError(51604, 'Role denied');
       // Recheck the original revision at final approval; a stale replacement must
       // never supersede newer office dates or a second approved replacement.
       let original = null;
@@ -255,11 +258,10 @@ function createAfcFormRepository(store) {
   };
 }
 
-// Stand-in for the server's worker-thread PDF check: loads the PDF with pdf-lib.
+// Stand-in for the server's isolated worker check, used in the browser-local Demo.
 async function validateDemoPdf(bytes) {
-  const { PDFDocument } = require('pdf-lib');
-  const doc = await PDFDocument.load(bytes, { ignoreEncryption: false });
-  return { sha256: toHex(sha256Bytes(bytes)), pageCount: doc.getPageCount() };
+  const { readPdfPageCount } = require('../../../server/src/afc/afc-form-pdf');
+  return { sha256: toHex(sha256Bytes(bytes)), pageCount: await readPdfPageCount(bytes) };
 }
 
 module.exports = { createAfcRequestRepository, createAfcApprovalRepository, createAfcArtifactRepository, createAfcFormRepository, validateDemoPdf, requests };

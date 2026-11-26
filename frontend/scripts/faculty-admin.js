@@ -43,7 +43,7 @@
   let activeFaculty = [];
   const afcForms=window.PAWS_AFC_FORMS?.createRecordAttachment({api:UCVM_PAWS_DATA,host:$('afc-form-documents'),getUser:()=>currentUser,getFacultyId:()=>String($('afc-faculty')?.value||'')});
   const getAfcOriginal=window.PAWS_AFC_FORMS?.createDocumentDownloader({api:UCVM_PAWS_DATA,getUser:()=>currentUser,notify:showToast});
-  const specialLeaveEditor=window.UCVM_AFC_RECORDS?.createSpecialLeaveEditor({api:UCVM_PAWS_DATA,$,policy:window.PAWS_AFC_SPECIAL_LEAVE,getFacultyBaseFte:baseFteForAfcFaculty});
+  const specialLeaveEditor=window.UCVM_AFC_RECORDS?.createSpecialLeaveEditor({api:UCVM_PAWS_DATA,$,policy:window.PAWS_AFC_SPECIAL_LEAVE,getFacultyBaseFte:baseFteForAfcFaculty,canManageSpecialLeave:()=>!isTestingAfcEntryOnly(currentUser)});
   let facultyArchive=null;
   const cccReplace=window.PAWS_CCC_REPLACEMENT?.createController({api:UCVM_PAWS_DATA,host:$('ccc-replacement'),getUser:()=>currentUser});
   let selectedId = null;
@@ -125,6 +125,7 @@
 
   function dashboardRawRole(value) { return String((value && typeof value === 'object' ? value.role : value) || '').toLowerCase(); }
   function dashboardRole(value) { return ({ owner: 'adfa_general', administrator: 'adfa_regular', other_office: 'other_office', adfa_general: 'adfa_general', adfa_regular: 'adfa_regular', admin: 'adfa_regular', editor: 'faculty', viewer: 'faculty' }[dashboardRawRole(value)] || dashboardRawRole(value)); }
+  const isTestingAfcEntryOnly=profile=>window.UCVM_PAWS_DEMO_API?.isReadOnlyAdministrator?.(profile?.role)===true;
   function dashboardAdmin(profile) { return ['developer', 'adfa_general', 'adfa_regular'].includes(dashboardRole(profile && profile.role)); }
   function dashboardGeneral(profile) { return ['developer', 'adfa_general'].includes(dashboardRole(profile && profile.role)); }
   function dashboardRoleLabel(value) { return ({ developer: 'Developer', owner: 'ADFAD Owner', adfa_general: 'ADFAD Owner', administrator: 'ADFAD Admin', adfa_regular: 'ADFAD Admin', admin: 'ADFAD Admin', other_office: 'Other Office', hicc: 'HICC', visc: 'VISC', faculty: 'Faculty', editor: 'Faculty', viewer: 'Faculty' }[dashboardRawRole(value)] || dashboardRawRole(value)); }
@@ -159,6 +160,7 @@
   }
 
   function enterAdminMode(user, profile) {
+    $('afc-batch-mode')?.classList.toggle('hidden', isTestingAfcEntryOnly(profile));
     $('reports-tab')?.classList.toggle('hidden',!dashboardAdmin(profile));
     selfMode = false; document.body.classList.remove('faculty-self-mode');
     currentUser = { uid: user.uid, email: user.email || '', name: facultyName(profile, user.displayName || user.email || 'Administrator'), role: profile.role };

@@ -4,9 +4,17 @@
 // site's "+ Add Faculty" writes straight into the synthetic demo store.
 const { uuidFor } = require('./ids.js');
 const { applyDenseFixture } = require('./dense-fixture.js');
+const { isReadOnlyAdministrator } = require('./administrator-access');
 
-function createTestingOnly(store) {
+function createTestingOnly(store, currentUid) {
+  function checkRole(fallbackUid) {
+    const uid = currentUid ? currentUid() : fallbackUid;
+    const account = store.accountOverlay?.(uid);
+    const role = account?.role || store.tables.users.find(row => row.firebaseUid === uid)?.baseRole;
+    if (isReadOnlyAdministrator(role)) throw new Error('This administrator has read-only access here.');
+  }
   function addFaculty(input = {}, actorFirebaseUid = '') {
+    checkRole(actorFirebaseUid);
     const first = String(input.preferredFirstName || '').trim();
     const last = String(input.preferredLastName || '').trim();
     const ucid = String(input.ucid || '').trim();
@@ -45,6 +53,7 @@ function createTestingOnly(store) {
   // Existing imported/edited sessions, CCC entries, approvals and other data
   // are not removed or rewritten. This is not an institutional data import.
   function loadDenseCalendar(actorFirebaseUid = '') {
+    checkRole(actorFirebaseUid);
     const result = applyDenseFixture(store.tables);
     if (result.addedSessions || result.addedCCC) {
       // Manual loading uses the same compact persistence as startup seeding.

@@ -10,7 +10,8 @@
  const LAB=['lab','developer','owner','administrator','admin'];
  const ADFAD=['adfa_general','adfa_regular','administrator','admin','developer','owner'];
  const ADC=['adc','developer','owner'];
- const can=(role,office)=>office==='lab'?LAB.includes(role):office==='adfa'?ADFAD.includes(role):ADC.includes(role);
+ const canRead=(role,office)=>office==='lab'?LAB.includes(role):office==='adfa'?ADFAD.includes(role):ADC.includes(role);
+ const can=(role,office)=>canRead(role,office)&&!root?.UCVM_PAWS_DEMO_API?.isReadOnlyAdministrator?.(role);
  const pendingBadge=()=>root?.UCVM_TESTING_ONLY?.pendingBadge?.()||'';
  let dialog=null,embedded=false,office='',exported=[],allRows=[],editor='',preview=null,parsed=null,batchId='',busy=false,notice='',focusId='',faculty=[];
  const active=()=>Boolean(dialog&&(embedded?dialog.isConnected:dialog.open));
@@ -59,6 +60,14 @@
   const heading=embedded?'<header class="lab-bulk-header"><h3>Bulk CSV · LAB allocations'+pendingBadge()+'</h3><p class="lab-muted">Download assigned LAB work, upload a completed CSV, validate conflicts, then publish.</p></header>':
    '<header class="paws-stage-header"><h2>'+esc(isLab?'Lab Scheduling · Bulk CSV':'ADFAD Work Queue · Bulk Faculty Assignments')+
    pendingBadge()+'</h2><button type="button" data-office-close>Close</button></header>';
+  if(!can(identity()?.role,office)){
+   dialog.innerHTML=heading+'<div class="paws-stage-body"><p role="status">Read-only ADFAD work queue</p>'+
+    '<div class="paws-stage-list">'+allRows.map(row=>'<p>'+esc(row.courseNumber)+' · '+esc(row.date)+' · '+esc(row.topic)+'</p>').join('')+'</div>'+
+    '<button type="button" data-office-download>Download pending ADFAD CSV</button></div>';
+   dialog.querySelector('[data-office-close]').onclick=()=>dialog.close();
+   dialog.querySelector('[data-office-download]').onclick=()=>download(csv.officeTemplate(office,allRows),'paws_adfa_pending.csv');
+   return;
+  }
   dialog.innerHTML=heading+
    '<div class="paws-stage-body"><p class="paws-stage-banner">Synthetic Testing Demo. This is an office task queue, not ADC Schedule Workflow. Do not upload real student names, UCIDs or private employee records.</p>'+
    '<p>'+esc(instructions)+'</p>'+(notice?'<p class="paws-stage-status" role="status">'+esc(notice)+'</p>':'')+
@@ -112,7 +121,7 @@
   if(!active())return;
   const host=dialog,currentOffice=office;
   const data=await request('/office-export?office='+office);
-  if(!active()||dialog!==host||office!==currentOffice||!identity()||!can(identity().role,office))return;
+  if(!active()||dialog!==host||office!==currentOffice||!identity()||!canRead(identity().role,office))return;
   exported=data.rows||[];
   const rows=focusId?(office==='lab'?exported.filter(x=>{
    // Keep the whole Course/date group so unrelated stations are not omitted.
@@ -147,7 +156,7 @@
  }
  async function open(officeName,{sessionId=''}={}){
   const user=identity(),target=val(officeName);
-  if(!user||!can(user.role,target)){root?.alert?.('Use a scoped LAB or ADFAD Demo role.');return}
+  if(!user||!canRead(user.role,target)||target==='lab'&&!can(user.role,target)){root?.alert?.('Use a scoped LAB or ADFAD Demo role.');return}
   // LAB work is now a tab of Lab Scheduling, never a second top-level queue.
   if(target==='lab'){
    if(!root.PAWS_LAB_SCHEDULING?.open){root?.alert?.('Lab Scheduling is unavailable. Reload the Testing Demo.');return}
@@ -177,9 +186,9 @@
    const id='paws-office-'+name+'-queue';
    let b=root.document.getElementById(id);
    if(!b){b=root.document.createElement('button');b.id=id;b.className='masthead-link';b.type='button';b.innerHTML=(name==='lab'?'LAB Work Queue':'ADFAD Work Queue')+pendingBadge();b.onclick=()=>open(name);host.prepend(b)}
-   b.hidden=!user||!can(user.role,name);
+   b.hidden=!user||!canRead(user.role,name);
   }
-  if(active()&&(!user||!can(user.role,office))){
+  if(active()&&(!user||!canRead(user.role,office))){
    if(embedded)unmountLab();else dialog.close();
   }
  }

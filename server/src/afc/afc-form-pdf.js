@@ -18,4 +18,11 @@ function validateAfcFormPdf(bytes){
   }catch(_){finish(failure('INVALID_PDF'));}
  });
 }
-module.exports={validateAfcFormPdf,MAX_FORM_BYTES};
+// The browser-local Testing adapter only needs to count pages. University
+// uploads still use the isolated worker above for validation.
+async function readPdfPageCount(bytes) {
+ const { PDFDocument } = require('pdf-lib');
+ const document = await PDFDocument.load(bytes, { ignoreEncryption: false });
+ return document.getPageCount();
+}
+module.exports={validateAfcFormPdf,readPdfPageCount,MAX_FORM_BYTES};

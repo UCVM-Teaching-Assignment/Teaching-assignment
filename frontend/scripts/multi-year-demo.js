@@ -6,7 +6,9 @@
   const E=escapeText;
   const roleCanWork=role=>['owner','developer','adfa_general','adfa_regular','administrator','admin','adc','lab','hicc','visc'].includes(role);
   const isAdfa=role=>['owner','developer','adfa_general','adfa_regular','administrator','admin'].includes(role);
-  const isBusiness=role=>isAdfa(role)&&role!=='developer';
+  const readOnlyAdministrator=role=>root.PAWS_MULTI_YEAR_DEMO_MODEL.isReadOnlyAdministrator(role);
+  const canEditAdfa=role=>isAdfa(role)&&!readOnlyAdministrator(role);
+  const isBusiness=role=>canEditAdfa(role)&&role!=='developer';
   const managesYears=role=>['owner','adfa_general'].includes(role);
   const layers=[['LEC','LEC'],['SRL','SRL'],['LAB','LAB'],['ccc','CCC'],['rotation','Rotation'],['fourthYear','Fourth-Year'],['otherWork','Other Work'],['afc','AFC']];
   const defaultLayers=()=>new Set(['LEC','SRL','LAB']);
@@ -34,7 +36,7 @@
   const facultyName=(s,id)=>displayName(s.faculty.find(f=>f.id===id)?.name||(id?'Name unavailable':'Unassigned'));
   const eligibleFaculty=(s,date)=>s.faculty.filter(f=>f.active&&f.appointmentValid&&(!f.activationDate||date>=f.activationDate));
   const doeNumber=value=>root.PAWS_MULTI_YEAR_DEMO_MODEL.formatDoeNumber(value);
-  function canEditCourse(s,a,code){if(isAdfa(a.role))return true;const fid=a.facultyId||s.users.find(u=>u.uid===a.uid)?.facultyId;return (s.roles[selectedYear]||[]).some(r=>r.status==='confirmed'&&r.facultyId===fid&&['HICC','Course Coordinator'].includes(r.roleType)&&r.scope.toUpperCase().startsWith(code));}
+  function canEditCourse(s,a,code){if(readOnlyAdministrator(a.role))return false;if(canEditAdfa(a.role))return true;const fid=a.facultyId||s.users.find(u=>u.uid===a.uid)?.facultyId;return (s.roles[selectedYear]||[]).some(r=>r.status==='confirmed'&&r.facultyId===fid&&['HICC','Course Coordinator'].includes(r.roleType)&&r.scope.toUpperCase().startsWith(code));}
   function label(s,code){const row=s.annual[selectedYear]?.[code];if(!row)return code;const pub=row.published.at(-1);return code+' · '+row.title+(pub?' · Published v'+pub.version:(row.working.length?' · Draft':' · Empty Draft'))+(pub&&row.revision!==pub.revision?' · Changes Pending':'');}
   function table(headers,rows){if(!rows.length)return '<p class="paws-my-empty">No records for this view.</p>';
     return '<div class="paws-my-scroller"><table class="paws-my-table"><thead><tr>'+headers.map(h=>'<th>'+E(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(cells=>'<tr>'+cells.map(cell=>'<td>'+cell+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
@@ -129,15 +131,15 @@
   function viewCourses(a,s){
     const annual=s.annual[selectedYear]||{},yearState=s.years[selectedYear].status;
     const canPlan=roleCanWork(a.role)&&a.role!=='faculty';
-    const codes=Object.keys(annual).filter(code=>canEditCourse(s,a,code)||annual[code].published.length>0).sort();
+    const codes=Object.keys(annual).filter(code=>isAdfa(a.role)||canEditCourse(s,a,code)||annual[code].published.length>0).sort();
     if(!codes.includes(selectedCode))selectedCode=codes[0]||'';
     const canEdit=selectedCode&&canEditCourse(s,a,selectedCode);
     let html='<div class="paws-my-two"><div>'+wrap('Annual Courses',
        '<p class="paws-my-muted">Shared Catalog, separate Course/Session/Assignment records for every academic year.</p>'+
-       (isAdfa(a.role)&&yearState!=='archived'?'<form data-my-form="add-course" class="paws-my-form"><label class="paws-my-field"><span>Select from Catalog</span>'+select('code',s.catalog.filter(c=>!annual[c.code]),c=>c.code,c=>c.code+' · '+c.title)+'</label><button type="submit">Add Course</button></form>':'')+
+       (canEditAdfa(a.role)&&yearState!=='archived'?'<form data-my-form="add-course" class="paws-my-form"><label class="paws-my-field"><span>Select from Catalog</span>'+select('code',s.catalog.filter(c=>!annual[c.code]),c=>c.code,c=>c.code+' · '+c.title)+'</label><button type="submit">Add Course</button></form>':'')+
        '<div class="paws-my-course-list">'+codes.map(code=>'<button type="button" class="'+(code===selectedCode?'active':'')+'" data-my-select-course="'+E(code)+'">'+E(label(s,code))+'</button>').join('')+'</div>')+'</div><div>';
     if(!selectedCode||!annual[selectedCode])return html+wrap('Course detail','Select a Course to inspect its Working and Published information.')+'</div></div>';
-    const row=annual[selectedCode],pub=row.published.at(-1),office=row.confirmed?.at(-1),readWorking=canPlan&&canEdit,sessionRows=readWorking?row.working:pub?.sessions||[];
+    const row=annual[selectedCode],pub=row.published.at(-1),office=row.confirmed?.at(-1),readWorking=canPlan&&(canEdit||isAdfa(a.role)),sessionRows=readWorking?row.working:pub?.sessions||[];
     let body='<p class="paws-my-muted">'+E(row.title)+' · Working revision '+E(row.revision)+' · '+(office?'Confirmed v'+E(office.version):'Confirmation pending')+' · '+(pub?'Published v'+E(pub.version):'Publication pending')+'</p>';
     if(canEdit&&yearState!=='archived'){
       if(isBusiness(a.role))body+='<button data-my-action="finalize">ADFAD Finalize Working revision</button> <button data-my-tab="office">Office Confirmation</button> ';
@@ -376,13 +378,13 @@
     html+=wrap('Archive history',table(['Year','Archived at','Pending Course Drafts','Frozen conflicts'],s.archives.filter(x=>x.year===selectedYear).map(x=>[E(x.year),E(x.at),E(x.pending.join(', ')||'None'),E(x.conflicts.length)])));
     if(admin)html+=wrap('Live conflict check and shared AFC',
       '<p class="paws-my-muted">AFC records are shared by year. Retire freezes a conflict snapshot. Restore recalculates from the latest shared AFC.</p>'+
-      '<form data-my-form="add-afc" class="paws-my-form"><label class="paws-my-field"><span>Faculty</span>'+select('facultyId',s.faculty,x=>x.id,x=>x.name)+'</label>'+input('Start','startDate','date','')+input('End','endDate','date','')+'<button type="submit">Add synthetic AFC</button></form>'+
+      (canEditAdfa(a.role)?'<form data-my-form="add-afc" class="paws-my-form"><label class="paws-my-field"><span>Faculty</span>'+select('facultyId',s.faculty,x=>x.id,x=>x.name)+'</label>'+input('Start','startDate','date','')+input('End','endDate','date','')+'<button type="submit">Add synthetic AFC</button></form>':'')+
       table(['Course','Date','Faculty'],load().getConflicts(a,selectedYear).map(x=>[E(x.courseCode),E(x.date),E(facultyName(s,x.facultyId))])));
     html+=wrap('Recent history',table(['When','Actor','Action'],s.audit.filter(x=>x.year===selectedYear).slice(-30).reverse().map(x=>[E(x.at),E(x.actor),E(x.event)])));
     return wrap('Archive / Restore',html);
   }
   function viewCatalog(a,s){let body='<p class="paws-my-muted">Global Catalog title changes apply only to courses created later. Existing annual Course snapshots remain unchanged.</p>';
-    if(isAdfa(a.role))body+='<form data-my-form="update-catalog" class="paws-my-form"><label class="paws-my-field"><span>Catalog Course</span>'+select('code',s.catalog,c=>c.code,c=>c.code+' · '+c.title)+'</label>'+input('New title','title','text','maxlength="150"')+'<button type="submit">Update Catalog</button></form>';
+    if(canEditAdfa(a.role))body+='<form data-my-form="update-catalog" class="paws-my-form"><label class="paws-my-field"><span>Catalog Course</span>'+select('code',s.catalog,c=>c.code,c=>c.code+' · '+c.title)+'</label>'+input('New title','title','text','maxlength="150"')+'<button type="submit">Update Catalog</button></form>';
     body+=table(['Course','Current Catalog title'],s.catalog.map(c=>[E(c.code),E(c.title)]));return wrap('Shared Course Catalog',body);
   }
   function render(){if(!dialog)return;const a=actual(),s=state();if(!s.years[selectedYear])selectedYear=load().getPreferredYear(a);
@@ -391,14 +393,14 @@
     const showStaff=roleCanWork(a.role)&&a.role!=='faculty';
     const names=[['calendar','Calendar'],['teaching','Teaching'],['courses','Courses & Assignments'],['office','ADFAD Office'],['doe','DOE'],['roles','Roles'],['archive','Archive & AFC'],['catalog','Course Catalog'],['rollover','Rollover'],['review','Publish Review'],['compare','Year Comparison']];
     if(!isAdfa(a.role)&&tab==='office')tab='calendar';
-    const visible=names.filter(n=>n[0]==='office'?isAdfa(a.role):n[0]==='rollover'||n[0]==='review'?showStaff:n[0]==='archive'?(isAdfa(a.role)||['adc','lab'].includes(a.role)):n[0]==='catalog'?showStaff:n[0]==='courses'?(showStaff||a.role==='faculty'):true);
+    const visible=names.filter(n=>n[0]==='office'?isAdfa(a.role):n[0]==='rollover'||n[0]==='review'?showStaff&&!readOnlyAdministrator(a.role):n[0]==='archive'?(isAdfa(a.role)||['adc','lab'].includes(a.role)):n[0]==='catalog'?showStaff:n[0]==='courses'?(showStaff||a.role==='faculty'):true);
     let body='';try{body=({calendar:()=>viewCalendar(a,s),teaching:()=>viewTeaching(a,s),courses:()=>viewCourses(a,s),office:()=>viewOffice(a,s),doe:()=>viewDoe(a,s),roles:()=>viewRoles(a,s),archive:()=>viewArchive(a,s),catalog:()=>viewCatalog(a,s),rollover:()=>viewRollover(a,s),review:()=>viewReview(a,s),compare:()=>viewComparison(a,s)})[tab]();}catch(error){body=wrap('Access',E(error.message))}
     const createYear=managesYears(a.role)&&s.years[selectedYear].status!=='archived'?'<button data-my-action="create-year" type="button">Create Next Year</button>':'';
     const stage=s.years[selectedYear].status,transitions={planning:['review'],review:['planning','active'],active:['review']};
     const phaseControl=isBusiness(a.role)&&stage!=='archived'?'<label>Change phase '+select('phase',[stage,...(transitions[stage]||[])],x=>x,x=>PHASE_LABELS[x]).replace('<select ','<select data-my-phase ')+'</label>':'';
     const planningDefault=managesYears(a.role)&&stage!=='archived'?(s.planningDefault?.year===selectedYear?'<span class="paws-my-phase-badge">Office planning default</span>':'<button type="button" data-my-action="planning-default">Set Office Planning Default</button>'):'';
     dialog.innerHTML='<div class="paws-my-shell"><header class="paws-my-head"><div><small>PAWS · Testing site only · Browser-local simulation</small><h2>Academic Year Workspace</h2><p>'+E(a.name)+' · '+E(a.role)+' · No database connection</p></div><button data-my-action="close" type="button" aria-label="Close Academic Year Workspace">Close ×</button></header>'+
-      '<div class="paws-my-toolbar"><label>Academic Year <select data-my-year>'+opts(available,x=>x,x=>x+' · '+PHASE_LABELS[s.years[x].status])+'</select></label><span class="paws-my-phase-badge">'+E(PHASE_LABELS[stage]+' · '+shownVersion(a.role,stage))+'</span>'+phaseControl+createYear+planningDefault+'<button data-my-action="reset" type="button">Reset multi-year Demo</button></div>'+
+      '<div class="paws-my-toolbar"><label>Academic Year <select data-my-year>'+opts(available,x=>x,x=>x+' · '+PHASE_LABELS[s.years[x].status])+'</select></label><span class="paws-my-phase-badge">'+E(PHASE_LABELS[stage]+' · '+shownVersion(a.role,stage))+'</span>'+phaseControl+createYear+planningDefault+(readOnlyAdministrator(a.role)?'':'<button data-my-action="reset" type="button">Reset multi-year Demo</button>')+'</div>'+
       '<nav class="paws-my-tabs" aria-label="Multi-year test views">'+visible.map(x=>'<button class="'+(tab===x[0]?'active':'')+'" data-my-tab="'+E(x[0])+'" type="button">'+E(x[1])+'</button>').join('')+'</nav>'+
       (message?'<p class="paws-my-notice" role="status">'+E(message)+'</p>':'')+'<div class="paws-my-body">'+body+'</div></div>';
     const selectEl=dialog.querySelector('[data-my-year]');if(selectEl)selectEl.value=selectedYear;
@@ -472,7 +474,7 @@
       if(root.confirm('Retire '+selectedYear+'? Published is official; '+pending.length+' Course(s) have unpublished Working content. Preserve all drafts read-only and freeze conflicts?'))m.retireYear(a,selectedYear,true);
     }
     if(action==='restore'&&root.confirm('Restore '+selectedYear+' and recalculate conflicts from current AFC?'))m.restoreYear(a,selectedYear);
-    if(action==='reset'&&root.confirm('Reset this browser-local Academic Year Workspace?')){m.reset();clearYearSelection();selectedYear=m.getPreferredYear(a);tab='calendar';}
+    if(action==='reset'&&!readOnlyAdministrator(a.role)&&root.confirm('Reset this browser-local Academic Year Workspace?')){m.reset();clearYearSelection();selectedYear=m.getPreferredYear(a);tab='calendar';}
   }
   async function downloadOfficeExport(id,format){
     const a=actual(),m=load(),year=selectedYear,view=m.getOfficeProgress(a,year);

@@ -43,6 +43,25 @@ Legend: **Admin** = Developer, Owner, Administrator after normalization. **Gener
 
 Read the specific endpoint and repository predicate before altering permissions. The table intentionally avoids assigning one global Yes to every admin operation.
 
+## Current Testing Pages permissions
+
+Scope: PAWS Frontend Demo, November 26, 2026. The public Role Tester lists ADFAD Owner, ADFAD Administrator and Faculty. A fresh session opens as ADFAD Owner. Developer and the other synthetic roles remain available for targeted Testing scenarios outside the dropdown.
+
+| Operation | ADFAD Administrator |
+| --- | --- |
+| Timetable, Calendar Activities, Scheduling Tasks, Teaching Assignments and Session Swap | View authorized records. |
+| Create or batch-create sessions, edit sessions or replace instructors | Denied. |
+| Import Calendar Activities, enter activity times or replace CCC, including Teaching Calendar import in the academic-year workspace | Denied. |
+| Mark a scheduling task as reviewed | Denied. |
+| Finalize instructors or publish assignments, including academic-year workflow | Denied. |
+| Start, revise, withdraw, approve, apply or override a swap, or preview its DOE impact | Denied. |
+| Faculty, appointments and DOE | View records and run the usual read-only reports. Faculty, appointment and DOE edits are denied. |
+| AFC form entry and original PDFs | Create a single standard AFC record, upload and attach its original PDF, and read authorized records and PDFs. |
+| AFC request decisions | Recommend or reject only if explicitly designated as Reports To on a pending Reports To request. |
+| Other AFC writes | Final approval, batch entry, date editing, cancellation and Available Special Leave deductions are denied. |
+
+The [Demo API permission policy](../../tools/pages-demo-api/administrator-access.js) applies these limits to all Administrator aliases. The [AFC approval repository](../../tools/pages-demo-api/repos/afc.js) validates the designated actor and workflow stage. This policy is specific to the Testing Pages runtime.
+
 ## Firebase Lab: independent Firestore authority
 
 Lab reads `/users/{uid}` for readiness and uses `firebase/firestore.rules` as the enforcement boundary. Browser helpers guide rendering only. Key current predicates:

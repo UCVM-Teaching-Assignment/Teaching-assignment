@@ -36,7 +36,7 @@ function make({role='faculty',uid='report',afcWritable=true,swapWritable=true}={
   nodes.set('testing-only-decision',holder);nodes.set('testing-only-decision-form',form);nodes.set('testing-only-swap-decision-form',form);
   nodes.set('testing-only-decision-cancel',{addEventListener(){}});nodes.set('testing-only-decision-status',{textContent:''});
   const sandbox={root,ADMIN_ROLES:new Set(['developer','owner','adfa_general','adfa_regular','administrator','admin']),
-    roleOf:u=>u.role,esc:v=>String(v??''),AFC_STAGE:{pending_report_to:'Reports-To',pending_admin:'Admin'},
+    readOnlyAdministrator:u=>['administrator','adfa_regular','admin'].includes(u.role),roleOf:u=>u.role,esc:v=>String(v??''),AFC_STAGE:{pending_report_to:'Reports-To',pending_admin:'Admin'},
     api,table,pill:s=>s,openPanel:()=>{const body={isConnected:true,innerHTML:'',listeners:{},addEventListener(k,fn){this.listeners[k]=fn;}};sandbox.body=body;return body;},
     closePanel(){},failure(){},toast(){},$:name=>nodes.get(name)||null,TextEncoder,Uint8Array,Date};
   vm.createContext(sandbox);
@@ -47,6 +47,13 @@ test('Reports-To may recommend their pending AFC request but not admin-approve',
   const {run}=make({uid:'report',role:'faculty'}),body=await run();
   assert.match(body.innerHTML,/data-approval-id="a1" data-approval-action="recommend"/);
   assert.doesNotMatch(body.innerHTML,/data-approval-id="a2" data-approval-action="approve"/);
+});
+test('Administrator can decide only their designated Reports-To AFC request',async()=>{
+  const {run}=make({uid:'report',role:'administrator',swapWritable:false}),body=await run();
+  assert.match(body.innerHTML,/data-approval-id="a1" data-approval-action="recommend"/);
+  assert.match(body.innerHTML,/data-approval-id="a1" data-approval-action="reject"/);
+  assert.doesNotMatch(body.innerHTML,/data-approval-id="a2"/);
+  assert.doesNotMatch(body.innerHTML,/data-approval-action="approve"/);
 });
 test('ADFA may approve the pending-admin AFC request',async()=>{
   const {run}=make({uid:'admin',role:'adfa_general'}),body=await run();

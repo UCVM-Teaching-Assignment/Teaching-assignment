@@ -17,7 +17,7 @@
     if (!batch && $('afc-batch-submit')) $('afc-batch-submit').disabled = true;
     if ($('afc-batch-status')) $('afc-batch-status').textContent = batch ? '' : 'AFC batch creation is unavailable. Your administrator permissions must be verified by the server.';
   }
-  function createSpecialLeaveEditor({api,$,policy,getFacultyBaseFte=()=>null}={}) {
+  function createSpecialLeaveEditor({api,$,policy,getFacultyBaseFte=()=>null,canManageSpecialLeave=()=>true}={}) {
     let generation=0,years=[],sources={};
     const touched=new Set();
     const host=$('afc-special-years'),message=$('afc-special-source-status');
@@ -31,7 +31,7 @@
     }
     function format(value){return value===null||value===undefined?'Missing':String(value);}
     function read() {
-      if($('afc-reason')?.value!=='special')return {};
+      if($('afc-reason')?.value!=='special'||!canManageSpecialLeave())return {};
       const availability=$('afc-special-availability')?.value||'unavailable';
       if(availability!=='available')return {availability:'unavailable'};
       const allocationsByYear=Object.fromEntries(Object.entries(selections()).map(([year,categories])=>[year,Object.fromEntries(Object.entries(categories).map(([k,v])=>[k,v]))]));
@@ -66,9 +66,10 @@
     }
     async function refresh() {
       const id=++generation,reason=$('afc-reason')?.value,available=$('afc-special-availability')?.value==='available';
-      $('afc-special-options')?.classList.toggle('hidden',reason!=='special');
-      $('afc-special-deduction')?.classList.toggle('hidden',reason!=='special'||!available);
-      if(reason!=='special'||!available){return;}
+      const showOptions=reason==='special'&&canManageSpecialLeave();
+      $('afc-special-options')?.classList.toggle('hidden',!showOptions);
+      $('afc-special-deduction')?.classList.toggle('hidden',!showOptions||!available);
+      if(!showOptions||!available)return;
       const start=$('afc-start-date')?.value,end=$('afc-end-date')?.value,facultyId=$('afc-faculty')?.value;
       // Contract FTE is a property of the Faculty record, not a per-year
       // allocation. Show it as soon as Faculty is selected, even without dates.
@@ -165,7 +166,7 @@
     }
     return {submit,isUnconfirmed:()=>unconfirmed};
   }
-  function renderRows(rows,{facultyName,canCancel:allowed=false,canEdit:editAllowed=false,editingKey='',editingSpecialKey='',busy=()=>false,renderPdf=()=>'<span class="muted">N/A</span>',getFacultyBaseFte=()=>null}={}) {
+  function renderRows(rows,{facultyName,canCancel:allowed=false,canEdit:editAllowed=false,editingKey='',editingSpecialKey='',busy=()=>false,renderPdf=()=>'<span class="muted">N/A</span>',getFacultyBaseFte=()=>null,canManageSpecialLeave=()=>true}={}) {
     return rows.map(row => {
       const key = `${row.sourceKind}:${row.afcRecordId}`;
       const editable = row.active !== false && /^[0-9a-f]{16}$/i.test(row.versionToken || '');
