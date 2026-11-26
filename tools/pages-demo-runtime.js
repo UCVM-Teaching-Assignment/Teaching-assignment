@@ -8,10 +8,9 @@
   const USER_KEY='ucvm-pages-demo-user-v2';
   const SIGNED_OUT='__signed_out__';
   const DEFAULT_UID='uid-developer';
-  const PAWS_ROLE_OPTIONS=[
+  const PAWS_OFFICE_ROLE_OPTIONS=[
     ['uid-owner','ADFAD Owner',['owner','adfa_general']],
-    ['uid-admin','ADFAD Administrator',['administrator','admin','adfa_regular']],
-    ['uid-fac-001','Faculty',['faculty']]
+    ['uid-admin','ADFAD Administrator',['administrator','admin','adfa_regular']]
   ];
   const DELETE_SENTINEL='delete';
   let generatedId=0;
@@ -560,15 +559,26 @@
     return Object.freeze(api);
   }
 
+  function pawsRoleOptions(store,formatName){
+    const office=PAWS_OFFICE_ROLE_OPTIONS.flatMap(([uid,label,roles])=>{
+      const account=store.read('users/'+uid);
+      return account?.active===true&&account.mustChangePassword!==true&&roles.includes(account.role)?[{uid,label}]:[];
+    });
+    const faculty=store.list('users').flatMap(({path,data:account})=>{
+      if(account?.role!=='faculty'||account.active!==true||account.mustChangePassword===true||!text(account.facultyId))return [];
+      const profile=store.read('faculty/'+account.facultyId);
+      const label=formatName(profile,account.name);
+      return label?[{uid:path.slice('users/'.length),label}]:[];
+    }).sort((a,b)=>a.label.localeCompare(b.label)||a.uid.localeCompare(b.uid));
+    return [...office,...faculty];
+  }
+
   function installToolbar(root,seed,store,auth){
     const render=()=>{
       if(root.document.getElementById('ucvm-pages-demo-toolbar'))return;
       const priority={developer:0,owner:1,administrator:2,adfa_general:3,adfa_regular:4,adc:5,lab:6,hicc:7,visc:8,faculty:9};
       const seededUsers=(seed?.documents||[]).filter(row=>String(row.path||'').startsWith('users/')).map(row=>({uid:String(row.path).split('/')[1],...(row.data||{})})).filter(row=>row.active!==false&&row.mustChangePassword!==true).sort((a,b)=>(priority[a.role]??99)-(priority[b.role]??99)||String(a.name||a.uid).localeCompare(String(b.name||b.uid)));
-      const users=seed?.paws?PAWS_ROLE_OPTIONS.flatMap(([uid,label,roles])=>{
-        const account=store.read('users/'+uid);
-        return account?.active===true&&account.mustChangePassword!==true&&roles.includes(account.role)?[{uid,label}]:[];
-      }):seededUsers;
+      const users=seed?.paws?pawsRoleOptions(store,root.PAWS_FACULTY_NAME.format):seededUsers;
       const style=root.document.createElement('style');
       style.id='ucvm-pages-demo-toolbar-style';
       style.textContent='#ucvm-pages-demo-toolbar{position:fixed;left:12px;bottom:12px;z-index:2147483646;width:min(410px,calc(100vw - 24px));background:#fff3cd;color:#3d3300;padding:10px 12px;border:2px solid #8a6d00;border-radius:10px;font:600 12px/1.35 Arial,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.28)}#ucvm-pages-demo-toolbar .demo-title{font-size:13px;font-weight:900;letter-spacing:.04em}#ucvm-pages-demo-toolbar .demo-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:7px}#ucvm-pages-demo-toolbar label{font-weight:800}#ucvm-pages-demo-toolbar select,#ucvm-pages-demo-toolbar button{font:700 12px Arial,sans-serif;padding:5px 7px;border-radius:6px;border:1px solid #8a6d00;background:#fff;color:#3d3300}#ucvm-pages-demo-toolbar select{min-width:210px;flex:1}#ucvm-pages-demo-toolbar small{display:block;color:#665a21;margin-top:6px;font-weight:600}';
