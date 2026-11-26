@@ -3,6 +3,14 @@
   "entries": [
     {
       "date": "2026-11-26",
+      "pr": 125,
+      "title": "List Faculty by name in the Testing Role Tester",
+      "changes": [
+        "Choose an existing synthetic Faculty account by name to open that person's Teaching Schedule and My Teaching."
+      ]
+    },
+    {
+      "date": "2026-11-26",
       "pr": 124,
       "title": "Simplify Testing roles and restrict Administrator edits",
       "changes": [

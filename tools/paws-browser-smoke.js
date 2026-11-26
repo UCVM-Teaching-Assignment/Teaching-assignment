@@ -142,25 +142,48 @@ async function verifyFacultySchedule() {
   }
 }
 
-async function facultyTransitionSmoke(cdp) {
+async function selectFacultyInRoleTester(cdp, uid, label) {
+  const selectorReady = await cdp.send('Runtime.evaluate', {
+    expression: `Array.from(document.querySelector('#ucvm-pages-demo-toolbar select')?.options || [])
+      .some(option => option.value === ${JSON.stringify(uid)} && option.textContent === ${JSON.stringify(label)})`,
+    returnByValue: true
+  });
+  if (selectorReady.result?.value !== true) throw Error('Missing Role Tester choice for ' + label);
   await cdp.send('Runtime.evaluate', { expression: `setTimeout(() => {
     const select = document.querySelector('#ucvm-pages-demo-toolbar select');
-    select.value = 'uid-fac-001';
+    select.value = ${JSON.stringify(uid)};
     select.dispatchEvent(new Event('change', { bubbles: true }));
   }, 50)` });
   for (let attempt = 0; attempt < 100; attempt++) {
     const status = await cdp.send('Runtime.evaluate', {
-      expression: "window.UCVM_TIMETABLE_TESTING_HOOKS?.currentUser?.()?.uid === 'uid-fac-001'",
+      expression: `window.UCVM_TIMETABLE_TESTING_HOOKS?.currentUser?.()?.uid === ${JSON.stringify(uid)}
+        && document.querySelector('#ucvm-pages-demo-toolbar select')?.value === ${JSON.stringify(uid)}`,
       returnByValue: true
     }).catch(() => null);
-    if (status?.result?.value === true) {
-      const result = await cdp.send('Runtime.evaluate', { expression: '(' + verifyFacultySchedule.toString() + ')()', awaitPromise: true, returnByValue: true });
-      if (!result.result?.value?.ok) throw Error(result.result?.value?.error || result.exceptionDetails?.text || 'No browser result');
-      return;
-    }
+    if (status?.result?.value === true) return;
     await wait(125);
   }
-  throw Error('Role Tester did not reload as Faculty');
+  throw Error('Role Tester did not reload as ' + label);
+}
+
+async function facultyTransitionSmoke(cdp) {
+  const personalSessions = async () => {
+    const result = await cdp.send('Runtime.evaluate', {
+      expression: 'UCVM_PAWS_DATA.listSessions().then(rows => rows.map(row => row.id).sort())',
+      awaitPromise: true, returnByValue: true
+    });
+    const ids = result.result?.value;
+    if (!ids?.length) throw Error('No personal teaching sessions for the selected Faculty account');
+    return ids;
+  };
+  await selectFacultyInRoleTester(cdp, 'uid-fac-002', 'Petrov, Rowan');
+  const petrovSessions = await personalSessions();
+  await selectFacultyInRoleTester(cdp, 'uid-fac-001', 'Lindqvist, Avery');
+  const lindqvistSessions = await personalSessions();
+  if (JSON.stringify(petrovSessions) === JSON.stringify(lindqvistSessions))
+    throw Error('Two Faculty accounts opened the same personal teaching data');
+  const result = await cdp.send('Runtime.evaluate', { expression: '(' + verifyFacultySchedule.toString() + ')()', awaitPromise: true, returnByValue: true });
+  if (!result.result?.value?.ok) throw Error(result.result?.value?.error || result.exceptionDetails?.text || 'No browser result');
 }
 
 async function verifyAdfadOfficeWorkflow(action){
@@ -284,9 +307,16 @@ async function main(){
          await new Promise(resolve=>setTimeout(resolve,100));
        }while(Date.now()<deadline);
        if(!selector||uid!==expectedUid)return {ok:false,uid,error:'Testing identity or role picker did not load'};
-       const labels=Array.from(selector.options,option=>option.textContent);
-       const expected=['ADFAD Owner','ADFAD Administrator','Faculty'];
-       if(JSON.stringify(labels)!==JSON.stringify(expected))return {ok:false,labels};
+       const options=Array.from(selector.options,option=>[option.value,option.textContent]);
+       const fixtures=new Map(window.UCVM_PAGES_DEMO_SEED.documents.map(row=>[row.path,row.data]));
+       const faculty=Array.from(fixtures).filter(([path,account])=>path.startsWith('users/')&&account.role==='faculty'&&account.active===true&&account.mustChangePassword!==true)
+         .map(([path,account])=>{
+           const profile=fixtures.get('faculty/'+account.facultyId);
+           return [path.slice('users/'.length),profile.lastName+', '+profile.firstName];
+         })
+         .sort((a,b)=>a[1].localeCompare(b[1])||a[0].localeCompare(b[0]));
+       const expected=[['uid-owner','ADFAD Owner'],['uid-admin','ADFAD Administrator'],...faculty];
+       if(faculty.length<2||JSON.stringify(options)!==JSON.stringify(expected))return {ok:false,options};
        if(uid==='uid-admin'){
          const menu=document.getElementById('cal-admin-menu');
          const gates=await UCVM_PAWS_DATA.swapCapabilities();
@@ -451,7 +481,7 @@ async function main(){
        console.log('ok   Default PAWS Testing loads packed synthetic data, 74 Fall W11 sessions via API and visible November Month teaching blocks');
        try {
          await facultyTransitionSmoke(cdp);
-         console.log('ok   Developer → Faculty: Years 1–3 in Week and Month, personal workflow data, scoped SWAP, and My Teaching and reset in List');
+         console.log('ok   Role Tester opens two named Faculty accounts with distinct personal schedules, Years 1–3, scoped SWAP, and My Teaching');
        } catch (error) {
          problems.push(label + ': Faculty role transition failed: ' + error.message);
        }
