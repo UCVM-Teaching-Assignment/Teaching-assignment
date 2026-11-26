@@ -1,6 +1,6 @@
 'use strict';
 // QA-02: approval actions work for authorized users and stay refused for others.
-// - An administrator may recommend an AFC request on behalf of Reports To
+// - Owner may recommend an AFC request on behalf of Reports To
 //   (SQL RecommendAfcRequest sets SignedOnBehalf); the page offers that button.
 // - Teaching Assignment review / final / publish / draft accept an empty note.
 //   The page sends null for an empty note box, which the API used to reject.
@@ -36,32 +36,32 @@ const signature = uid => {
   return { signature: { mode: 'typed', name: 'QA Tester', uid, email, signedAt: '2026-11-09T20:00:00.000Z', account: email, attested: true, fingerprint: 'a'.repeat(64), imageDataUrl: '' } };
 };
 
-test('Reports To and administrators can recommend; others cannot', async () => {
-  for (const uid of ['uid-fac-001', 'uid-admin', 'uid-owner']) {
+test('Designated Reports To and Owner can recommend; others cannot', async () => {
+  for (const uid of ['uid-fac-001', 'uid-owner']) {
     const { route } = setup();
     const r = await call(route, uid, 'POST', `/api/v1/afc-requests/${PENDING_REPORT_TO}/recommend`, signature(uid));
     assert.equal(r.status, 200, uid);
     assert.equal(r.body.afcRequest.status, 'pending_admin', uid);
   }
-  for (const uid of ['uid-fac-003', 'uid-fac-002', 'uid-visc-1', 'uid-adc-1', 'uid-lab-1']) {
+  for (const uid of ['uid-admin', 'uid-fac-003', 'uid-fac-002', 'uid-visc-1', 'uid-adc-1', 'uid-lab-1']) {
     const { route } = setup();
     assert.equal((await call(route, uid, 'POST', `/api/v1/afc-requests/${PENDING_REPORT_TO}/recommend`, signature(uid))).status, 403, uid);
   }
 });
 
-test('an administrator recommendation is recorded as signed on behalf', async () => {
+test('an Owner recommendation is recorded as signed on behalf', async () => {
   const { store, route } = setup();
-  const response = await call(route, 'uid-admin', 'POST', `/api/v1/afc-requests/${PENDING_REPORT_TO}/recommend`, signature('uid-admin'));
+  const response = await call(route, 'uid-owner', 'POST', `/api/v1/afc-requests/${PENDING_REPORT_TO}/recommend`, signature('uid-owner'));
   assert.equal(response.status, 200);
   const request = store.tables.extra.afcRequests.find(row => row.afcRequestId === PENDING_REPORT_TO);
   const approval = request.approvals.find(a => a.stage === 'report_to');
   assert.equal(approval.signedOnBehalf, true);
-  assert.equal(approval.approverFirebaseUid, 'uid-admin');
+  assert.equal(approval.approverFirebaseUid, 'uid-owner');
   assert.equal(store.tables.history[0].after.signedOnBehalf, true);
 });
 
 test('AFC decisions and approved PDFs follow the saved account role', async () => {
-  const { store, route } = setup({ roles: { 'uid-fac-003': 'administrator', 'uid-admin': 'faculty' } });
+  const { store, route } = setup({ roles: { 'uid-fac-003': 'owner', 'uid-admin': 'faculty' } });
   const path = `/api/v1/afc-requests/${PENDING_REPORT_TO}`;
   assert.equal((await call(route, 'uid-admin', 'POST', `${path}/recommend`, signature('uid-admin'))).status, 403);
   assert.equal((await call(route, 'uid-fac-003', 'POST', `${path}/recommend`, signature('uid-fac-003'))).status, 200);
@@ -86,7 +86,7 @@ test('an AFC rejection retains its reason for the requester after reload', async
   const { store, route } = setup({ storage });
   const rejectionReason = 'Please choose dates with course coverage.';
   const path = `/api/v1/afc-requests/${PENDING_REPORT_TO}`;
-  const rejection = await call(route, 'uid-admin', 'POST', `${path}/reject`, { ...signature('uid-admin'), rejectionReason });
+  const rejection = await call(route, 'uid-owner', 'POST', `${path}/reject`, { ...signature('uid-owner'), rejectionReason });
   assert.equal(rejection.status, 200);
   assert.equal(rejection.body.afcRequest.rejectionReason, rejectionReason);
   assert.equal(store.tables.extra.afcRequests.find(row => row.afcRequestId === PENDING_REPORT_TO).approvals.at(-1).stage, 'admin');

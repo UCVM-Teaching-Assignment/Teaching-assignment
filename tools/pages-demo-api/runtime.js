@@ -7,6 +7,7 @@ const { createSwaFunctions } = require('../../server/src/runtime/swa-functions')
 const { createDashboardApi } = require('../../server/src/data/dashboard-api');
 const { createDashboardFunctions } = require('../../server/src/runtime/swa-dashboard-functions');
 const repos = require('./repos/index.js');
+const { isReadOnlyAdministrator, restrictAdministratorRequest, restrictAdministratorResponse } = require('./administrator-access');
 
 const PROJECT = 'pages-demo';
 const ALL_WRITES = new Proxy({}, { get: (_, key) => key === 'then' ? undefined : true });
@@ -62,7 +63,18 @@ function createDemoRuntime(store) {
     if (pathname.startsWith('/api/v1/dashboard/')) return dashboardRoutes(request);
     return timetable(request);
   };
-  return route;
+  return async request => {
+    const token = String(request.headers.get('authorization') || '').replace(/^Bearer /i, '');
+    // Let the normal route handle missing or invalid identities.
+    const uid = /^demo-token-(.+)$/.exec(token)?.[1];
+    const actor = uid ? await findUser(uid) : null;
+    if (!actor?.active || actor.mustChangePassword || !isReadOnlyAdministrator(actor.baseRole)) return route(request);
+
+    const pathname = new URL(request.url).pathname.replace(/\/+$/, '');
+    const denied = await restrictAdministratorRequest(request, pathname);
+    if (denied) return denied;
+    return restrictAdministratorResponse(pathname, await route(request));
+  };
 }
 
 module.exports = { createDemoRuntime, verifyDemoToken, PROJECT };

@@ -1886,7 +1886,7 @@
   }
 
   function canRequestTimetableSwap(session) {
-    return !session.isCcc&&session.assignedToViewer!==false&&currentUser&&window.PAWS_SWAP&&scheduleSource==='vetmed-ops';
+    return !window.UCVM_PAWS_DEMO_API?.isReadOnlyAdministrator?.(currentUser?.role)&&!session.isCcc&&session.assignedToViewer!==false&&currentUser&&window.PAWS_SWAP&&scheduleSource==='vetmed-ops';
   }
 
   function openSessionDetail(id, currentSession = null) {
@@ -2763,7 +2763,8 @@
 
   function updateAuthUI() {
     const b = $('account-toggle');
-    const showAdminTools=canEdit()||UCVM.general(currentUser)||currentUser?.role==='hicc';
+    const restricted=window.UCVM_PAWS_DEMO_API?.isReadOnlyAdministrator?.(currentUser?.role);
+    const showAdminTools=!restricted&&(canEdit()||UCVM.general(currentUser)||currentUser?.role==='hicc');
     b.textContent = currentUser ? `${currentUser.name} - ${currentUser.role}` : 'Sign in';
     b.classList.toggle('is-admin', canEdit());
     const sessionCreateEnabled=Boolean(window.UCVM_PAWS_DATA?.sessionCreateEnabled?.());

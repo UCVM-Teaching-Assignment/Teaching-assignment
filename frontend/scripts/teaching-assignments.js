@@ -156,7 +156,7 @@
   async function selectView(view) {
     if (view === 'queue' && !queueRoles.has(role())) view = 'published';
     if (view === 'contributions' && !['adc','lab'].includes(role())) view = 'published';
-    if (['publish','releases'].includes(view) && !isAdmin()) view = 'published';
+    if (['publish','releases'].includes(view) && !isAdmin() || view==='publish' && window.UCVM_PAWS_DEMO_API?.isReadOnlyAdministrator?.(role())) view = 'published';
     activeView = view;
     document.querySelectorAll('.view-tab').forEach(button => button.classList.toggle('active',button.dataset.view === view));
     $('queue-view').classList.toggle('hidden',view !== 'queue');
@@ -182,6 +182,9 @@
     try { const value = await UCVM_PAWS_DATA.teachingAssignmentWriteCapabilities(); if(g!==authGeneration)return; capabilities=value; }
     catch (_) { if(g!==authGeneration)return; capabilities = {}; }
     $('capability-strip').textContent = `Draft / submit ${capabilities.taDraft ? 'available to current HICC scope' : 'closed'} · VISC review ${capabilities.taReview ? 'available to current group leads' : 'closed'} · ADFAD final ${capabilities.taFinal ? 'available to administrators' : 'closed'} · Publish ${capabilities.taPublish ? 'available to administrators' : 'closed'}`;
+    if(window.UCVM_PAWS_DEMO_API?.isReadOnlyAdministrator?.(role())){
+      document.querySelector('[data-view="publish"]')?.classList.add('hidden');
+    }
     $('publish-button').disabled = !isAdmin() || capabilities.taPublish !== true;
     $('publish-button').dataset.gateDisabled = String(!isAdmin() || capabilities.taPublish !== true);
   }

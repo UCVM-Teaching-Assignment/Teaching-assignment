@@ -79,7 +79,8 @@ const { Buffer } = require('buffer');
   root.fetch = demoFetch;
   root.UCVM_PAWS_DEMO_API = Object.freeze({ store, reset: () => store.reset(),
     backend: 'browser-memory', authoritative: false,
-    testingOnly: require('./testing-only.js').createTestingOnly(store),
+    isReadOnlyAdministrator: require('./administrator-access').isReadOnlyAdministrator,
+    testingOnly: require('./testing-only.js').createTestingOnly(store, () => root.firebase?.auth?.().currentUser?.uid),
     async officeWorkbook(table, academicYear) {
       await ensureExcel();
       return require('../../server/src/reports/report-export').renderReportExport([table], { format: 'xlsx', academicYear });

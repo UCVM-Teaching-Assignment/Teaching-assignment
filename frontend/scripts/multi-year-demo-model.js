@@ -35,7 +35,8 @@
   const actorRole=a=>normalized(a?.role).toLowerCase();
   const owner=a=>actorRole(a)==='owner';
   const canManageYears=a=>['owner','adfa_general'].includes(actorRole(a));
-  const canConfirm=a=>canAdfa(a)&&actorRole(a)!=='developer';
+  const isReadOnlyAdministrator=role=>['adfa_regular','administrator','admin'].includes(normalized(role).toLowerCase());
+  const canConfirm=a=>['owner','adfa_general'].includes(actorRole(a));
   const inCourseScope=(scope,code)=>{
     const value=codeFor(scope);
     return value===code||(value.startsWith(code)&&/^[\s:·,(/-]/.test(value.slice(code.length)));
@@ -125,6 +126,7 @@
     const editable=year=>{const y=inspect(year);if(y.status==='archived')invalid('Archived academic year is read-only');return y};
     const staff=a=>{who(a);if(!canPlan(a))invalid('Planning permission required')};
     const adfa=a=>{who(a);if(!canAdfa(a))invalid('ADFAD approval required')};
+    const writeAdfa=a=>{adfa(a);if(isReadOnlyAdministrator(a.role))invalid('This administrator has read-only workspace access');};
     const business=a=>{who(a);if(!canConfirm(a))invalid('ADFAD approval required for business operations')};
     const ownerOnly=a=>{who(a);if(!owner(a))invalid('Owner only')};
     const yearManager=a=>{who(a);if(!canManageYears(a))invalid('Academic year management permission required')};
@@ -179,12 +181,12 @@
       const source=(state.roles[row.year]||[]).filter(r=>r.status==='confirmed'&&r.facultyId===fid&&inCourseScope(r.scope,row.course.code));
       if(!row.course.publishers.includes(a.uid)&&!source.length)invalid('Course scope permission required');
     }
-    function canPublish(a,year,row){if(canConfirm(a))return true;
+    function canPublish(a,year,row){if(isReadOnlyAdministrator(a.role))return false;if(canConfirm(a))return true;
       const uid=normalized(a&&a.uid),fid=a&&a.facultyId||state.users.find(u=>u.uid===uid)?.facultyId;
       if(row.publishers.includes(uid))return true;
       return (state.roles[year]||[]).some(r=>r.status==='confirmed'&&r.facultyId===fid&&['HICC','Course Coordinator'].includes(r.roleType)&&inCourseScope(r.scope,row.code));
     }
-    const canEditCourse=(a,year,row)=>canAdfa(a)||canPublish(a,year,row);
+    const canEditCourse=(a,year,row)=>!isReadOnlyAdministrator(a.role)&&(canAdfa(a)||canPublish(a,year,row));
     function setPlanningDefault(year){
       state.planningDefault={year,revision:(state.planningDefault?.revision||0)+1};
     }
@@ -271,12 +273,12 @@
       logged('synthetic_2027_28_sample_loaded',a,year,{courses:3,workingSessions:9,publishedSessions:5});
       return {year,courses:3,workingSessions:9,publishedSessions:5};
     }
-    function addCourse(a,year,code){adfa(a);editable(year);const key=codeFor(code),item=state.catalog.find(c=>c.code===key);if(!item)invalid('Course not found in shared Catalog');
+    function addCourse(a,year,code){writeAdfa(a);editable(year);const key=codeFor(code),item=state.catalog.find(c=>c.code===key);if(!item)invalid('Course not found in shared Catalog');
       if(state.annual[year][key])invalid('Annual Course already exists');
       state.annual[year][key]={code:key,title:item.title,working:[],revision:1,finalizedRevision:0,published:[],publishers:[]};
       logged('annual_course_created',a,year,{code:key});return clone(state.annual[year][key]);
     }
-    function updateCatalog(a,code,title){adfa(a);const key=codeFor(code),item=state.catalog.find(c=>c.code===key);if(!item)invalid('Catalog Course not found');if(!normalized(title))invalid('Course title required');item.title=normalized(title);logged('catalog_updated',a,'global',{code:key,title:item.title});return clone(item)}
+    function updateCatalog(a,code,title){writeAdfa(a);const key=codeFor(code),item=state.catalog.find(c=>c.code===key);if(!item)invalid('Catalog Course not found');if(!normalized(title))invalid('Course title required');item.title=normalized(title);logged('catalog_updated',a,'global',{code:key,title:item.title});return clone(item)}
     function addSession(a,year,code,input){staff(a);editable(year);const row=annual(year,code);if(!canEditCourse(a,year,row))invalid('Course scope permission required');
       const date=normalized(input&&input.date);if(!validDate(date)||date<startOf(year)||date>=nextOf(year))invalid('Session date outside academic year');
       const id=normalized(input.id)||'demo-session-'+(state.serial+1);
@@ -961,7 +963,7 @@
       });
     }
     function getConflicts(a,year){staff(a);if(!canAdfa(a)&&!['adc','lab'].includes(normalized(a.role).toLowerCase()))invalid('Office scope permission required');const y=inspect(year);if(y.status==='archived')return clone([...state.archives].reverse().find(v=>v.year===year)?.conflicts||[]);return clone(conflictRows(year));}
-    function addAfc(a,input){adfa(a);if(!faculty(input.facultyId))invalid('Unknown Faculty');if(!input.startDate||!input.endDate||input.startDate>input.endDate)invalid('Invalid AFC dates');
+    function addAfc(a,input){writeAdfa(a);if(!faculty(input.facultyId))invalid('Unknown Faculty');if(!input.startDate||!input.endDate||input.startDate>input.endDate)invalid('Invalid AFC dates');
       if(state.afc.some(x=>x.afcRecordId===input.afcRecordId))invalid('Duplicate AFC');state.afc.push(clone(input));logged('afc_added',a,'shared',{afcRecordId:input.afcRecordId});return true;
     }
     function retireYear(a,year,confirmed=false){ownerOnly(a);const y=editable(year);if(confirmed!==true)invalid('Retire confirmation required');
@@ -1055,5 +1057,5 @@
     const total=known.reduce((n,v)=>n+v,0).toFixed(2);
     return known.length===values.length?total:total+' + not recorded';
   }
-  return Object.freeze({createEngine,STORAGE_KEY,currentYear,validateYear,formatDoeNumber,sessionDoeCredit});
+  return Object.freeze({createEngine,isReadOnlyAdministrator,STORAGE_KEY,currentYear,validateYear,formatDoeNumber,sessionDoeCredit});
 });

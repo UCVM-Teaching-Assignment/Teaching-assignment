@@ -38,6 +38,7 @@
   const num = (value, digits = 2) => (Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—');
   const uuid = () => (root.crypto && root.crypto.randomUUID ? root.crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => Math.floor(Math.random() * 16).toString(16)));
   const roleOf = user => String((user && user.role) || '').toLowerCase();
+  const readOnlyAdministrator = user => root.UCVM_PAWS_DEMO_API?.isReadOnlyAdministrator?.(roleOf(user))===true;
 
   async function api(path, { method = 'GET', body } = {}) {
     const origin = root.PAWS_API_ORIGIN_CONFIG && root.PAWS_API_ORIGIN_CONFIG.apiOrigin;
@@ -194,13 +195,13 @@
       root.addEventListener('ucvm:sessions-updated', updateDensityStatus);
       const allowed = user => {
         const role = roleOf(user);
-        button.classList.toggle('hidden', !(ADMIN_ROLES.has(role) || role === 'adc'));
+        button.classList.toggle('hidden', readOnlyAdministrator(user) || !(ADMIN_ROLES.has(role) || role === 'adc'));
       };
       root.addEventListener('ucvm-timetable-user', event => allowed(event.detail && event.detail.user));
       allowed(root.UCVM_TIMETABLE_TESTING_HOOKS?.currentUser?.());
       button.addEventListener('click', () => {
         const user = root.UCVM_TIMETABLE_TESTING_HOOKS?.currentUser?.();
-        if (!(ADMIN_ROLES.has(roleOf(user)) || roleOf(user) === 'adc')) return;
+        if (readOnlyAdministrator(user) || !(ADMIN_ROLES.has(roleOf(user)) || roleOf(user) === 'adc')) return;
         const demo = root.UCVM_PAWS_DEMO_API;
         if (!demo?.testingOnly?.loadDenseCalendar) {
           toast('Synthetic data fixture is not available in this build.', true); return;
@@ -325,7 +326,7 @@
     const current=root.UCVM_TIMETABLE_TESTING_HOOKS?.currentUser?.()||{};
     const account=root.firebase?.auth?.().currentUser;
     const uid=String(account?.uid||'');
-    const admin=ADMIN_ROLES.has(roleOf(current));
+    const admin=ADMIN_ROLES.has(roleOf(current))&&!readOnlyAdministrator(current);
     const read=async path=>{try{return{value:await api(path),error:null};}catch(error){return{value:null,error};}};
     const [a,s,ag,sg]=await Promise.all([read('/api/v1/afc-requests'),read('/api/v1/swaps/queue'),read('/api/v1/afc-requests/write-capabilities'),read('/api/v1/swaps/capabilities')]);
     if(!body.isConnected)return;
@@ -574,7 +575,7 @@
       const user = hooks() && hooks().currentUser();
       if (!user && ++tries < 120) return;
       clearInterval(timer);
-      const admin = ADMIN_ROLES.has(roleOf(user));
+      const admin = ADMIN_ROLES.has(roleOf(user))&&!readOnlyAdministrator(user);
       doc.querySelectorAll('.testing-only-admin').forEach(node => node.classList.toggle('hidden', !admin));
     }, 250);
   }
@@ -756,10 +757,11 @@
   }
 
   async function renderFacultyDatabase(panel) {
+    const writable=!readOnlyAdministrator(hooks()?.currentUser());
     panel.innerHTML = `<h2>Faculty Database ${badge()}</h2><p class="testing-only-note">Testing site only. The full Faculty table with add, import and export.</p>
       <div class="testing-only-row"><input type="search" id="testing-only-fdb-search" placeholder="Search name, UCID, email…">
-      <button type="button" class="testing-only-btn primary" id="testing-only-fdb-add">+ Add Faculty</button>
-      <label class="testing-only-btn">Import JSON<input type="file" accept=".json,application/json" id="testing-only-fdb-import" hidden></label>
+      ${writable?`<button type="button" class="testing-only-btn primary" id="testing-only-fdb-add">+ Add Faculty</button>
+      <label class="testing-only-btn">Import JSON<input type="file" accept=".json,application/json" id="testing-only-fdb-import" hidden></label>`:''}
       <button type="button" class="testing-only-btn" id="testing-only-fdb-json">Export JSON</button><button type="button" class="testing-only-btn" id="testing-only-fdb-csv">Export CSV</button></div>
       <div class="testing-only-status" id="testing-only-fdb-status"></div><div id="testing-only-fdb-table">Loading…</div>`;
     const status = (m, e) => { const n = $('testing-only-fdb-status'); n.textContent = m; n.classList.toggle('is-error', !!e); };
@@ -772,7 +774,7 @@
         { label: 'Name', value: r => r.displayName }, { label: 'UCID', value: r => r.ucid }, { label: 'Email', value: r => r.email }, { label: 'Rank', value: r => r.rank },
         { label: 'Record type', value: r => r.recordType }, { label: 'FTE', value: r => r.fte }, { label: 'Teaching area', value: r => r.teachingArea }, { label: 'Reports to', value: r => r.reportsToName || '' },
         { label: 'Status', html: r => pill(r.active ? 'Active' : 'Inactive', r.active ? 'good' : '') },
-        { label: '', html: r => `<button type="button" class="testing-only-btn" data-fdb-toggle="${esc(r.facultyId)}" data-active="${r.active ? '1' : '0'}" data-updated="${esc(r.updatedAtUtc)}">${r.active ? 'Deactivate' : 'Restore'}</button>` }
+        { label: '', html: r => writable?`<button type="button" class="testing-only-btn" data-fdb-toggle="${esc(r.facultyId)}" data-active="${r.active ? '1' : '0'}" data-updated="${esc(r.updatedAtUtc)}">${r.active ? 'Deactivate' : 'Restore'}</button>`:'' }
       ], rows, 'No faculty match.');
     };
     const load = async () => {
@@ -782,7 +784,7 @@
     panel.addEventListener('input', event => { if (event.target.id === 'testing-only-fdb-search') draw(); });
     panel.addEventListener('click', async event => {
       const toggle = event.target.closest('[data-fdb-toggle]');
-      if (toggle) {
+      if (writable && toggle) {
         const action = toggle.dataset.active === '1' ? 'deactivate' : 'restore';
         if (action === 'deactivate' && !root.confirm('Deactivate this Faculty record?')) return;
         try {
@@ -792,10 +794,10 @@
       }
       if (event.target.id === 'testing-only-fdb-json') download('faculty-database.json', JSON.stringify(faculty.map(f => Object.fromEntries(FIELDS.map(k => [k, f[k]]))), null, 2), 'application/json');
       if (event.target.id === 'testing-only-fdb-csv') download('faculty-database.csv', [FIELDS.join(','), ...faculty.map(f => FIELDS.map(k => csvCell(f[k])).join(','))].join('\n'), 'text/csv');
-      if (event.target.id === 'testing-only-fdb-add') openAddFaculty(load);
+      if (writable && event.target.id === 'testing-only-fdb-add') openAddFaculty(load);
     });
     panel.addEventListener('change', async event => {
-      if (event.target.id !== 'testing-only-fdb-import') return;
+      if (!writable || event.target.id !== 'testing-only-fdb-import') return;
       try {
         const rows = JSON.parse(await readFile(event.target)); event.target.value = '';
         if (!Array.isArray(rows)) throw new Error('The JSON file must contain a list of faculty.');

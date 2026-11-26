@@ -20,7 +20,7 @@ const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const CHECKS=Object.freeze([
  {page:'index.html',uid:'uid-developer',text:['Teaching Schedule','Week','DEMO ROLE TESTER','Change Log','Academic Years · Demo']},
  {page:'index.html',uid:'uid-owner',text:['Teaching Schedule','Academic Years · Demo']},
- {page:'index.html',uid:'uid-admin',text:['Teaching Schedule','Admin tools']},
+ {page:'index.html',uid:'uid-admin',text:['Teaching Schedule','AFC Request']},
  {page:'index.html',uid:'uid-hicc-1',text:['Teaching Schedule']},
  {page:'index.html',uid:'uid-fac-001',text:['Teaching Schedule','My Teaching']},
  {page:'faculty-admin.html',uid:'uid-developer',text:['Faculty Dashboard','Lookup','DOE Overview','AFC Records','Academic Years · Demo']},
@@ -272,6 +272,22 @@ async function main(){
    const label=`${check.page} as ${check.uid}`;
    const {ok,body}=await waitForText(cdp,['PAWS Frontend Demo',...check.text]);
    if(!ok)problems.push(`${label}: missing ${check.text.filter(text=>!body.includes(text)).join(', ')||'banner'}`);
+   if(check.page==='index.html'&&ok){
+     const probe=await cdp.send('Runtime.evaluate',{expression:`(async()=>{
+       const labels=Array.from(document.querySelectorAll('#ucvm-pages-demo-toolbar select option'),option=>option.textContent);
+       const expected=['ADFAD Owner','ADFAD Administrator','Faculty'];
+       if(JSON.stringify(labels)!==JSON.stringify(expected))return {ok:false,labels};
+       const uid=firebase.auth().currentUser?.uid;
+       if(uid==='uid-admin'){
+         const menu=document.getElementById('cal-admin-menu');
+         const gates=await UCVM_PAWS_DATA.swapCapabilities();
+         if(!menu?.classList.contains('hidden')||gates.canPreviewDoe!==false||gates.writeCapabilities.swapRequest!==false)
+           return {ok:false,error:'Read-only Administrator still has a schedule or SWAP action'};
+       }
+       return {ok:true};
+     })()`,awaitPromise:true,returnByValue:true});
+     if(!probe.result?.value?.ok)problems.push(label+': Testing role controls failed '+JSON.stringify(probe.result?.value||probe.exceptionDetails||'no result'));
+   }
    if(check.page==='index.html'&&check.uid==='uid-owner'&&ok){
      // Empty academic years are created deliberately; no automatic sample Sessions.
      const probe=await cdp.send('Runtime.evaluate',{expression:"(function verifyEmptyAcademicYear(){\n  try{\n    const launcher=document.getElementById('paws-multi-year-open');\n    if(!launcher)return{ok:false,error:'Academic Year launcher missing'};\n    launcher.click();\n    const dialog=document.getElementById('paws-multi-year-demo');\n    if(!dialog?.open)return{ok:false,error:'Academic Year dialog did not open'};\n    const model=window.PAWS_MULTI_YEAR_DEMO_MODEL;\n    const initial=JSON.parse(localStorage.getItem(model.STORAGE_KEY)||'null');\n    if(Object.keys(initial?.annual?.['2026-27']||{}).length)return{ok:false,error:'Initial Academic Year has example Sessions'};\n    if(initial?.annual?.['2027-28']&&Object.keys(initial.annual['2027-28']).length)return{ok:false,error:'2027-28 sample should not be preloaded'};\n    if(dialog.querySelector('[data-my-action=\"load-2027-28-sample\"]'))return{ok:false,error:'Sample loading shortcut should not be visible'};\n    const create=dialog.querySelector('[data-my-action=\"create-year\"]');\n    if(!create)return{ok:false,error:'Create Next Year unavailable'};\n    create.click();\n    const selected=dialog.querySelector('[data-my-year]');\n    const next=JSON.parse(localStorage.getItem(model.STORAGE_KEY)||'null');\n    if(selected?.value!=='2027-28'||next?.years?.['2027-28']?.status!=='planning')\n      return{ok:false,error:'2027-28 planning year was not created'};\n    if(Object.keys(next.annual['2027-28']||{}).length)return{ok:false,error:'New academic year contains sample Courses'};\n    if(!dialog.querySelector('[data-my-tab=\"review\"]'))return{ok:false,error:'Publish Review tab unavailable'};\n    dialog.querySelector('[data-my-tab=\"compare\"]').click();\n    if(!dialog.textContent.includes('Cross-year Teaching / DOE Comparison'))return{ok:false,error:'Year Comparison missing'};\n    const header=document.getElementById('paws-global-academic-year');\n    if(header?.value!=='2027-28')return{ok:false,error:'Global Academic Year not synchronized'};\n    const notice=document.getElementById('paws-year-preview-notice');\n    if(!notice||notice.hidden||!document.body.classList.contains('paws-my-year-preview-required'))\n      return{ok:false,error:'Future year did not mask original Calendar'};\n    return{ok:true};\n  }catch(error){return{ok:false,error:String(error?.message||error)}}\n})()",returnByValue:true});

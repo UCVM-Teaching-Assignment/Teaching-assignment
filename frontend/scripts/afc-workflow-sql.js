@@ -14,13 +14,13 @@
     return String(value??'').trim().toLowerCase().replace(/[\s-]+/g,'_');
   }
 
-  function requestActions(request,{uid='',role=''}={}){
-    const actor=String(uid??'').trim(),normalizedRole=normalizeRole(role),isAdmin=ADMIN_ROLES.has(normalizedRole);
+  function requestActions(request,{uid='',role='',designatedOnly=false}={}){
+    const actor=String(uid??'').trim(),normalizedRole=normalizeRole(role),isAdmin=ADMIN_ROLES.has(normalizedRole)&&!designatedOnly;
     const status=String(request?.status??'').trim();
     const requester=String(request?.requesterFirebaseUid??'').trim();
     const reportTo=String(request?.reportToFirebaseUid??'').trim();
     const canWithdraw=SELF_ROLES.has(normalizedRole)&&requester===actor&&['pending_report_to','pending_admin'].includes(status);
-    const canRecommend=status==='pending_report_to'&&(isAdmin||(SELF_ROLES.has(normalizedRole)&&reportTo===actor));
+    const canRecommend=status==='pending_report_to'&&(isAdmin||((SELF_ROLES.has(normalizedRole)||designatedOnly)&&Boolean(actor)&&reportTo===actor));
     const canApprove=status==='pending_admin'&&isAdmin;
     const canReject=canRecommend||canApprove;
     // UX-07: an approved request can change dates. Faculty start a new approval;
@@ -55,7 +55,7 @@
     const e=escape;
     const showFaculty = value => root.PAWS_FACULTY_NAME?.format?.(value) || String(value??'');
 
-    function actionsFor(request){return requestActions(request,{uid:uid(),role:actorRole()})}
+    function actionsFor(request){return requestActions(request,{uid:uid(),role:actorRole(),designatedOnly:designatedOnly()})}
     function unavailableMessage(){
       const messages=[];
       if(!writeCapabilities.requestLifecycle)messages.push('Submitting and withdrawing AFC requests are currently unavailable.');
@@ -63,6 +63,7 @@
       if(!writeCapabilities.approvedArtifactCreation)messages.push('Creating a missing approved AFC PDF is currently unavailable; existing approved PDFs remain downloadable.');
       return messages.length?'<p class="afc-note" role="status">'+messages.map(e).join(' ')+'</p>':'';
     }
+    const designatedOnly=()=>root?.UCVM_PAWS_DEMO_API?.isReadOnlyAdministrator?.(actorRole())===true;
     function statusLabel(value){return({pending_report_to:'Pending Reports To approval',pending_admin:'Pending ADMIN approval',approved:'Approved',rejected:'Rejected',withdrawn:'Withdrawn',superseded:'Replaced by new dates'}[value]||value||'Unknown')}
     const PENDING=['pending_report_to','pending_admin'];
     function openChangeFor(id){return requests.find(row=>String(row.replacesAfcRequestId??'')===String(id)&&PENDING.includes(String(row.status??'')))||null}
@@ -108,7 +109,7 @@
       if(a.canChangeDates&&!pendingChange&&writeCapabilities.requestLifecycle&&writeCapabilities.dateChange)controls.push('<button type="button" data-afc-change-dates="'+e(id)+'">Change dates</button>');
       if(a.canOfficeChangeDates&&!pendingChange&&writeCapabilities.dateChange&&request.versionToken)controls.push('<button type="button" data-afc-office-dates="'+e(id)+'">Edit dates</button>');
       const officeEditor=officeEditId===id&&a.canOfficeChangeDates&&!pendingChange&&writeCapabilities.dateChange?'<div class="afc-grid" data-afc-office-editor="'+e(id)+'"><label>New start date<input type="date" data-afc-office-start value="'+e(request.startDate)+'"></label><label>New end date<input type="date" data-afc-office-end value="'+e(request.endDate)+'"></label><span><button type="button" data-afc-office-save="'+e(id)+'">Save dates</button> <button type="button" data-afc-office-cancel="'+e(id)+'">Cancel</button></span><p class="afc-note">The ADFA office change applies immediately without a new approval. Change History records the old and new dates; the approved PDF keeps the originally approved dates.</p><p class="afc-note" role="status" id="afc-office-status-'+e(id)+'"></p></div>':'';
-      if(a.canRecommend&&ADMIN_ROLES.has(actorRole()))details.push('<p class="afc-note">An administrator may sign on behalf of Reports To; the server remains authoritative.</p>');
+      if(a.canRecommend&&ADMIN_ROLES.has(actorRole())&&!designatedOnly())details.push('<p class="afc-note">An administrator may sign on behalf of Reports To; the server remains authoritative.</p>');
       return '<article class="afc-card"><header><strong>'+e(showFaculty(request.facultyName))+'</strong><span class="afc-status '+e(status)+'">'+e(statusLabel(status))+'</span></header>'+
         details.join('')+(status==='approved'?'<p class="afc-note" role="status" id="afc-download-status-'+e(id)+'"></p>':'')+
         (controls.length?'<div class="afc-review">'+controls.join('')+'</div>':'')+officeEditor+'</article>';

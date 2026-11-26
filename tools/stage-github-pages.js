@@ -216,7 +216,7 @@ function pawsFacultyIndex(documents){
 function writeDemoRuntime(directory,{paws=false}={}){
   const dataset=buildDataset();
   if(paws)dataset.documents=pawsFacultyIndex(dataset.documents);
-  const payload={version:1,generatedFrom:dataset.generatedFrom,counts:dataset.counts,documents:dataset.documents};
+  const payload={version:1,paws,generatedFrom:dataset.generatedFrom,counts:dataset.counts,documents:dataset.documents};
   fs.writeFileSync(path.join(directory,DEMO_DATA_FILE),'window.UCVM_PAGES_DEMO_SEED='+JSON.stringify(payload)+';\n');
   fs.copyFileSync(path.join(__dirname,DEMO_RUNTIME_FILE),path.join(directory,DEMO_RUNTIME_FILE));
   fs.copyFileSync(path.join(__dirname,'pages-demo-panels.js'),path.join(directory,'pages-demo-panels.js'));

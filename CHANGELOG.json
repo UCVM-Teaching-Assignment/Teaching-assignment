@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "date": "2026-11-26",
+      "pr": 124,
+      "title": "Simplify Testing roles and restrict Administrator edits",
+      "changes": [
+        "Show ADFAD Owner, ADFAD Administrator and Faculty in the Testing Role Tester. New Demo sessions open as ADFAD Owner.",
+        "Keep business views and reports available to ADFAD Administrator. Limit updates to standard single AFC form entry and decisions on AFC requests assigned to that administrator as Reports To.",
+        "Remove Administrator write controls for sessions, imports, scheduling reviews, swaps, teaching publication and Faculty or DOE administration."
+      ]
+    },
+    {
       "date": "2026-11-24",
       "pr": 123,
       "title": "Plan the next academic year in the ADFAD Office Demo",
